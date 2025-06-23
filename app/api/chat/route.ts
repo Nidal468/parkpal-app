@@ -13,7 +13,7 @@ const isSupabaseConfigured = () => {
   return !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
 }
 
-// Fixed search function with better error handling for your data structure
+// Simplified and more robust search function
 async function searchParkingSpaces(searchParams: any) {
   try {
     console.log("🔍 Starting parking space search with params:", searchParams)
@@ -38,27 +38,30 @@ async function searchParkingSpaces(searchParams: any) {
 
       console.log("✅ Database has spaces, proceeding with search...")
 
-      // Start with basic query - handle both boolean and string is_available
-      let query = supabaseServer.from("spaces").select("*")
+      // Start with basic query - only check for available spaces
+      let query = supabaseServer.from("spaces").select("*").eq("is_available", true)
 
-      // Handle is_available as either boolean true or string "true"
-      query = query.or('is_available.eq.true,is_available.eq."true"')
-
-      // Location proximity search (search in multiple fields)
+      // Location search - be more flexible with SE17 searches
       if (searchParams.location) {
-        console.log(`📍 Adding location proximity filter: "${searchParams.location}"`)
-        const locationTerm = `%${searchParams.location}%`
-        query = query.or(
-          `title.ilike.${locationTerm},location.ilike.${locationTerm},address.ilike.${locationTerm},postcode.ilike.${locationTerm}`,
-        )
-      }
+        console.log(`📍 Adding location filter: "${searchParams.location}"`)
+        const locationTerm = searchParams.location.toLowerCase()
 
-      // Availability date range filtering
-      if (searchParams.startDate && searchParams.endDate) {
-        console.log(`📅 Adding availability filter: ${searchParams.startDate} to ${searchParams.endDate}`)
-        query = query
-          .or(`available_from.is.null,available_from.lte.${searchParams.startDate}`)
-          .or(`available_to.is.null,available_to.gte.${searchParams.endDate}`)
+        // Handle SE17 specifically - search for SE17, Kennington, and nearby areas
+        if (locationTerm.includes("se17") || locationTerm.includes("se1")) {
+          console.log("🎯 SE17/SE1 specific search")
+          query = query.or(
+            `location.ilike.%SE17%,location.ilike.%SE1%,location.ilike.%Kennington%,location.ilike.%Elephant%,location.ilike.%Borough%,location.ilike.%Southwark%,postcode.ilike.%SE1%,address.ilike.%SE1%`,
+          )
+        } else {
+          // General location search
+          const locationPattern = `%${searchParams.location}%`
+          query = query.or(
+            `title.ilike.${locationPattern},location.ilike.${locationPattern},address.ilike.${locationPattern},postcode.ilike.${locationPattern}`,
+          )
+        }
+      } else {
+        // If no specific location, just get available spaces
+        console.log("📍 No specific location, getting all available spaces")
       }
 
       // Price filtering
@@ -74,7 +77,7 @@ async function searchParkingSpaces(searchParams: any) {
         query = query.or(featureQueries.join(","))
       }
 
-      // Order by price (best value first) and limit to 3 best matches
+      // Order by price and limit results
       const { data, error } = await query.order("price_per_day", { ascending: true }).limit(6)
 
       if (error) {
@@ -84,49 +87,71 @@ async function searchParkingSpaces(searchParams: any) {
       }
 
       if (!data || data.length === 0) {
-        console.log("📭 No results from Supabase query, trying mock data...")
-        const mockResults = searchMockParkingSpaces(searchParams)
-        if (mockResults.length > 0) {
-          console.log(`🎭 Using ${mockResults.length} mock results as fallback`)
-          return mockResults.slice(0, 3)
+        console.log("📭 No results from Supabase query")
+
+        // Try a broader search without location filter
+        console.log("🔄 Trying broader search...")
+        const { data: broadData, error: broadError } = await supabaseServer
+          .from("spaces")
+          .select("*")
+          .eq("is_available", true)
+          .order("price_per_day", { ascending: true })
+          .limit(3)
+
+        if (broadError) {
+          console.error("❌ Broad search error:", broadError)
+          return searchMockParkingSpaces(searchParams).slice(0, 3)
         }
-        console.log("❌ No results from mock data either")
-        return []
+
+        if (broadData && broadData.length > 0) {
+          console.log(`✅ Broad search found ${broadData.length} spaces`)
+          return broadData.map((space) => ({
+            ...space,
+            features:
+              typeof space.features === "string"
+                ? space.features
+                    .split(",")
+                    .map((f) => f.trim())
+                    .filter((f) => f.length > 0)
+                : space.features || [],
+            host: {
+              id: space.host_id || "mock-host",
+              name: "Host",
+              email: "host@example.com",
+            },
+          }))
+        }
+
+        console.log("❌ No results from broad search either, using mock data")
+        return searchMockParkingSpaces(searchParams).slice(0, 3)
       }
 
       console.log(`✅ Supabase query found ${data.length} spaces`)
 
-      // Transform the data to match expected format
-      const transformedSpaces = data.map((space) => {
-        return {
-          ...space,
-          // Ensure is_available is boolean
-          is_available: space.is_available === true || space.is_available === "true",
-          // Parse features if it's a string
-          features:
-            typeof space.features === "string"
-              ? space.features
-                  .split(",")
-                  .map((f) => f.trim())
-                  .filter((f) => f.length > 0)
-              : space.features || [],
-          // Add mock host info since we don't have users table populated
-          host: {
-            id: space.host_id || "mock-host",
-            name: "Host",
-            email: "host@example.com",
-          },
-        }
-      })
+      // Transform the data
+      const transformedSpaces = data.map((space) => ({
+        ...space,
+        is_available: space.is_available === true || space.is_available === "true",
+        features:
+          typeof space.features === "string"
+            ? space.features
+                .split(",")
+                .map((f) => f.trim())
+                .filter((f) => f.length > 0)
+            : space.features || [],
+        host: {
+          id: space.host_id || "mock-host",
+          name: "Host",
+          email: "host@example.com",
+        },
+      }))
 
-      return transformedSpaces.slice(0, 3) // Return top 3 results
+      return transformedSpaces.slice(0, 3)
     }
 
     // Fallback to mock data
     console.log("🎭 Using mock data (Supabase not configured)")
-    const mockResults = searchMockParkingSpaces(searchParams)
-    console.log(`✅ Mock search found ${mockResults.length} spaces`)
-    return mockResults.slice(0, 3) // Limit to 3 best matches
+    return searchMockParkingSpaces(searchParams).slice(0, 3)
   } catch (error) {
     console.error("💥 Search function error:", error)
     console.log("🎭 Falling back to mock data due to error")
@@ -134,33 +159,19 @@ async function searchParkingSpaces(searchParams: any) {
   }
 }
 
-// Simple distance calculation (Haversine formula)
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number | null {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return null
-
-  const R = 3959 // Earth's radius in miles
-  const dLat = ((lat2 - lat1) * Math.PI) / 180
-  const dLon = ((lon2 - lon1) * Math.PI) / 180
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-  return Math.round(R * c * 10) / 10 // Round to 1 decimal place
-}
-
 // Enhanced search parameter extraction
 function extractSearchParams(message: string) {
   const lowerMessage = message.toLowerCase()
   console.log("🔤 Extracting search params from:", message)
 
-  // Extract location with improved UK-specific patterns
+  // Extract location with improved patterns
   let location = null
   const locationPatterns = [
-    /(?:in|near|at|around)\s+([a-zA-Z0-9\s]+?)(?:\s+from|\s+for|\s+under|\s*$)/i,
+    /(?:in|near|at|around)\s+([a-zA-Z0-9\s]+?)(?:\s+area|\s+from|\s+for|\s+under|\s*$)/i,
     /parking\s+(?:in|at|near)\s+([a-zA-Z0-9\s]+)/i,
     /([a-zA-Z0-9\s]+)\s+parking/i,
     /(?:find|book|need)\s+(?:parking\s+)?(?:in|at|near)\s+([a-zA-Z0-9\s]+)/i,
-    /park\s+me\s+in\s+([a-zA-Z0-9\s]+)/i, // Handle "park me in SE17"
+    /park\s+me\s+(?:in|near)\s+([a-zA-Z0-9\s]+)/i,
   ]
 
   for (const pattern of locationPatterns) {
@@ -179,80 +190,10 @@ function extractSearchParams(message: string) {
     console.log(`💰 Extracted max price: £${maxPrice}`)
   }
 
-  // Extract dates with enhanced patterns
-  let startDate = null
-  let endDate = null
-
-  // Pattern for "June 23–July 1" or "June 23 - July 1"
-  const dateRangeMatch = message.match(/(\w+\s+\d{1,2})(?:\s*[-–]\s*(\w+\s+\d{1,2}))/i)
-  if (dateRangeMatch) {
-    const currentYear = new Date().getFullYear()
-    if (dateRangeMatch[1]) {
-      const start = new Date(`${dateRangeMatch[1]} ${currentYear}`)
-      if (!isNaN(start.getTime())) {
-        startDate = start.toISOString().split("T")[0]
-        console.log(`📅 Extracted start date: ${startDate}`)
-      }
-    }
-    if (dateRangeMatch[2]) {
-      const end = new Date(`${dateRangeMatch[2]} ${currentYear}`)
-      if (!isNaN(end.getTime())) {
-        endDate = end.toISOString().split("T")[0]
-        console.log(`📅 Extracted end date: ${endDate}`)
-      }
-    }
-  }
-
-  // Extract features
-  const featureKeywords = [
-    "security",
-    "secure",
-    "cctv",
-    "24/7",
-    "covered",
-    "underground",
-    "indoor",
-    "electric",
-    "charging",
-    "ev",
-    "disabled",
-    "accessible",
-    "valet",
-    "premium",
-  ]
-
-  const extractedFeatures: string[] = []
-  featureKeywords.forEach((keyword) => {
-    if (lowerMessage.includes(keyword)) {
-      const featureMap: { [key: string]: string } = {
-        security: "24/7 Security",
-        secure: "24/7 Security",
-        cctv: "CCTV",
-        "24/7": "24/7 Security",
-        covered: "Covered",
-        underground: "Underground",
-        indoor: "Indoor",
-        electric: "Electric Charging",
-        charging: "Electric Charging",
-        ev: "Electric Charging",
-        disabled: "Disabled Access",
-        accessible: "Disabled Access",
-        valet: "Valet Service",
-        premium: "Premium",
-      }
-      const mappedFeature = featureMap[keyword]
-      if (mappedFeature && !extractedFeatures.includes(mappedFeature)) {
-        extractedFeatures.push(mappedFeature)
-      }
-    }
-  })
-
   const extractedParams = {
     location,
     maxPrice,
-    startDate,
-    endDate,
-    features: extractedFeatures.length > 0 ? extractedFeatures : undefined,
+    features: undefined,
   }
 
   console.log("✅ Final extracted params:", extractedParams)
@@ -273,11 +214,10 @@ export async function POST(request: NextRequest) {
     // Extract search parameters from the user's message
     const searchParams = extractSearchParams(message)
 
-    // Search for parking spaces if location is mentioned OR if it's a general parking query
+    // Search for parking spaces if it's a parking query
     let parkingSpaces: any[] = []
     let hasSearchResults = false
 
-    // Search if location is mentioned OR if message contains parking-related keywords
     const isParkingQuery =
       searchParams.location ||
       message.toLowerCase().includes("parking") ||
@@ -292,27 +232,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Enhanced system prompt
-    const systemPrompt = `You are a helpful Parking Assistant for Parkpal. Your primary role is to help users find and book parking spaces.
+    const systemPrompt = `You are a helpful Parking Assistant for Parkpal. Your primary role is to help users find and book parking spaces in London.
 
 CORE ASSISTANT LOGIC:
 When users ask for parking, you search the Supabase spaces table and return matches based on:
-- Location proximity (based on address, postcode, or lat/lng coordinates)
-- Availability (checking available_from and available_to dates)
-- Day and time ranges (if provided by user)
-- Price constraints and feature requirements
+- Location proximity (especially for SE1, SE17, Kennington, Borough, Southwark areas)
+- Availability and pricing
+- Features and requirements
 
 SEARCH BEHAVIOR:
-- Display up to 3 best matches with title, price per day, distance (if calculable), and image
-- Order results by best value (price) and proximity when possible
-- If no matches found, reply: "Sorry, no matching spaces right now — want to try a nearby location or different dates?"
+- Display up to 3 best matches with title, price per day, location, and key features
+- Order results by best value (price) and proximity
+- If no matches found, suggest nearby areas or alternatives
 
 RESPONSE GUIDELINES:
 - Be conversational, helpful, and parking-focused
 - Present available spaces naturally with key details
-- Include specific information: location, price, features, availability
-- Use UK pricing (£) and locations
-- Mention key features like security, covered parking, accessibility
-- If no results, suggest alternatives (nearby areas, different dates, price ranges)
+- Include specific information: location, price, features
+- Use UK pricing (£) and London locations
 - Use emojis sparingly but effectively (🚗, 📍, £, 🔒)
 
 CURRENT SEARCH CONTEXT:
@@ -337,7 +274,6 @@ ${index + 1}. ${space.title || "Parking Space"} in ${space.location || "Location
    Postcode: ${space.postcode || "No postcode"}
    Features: ${Array.isArray(space.features) ? space.features.join(", ") : space.features || "Standard parking"}
    Description: ${space.description || "No description available"}
-   Available: ${space.available_from} to ${space.available_to}
 `,
   )
   .join("\n")}
@@ -345,21 +281,17 @@ ${index + 1}. ${space.title || "Parking Space"} in ${space.location || "Location
 Present these spaces in a friendly way and mention that detailed cards will be shown below your response.
 `
     : `
-No spaces found matching the criteria. Respond with: "Sorry, no matching spaces right now — want to try a nearby location or different dates?"
-
-Then suggest alternatives like:
-- Different dates (maybe shorter or longer stays)
-- Nearby areas (for London: Elephant & Castle, Vauxhall, Waterloo for Kennington searches)
-- Different price range
-- Checking back later for new availability
-- Different features or requirements
+No spaces found matching the criteria. Respond with helpful suggestions for nearby areas like:
+- For SE17/Kennington: try Elephant & Castle, Borough, Waterloo, or Southwark
+- Different dates or price ranges
+- Alternative search terms
 `
 }
 `
     : "No parking search performed - respond to general queries and guide towards parking assistance."
 }
 
-IMPORTANT: If users ask non-parking questions, politely redirect them back to parking assistance while being helpful.`
+IMPORTANT: Always be helpful and suggest alternatives if no exact matches are found.`
 
     // Convert conversation to OpenAI format
     const messages = [
@@ -367,12 +299,10 @@ IMPORTANT: If users ask non-parking questions, politely redirect them back to pa
         role: "system" as const,
         content: systemPrompt,
       },
-      // Add conversation history
       ...conversation.map((msg: any) => ({
         role: msg.role === "assistant" ? ("assistant" as const) : ("user" as const),
         content: msg.content,
       })),
-      // Add current message
       {
         role: "user" as const,
         content: message,
