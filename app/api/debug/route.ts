@@ -5,40 +5,71 @@ export async function GET(request: NextRequest) {
   try {
     console.log("🔍 Debug API called")
 
-    // Check all spaces
-    const { data: allSpaces, error: allError } = await supabaseServer.from("spaces").select("*").limit(10)
-
-    if (allError) {
-      console.error("❌ Error fetching spaces:", allError)
-      return NextResponse.json(
-        {
-          error: allError.message,
-          supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
-        },
-        { status: 500 },
-      )
+    // Check if spaces table exists and get its structure
+    let tableInfo = null
+    try {
+      const { data: tableCheck, error: tableError } = await supabaseServer
+        .from("spaces")
+        .select("*")
+        .limit(1)
+      
+      if (tableError) {
+        console.error("❌ Table error:", tableError)
+        tableInfo = { error: tableError.message, exists: false }
+      } else {
+        tableInfo = { exists: true, hasData: tableCheck && tableCheck.length > 0 }
+      }
+    } catch (err) {
+      tableInfo = { error: "Table might not exist", exists: false }
     }
 
-    console.log(`📊 Found ${allSpaces?.length || 0} total spaces`)
-
-    // Test SE17 search
-    const { data: se17Spaces, error: searchError } = await supabaseServer
-      .from("spaces")
-      .select("*")
-      .eq("is_available", true)
-      .or("location.ilike.%SE17%,postcode.ilike.%SE17%,address.ilike.%SE17%")
-
-    if (searchError) {
-      console.error("❌ SE17 search error:", searchError)
+    // Check all tables to see what exists
+    let allTables = []
+    try {
+      // Try to get some basic info about available tables
+      const { data: messages } = await supabaseServer.from("messages").select("id").limit(1)
+      if (messages !== null) allTables.push("messages")
+    } catch (e) {
+      // messages table doesn't exist
     }
+
+    try {
+      const { data: users } = await supabaseServer.from("users").select("id").limit(1)
+      if (users !== null) allTables.push("users")
+    } catch (e) {
+      // users table doesn't exist
+    }
+
+    try {
+      const { data: vehicles } = await supabaseServer.from("vehicles").select("id").limit(1)
+      if (vehicles !== null) allTables.push("vehicles")
+    } catch (e) {
+      // vehicles table doesn't exist
+    }
+
+    try {
+      const { data: spaces } = await supabaseServer.from("spaces").select("id").limit(1)
+      if (spaces !== null) allTables.push("spaces")
+    } catch (e) {
+      // spaces table doesn't exist
+    }
+
+    // Check what's in messages table (we know this works)
+    const { data: messageCount } = await supabaseServer
+      .from("messages")
+      .select("id", { count: "exact" })
+      .limit(0)
 
     return NextResponse.json({
-      totalSpaces: allSpaces?.length || 0,
-      se17Results: se17Spaces?.length || 0,
-      allSpaces: allSpaces || [],
-      se17Spaces: se17Spaces || [],
-      searchError: searchError?.message || null,
       supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
+      spacesTable: tableInfo,
+      existingTables: allTables,
+      messagesCount: messageCount?.length || 0,
+      envVars: {
+        hasSupabaseUrl: !!process.env.SUPABASE_URL,
+        hasSupabaseAnonKey: !!process.env.SUPABASE_ANON_KEY,
+        hasSupabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      }
     })
   } catch (error) {
     console.error("❌ Debug API error:", error)
@@ -46,6 +77,7 @@ export async function GET(request: NextRequest) {
       {
         error: "Debug failed",
         details: error instanceof Error ? error.message : "Unknown error",
+        supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
       },
       { status: 500 },
     )

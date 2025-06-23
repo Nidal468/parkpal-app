@@ -13,7 +13,7 @@ const isSupabaseConfigured = () => {
   return !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
 }
 
-// Fixed search function with better error handling
+// Fixed search function with better error handling for your data structure
 async function searchParkingSpaces(searchParams: any) {
   try {
     console.log("🔍 Starting parking space search with params:", searchParams)
@@ -38,8 +38,11 @@ async function searchParkingSpaces(searchParams: any) {
 
       console.log("✅ Database has spaces, proceeding with search...")
 
-      // Start with basic query - no joins to avoid foreign key issues
-      let query = supabaseServer.from("spaces").select("*").eq("is_available", true)
+      // Start with basic query - handle both boolean and string is_available
+      let query = supabaseServer.from("spaces").select("*")
+
+      // Handle is_available as either boolean true or string "true"
+      query = query.or('is_available.eq.true,is_available.eq."true"')
 
       // Location proximity search (search in multiple fields)
       if (searchParams.location) {
@@ -72,7 +75,7 @@ async function searchParkingSpaces(searchParams: any) {
       }
 
       // Order by price (best value first) and limit to 3 best matches
-      const { data, error } = await query.order("price_per_day", { ascending: true }).limit(3)
+      const { data, error } = await query.order("price_per_day", { ascending: true }).limit(6)
 
       if (error) {
         console.error("❌ Supabase query error:", error)
@@ -93,48 +96,30 @@ async function searchParkingSpaces(searchParams: any) {
 
       console.log(`✅ Supabase query found ${data.length} spaces`)
 
-      // Transform the data and try to get host info separately if needed
-      const transformedSpaces = await Promise.all(
-        data.map(async (space) => {
-          let hostInfo = null
+      // Transform the data to match expected format
+      const transformedSpaces = data.map((space) => {
+        return {
+          ...space,
+          // Ensure is_available is boolean
+          is_available: space.is_available === true || space.is_available === "true",
+          // Parse features if it's a string
+          features:
+            typeof space.features === "string"
+              ? space.features
+                  .split(",")
+                  .map((f) => f.trim())
+                  .filter((f) => f.length > 0)
+              : space.features || [],
+          // Add mock host info since we don't have users table populated
+          host: {
+            id: space.host_id || "mock-host",
+            name: "Host",
+            email: "host@example.com",
+          },
+        }
+      })
 
-          // Try to get host info if host_id exists
-          if (space.host_id) {
-            try {
-              const { data: host } = await supabaseServer
-                .from("users")
-                .select("id, name, email")
-                .eq("id", space.host_id)
-                .single()
-
-              if (host) {
-                hostInfo = host
-              }
-            } catch (hostError) {
-              console.log("⚠️ Could not fetch host info:", hostError)
-            }
-          }
-
-          return {
-            ...space,
-            host: hostInfo,
-            features:
-              typeof space.features === "string"
-                ? space.features
-                    .split(",")
-                    .map((f) => f.trim())
-                    .filter((f) => f.length > 0)
-                : space.features || [],
-            // Calculate distance if coordinates are available (simplified)
-            distance:
-              space.latitude && space.longitude
-                ? calculateDistance(searchParams.userLat, searchParams.userLng, space.latitude, space.longitude)
-                : null,
-          }
-        }),
-      )
-
-      return transformedSpaces
+      return transformedSpaces.slice(0, 3) // Return top 3 results
     }
 
     // Fallback to mock data
@@ -348,10 +333,11 @@ ${parkingSpaces
     (space, index) => `
 ${index + 1}. ${space.title || "Parking Space"} in ${space.location || "Location"}
    Price: £${space.price_per_day || "N/A"}/day
-   ${space.distance ? `Distance: ${space.distance} miles` : ""}
+   Address: ${space.address || "No address"}
+   Postcode: ${space.postcode || "No postcode"}
    Features: ${Array.isArray(space.features) ? space.features.join(", ") : space.features || "Standard parking"}
    Description: ${space.description || "No description available"}
-   ${space.host?.name ? `Host: ${space.host.name}` : ""}
+   Available: ${space.available_from} to ${space.available_to}
 `,
   )
   .join("\n")}
