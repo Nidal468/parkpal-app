@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,6 +14,8 @@ interface ParkingSpaceCardProps {
 }
 
 export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
+  const [pricingMode, setPricingMode] = useState<"daily" | "monthly">("daily")
+
   // Parse available hours for display
   const formatAvailableHours = (hours: string | null) => {
     if (!hours || hours === "00:00-23:59") return "24/7"
@@ -65,6 +68,22 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
     if (availableSpaces <= 3) return `${availableSpaces} spots left`
     return `${availableSpaces} available`
   }
+
+  // Get current price and period
+  const getCurrentPrice = () => {
+    if (pricingMode === "monthly") {
+      return {
+        price: space.price_per_month || 0,
+        period: "/month",
+      }
+    }
+    return {
+      price: space.price_per_day || 0,
+      period: "/day",
+    }
+  }
+
+  const { price, period } = getCurrentPrice()
 
   return (
     <Card className="w-full max-w-sm">
@@ -138,20 +157,48 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex items-center gap-1">
-            <Pound className="w-4 h-4 text-green-600" />
-            <span className="font-semibold text-green-600">£{space.price_per_day || 0}</span>
-            <span className="text-sm text-muted-foreground">/day</span>
+        {/* Pricing Toggle and Price Display */}
+        <div className="space-y-3 pt-2">
+          {/* Toggle Switch */}
+          <div className="flex items-center justify-center">
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setPricingMode("daily")}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
+                  pricingMode === "daily" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Daily
+              </button>
+              <button
+                onClick={() => setPricingMode("monthly")}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
+                  pricingMode === "monthly" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Monthly
+              </button>
+            </div>
           </div>
-          <Button
-            size="sm"
-            onClick={() => onBook?.(space.id)}
-            className="bg-purple-600 hover:bg-purple-700"
-            disabled={availableSpaces === 0}
-          >
-            {availableSpaces === 0 ? "Fully Booked" : "Book Now"}
-          </Button>
+
+          {/* Price Display with Animation */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Pound className="w-4 h-4 text-green-600" />
+              <div className="transition-all duration-300 ease-in-out">
+                <span className="font-semibold text-green-600 text-lg">£{price}</span>
+                <span className="text-sm text-muted-foreground ml-1">{period}</span>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => onBook?.(space.id)}
+              className="bg-purple-600 hover:bg-purple-700 transition-colors duration-200"
+              disabled={availableSpaces === 0}
+            >
+              {availableSpaces === 0 ? "Fully Booked" : "Book Now"}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

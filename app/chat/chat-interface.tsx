@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -22,6 +23,7 @@ interface Message {
 }
 
 export default function ChatInterface() {
+  const searchParams = useSearchParams()
   const [input, setInput] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -29,6 +31,7 @@ export default function ChatInterface() {
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null)
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid")
+  const [hasProcessedQuery, setHasProcessedQuery] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -44,6 +47,18 @@ export default function ChatInterface() {
     ])
   }, [])
 
+  // Handle URL query parameter
+  useEffect(() => {
+    const query = searchParams.get("q")
+    if (query && !hasProcessedQuery) {
+      setHasProcessedQuery(true)
+      // Auto-send the query from homepage
+      setTimeout(() => {
+        sendMessageWithText(query)
+      }, 500) // Small delay to ensure initial message is loaded
+    }
+  }, [searchParams, hasProcessedQuery])
+
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -54,18 +69,16 @@ export default function ChatInterface() {
     }
   }, [messages])
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return
+  const sendMessageWithText = async (messageText: string) => {
+    if (!messageText.trim() || isLoading) return
 
-    const userMessage = input.trim()
-    setInput("")
     setError(null)
     setIsLoading(true)
 
     // Add user message immediately
     const newUserMessage: Message = {
       role: "user",
-      content: userMessage,
+      content: messageText,
       timestamp: new Date().toLocaleTimeString(),
     }
 
@@ -87,7 +100,7 @@ export default function ChatInterface() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: userMessage,
+          message: messageText,
           conversation: messages.filter((msg) => msg.content !== "Searching for parking spaces..."),
         }),
       })
@@ -141,6 +154,12 @@ export default function ChatInterface() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const sendMessage = async () => {
+    const messageText = input.trim()
+    setInput("")
+    await sendMessageWithText(messageText)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

@@ -18,7 +18,7 @@ export interface Vehicle {
   colour: string | null
 }
 
-// Parking Space interface (updated with inventory tracking)
+// Parking Space interface (updated with inventory tracking and monthly pricing)
 export interface ParkingSpace {
   id: string
   host_id: string
@@ -28,6 +28,7 @@ export interface ParkingSpace {
   is_available: boolean | null
   description: string | null
   price_per_day: number | null
+  price_per_month: number | null // Monthly pricing
   available_from: string | null // date string
   available_to: string | null // date string
   image_url: string | null

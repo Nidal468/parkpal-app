@@ -4,8 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Send, Car } from "lucide-react"
+import { Car, Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -46,27 +45,39 @@ export default function HomePage() {
           <h1 className="text-5xl md:text-6xl font-bold text-gray-800 dark:text-white mb-6">Hi, I'm Parkpal</h1>
           <p className="text-lg text-gray-600 dark:text-gray-300 mb-12">Find parking that suits your precise needs.</p>
 
-          {/* Search Input */}
-          <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto mb-8">
-            <Input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Where are you looking to park?"
-              className="w-full px-6 py-4 text-lg rounded-full border-0 shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 rounded-full bg-black hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
+          {/* Updated Search Input */}
+          <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto mb-4">
+            <div className="relative bg-gray-900 dark:bg-gray-800 rounded-2xl p-4 shadow-2xl">
+              <div className="flex items-center gap-3">
+                <Plus className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Where are you looking to park?"
+                  className="flex-1 bg-transparent text-white placeholder-gray-400 text-lg outline-none"
+                />
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-semibold transition-colors duration-200 flex-shrink-0"
+                >
+                  PARK
+                </button>
+              </div>
+            </div>
           </form>
 
-          {/* Footer Link */}
-          <div className="mt-16">
+          {/* How it works - moved up */}
+          <div className="mb-8">
             <p className="text-gray-600 dark:text-gray-400">How it works? Type: 'Park me asap' or 'Park me near'</p>
+          </div>
+
+          {/* Terms and Privacy Disclaimer - moved down */}
+          <div className="text-sm text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
+            By sending a message, you agree to our{" "}
+            <button className="text-blue-600 dark:text-blue-400 hover:underline">Terms of Use</button> and acknowledge
+            that you have read and understand our{" "}
+            <button className="text-blue-600 dark:text-blue-400 hover:underline">Privacy Policy</button>.
           </div>
         </div>
       </main>
