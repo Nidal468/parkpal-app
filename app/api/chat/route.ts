@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import OpenAI from "openai"
+import { supabaseServer } from "@/lib/supabase-server"
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -45,16 +46,32 @@ If users ask about non-parking topics, politely redirect them back to parking as
 
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Using the more cost-effective model
+      model: "gpt-4o-mini",
       messages: messages,
       max_tokens: 500,
       temperature: 0.7,
     })
 
-    const response = completion.choices[0]?.message?.content || "Sorry, I couldn't process that request."
+    const botResponse = completion.choices[0]?.message?.content || "Sorry, I couldn't process that request."
+
+    // Store the conversation in Supabase
+    try {
+      const { error: supabaseError } = await supabaseServer.from("messages").insert({
+        user_message: message,
+        bot_response: botResponse,
+      })
+
+      if (supabaseError) {
+        console.error("Supabase error:", supabaseError)
+        // Don't fail the request if database storage fails
+      }
+    } catch (dbError) {
+      console.error("Database storage error:", dbError)
+      // Continue with the response even if storage fails
+    }
 
     return NextResponse.json({
-      message: response,
+      message: botResponse,
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
