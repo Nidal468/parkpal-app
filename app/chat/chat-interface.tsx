@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Car } from "lucide-react"
+import { Send, Car, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Message {
@@ -18,6 +18,7 @@ interface Message {
 export default function ChatInterface() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -48,10 +49,11 @@ export default function ChatInterface() {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     }
 
-    // Add user message and loading message
+    // Add user message and clear input
     setMessages((prev) => [...prev, userMessage])
     setInput("")
     setIsLoading(true)
+    setError(null)
 
     // Add thinking message
     const thinkingMessage: Message = {
@@ -73,11 +75,11 @@ export default function ChatInterface() {
         }),
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to get response")
-      }
-
       const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to get response")
+      }
 
       // Replace thinking message with actual response
       const assistantMessage: Message = {
@@ -89,6 +91,7 @@ export default function ChatInterface() {
       setMessages((prev) => prev.slice(0, -1).concat(assistantMessage))
     } catch (error) {
       console.error("Chat error:", error)
+      setError(error instanceof Error ? error.message : "An error occurred")
 
       // Replace thinking message with error message
       const errorMessage: Message = {
@@ -112,6 +115,16 @@ export default function ChatInterface() {
 
   return (
     <div className="flex-1 flex flex-col bg-background">
+      {/* Error Banner */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 p-3">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-400 text-sm max-w-4xl mx-auto">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
+
       {/* Chat Messages */}
       <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
         <div className="space-y-4 max-w-4xl mx-auto">
@@ -180,7 +193,11 @@ export default function ChatInterface() {
               disabled={!input.trim() || isLoading}
               className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 h-11"
             >
-              <Send className="w-4 h-4" />
+              {isLoading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
             </Button>
           </div>
         </div>

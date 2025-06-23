@@ -1,14 +1,57 @@
 import { type NextRequest, NextResponse } from "next/server"
+import OpenAI from "openai"
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
 
 export async function POST(request: NextRequest) {
   try {
     const { message, conversation } = await request.json()
 
-    // Simulate processing delay
-    await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 2000))
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OpenAI API key not configured")
+    }
 
-    // Generate parking-specific responses based on user input
-    const response = generateParkingResponse(message)
+    // Convert conversation to OpenAI format
+    const messages = [
+      {
+        role: "system" as const,
+        content: `You are Parkpal, a helpful AI assistant specialized in finding parking solutions. You help users find parking spots, provide pricing information, suggest alternatives, and answer parking-related questions. 
+
+Key guidelines:
+- Always be friendly and helpful
+- Focus on parking-related solutions
+- Provide specific, actionable advice
+- Include pricing when possible (use realistic UK prices)
+- Suggest alternatives when needed
+- Use emojis to make responses engaging
+- Keep responses concise but informative
+
+If users ask about non-parking topics, politely redirect them back to parking assistance.`,
+      },
+      // Add conversation history
+      ...conversation.map((msg: any) => ({
+        role: msg.role === "assistant" ? ("assistant" as const) : ("user" as const),
+        content: msg.content,
+      })),
+      // Add current message
+      {
+        role: "user" as const,
+        content: message,
+      },
+    ]
+
+    // Call OpenAI API
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // Using the more cost-effective model
+      messages: messages,
+      max_tokens: 500,
+      temperature: 0.7,
+    })
+
+    const response = completion.choices[0]?.message?.content || "Sorry, I couldn't process that request."
 
     return NextResponse.json({
       message: response,
@@ -16,38 +59,22 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Chat API error:", error)
-    return NextResponse.json({ error: "Failed to process chat message" }, { status: 500 })
+
+    // Provide helpful error messages
+    if (error instanceof Error && error.message.includes("API key")) {
+      return NextResponse.json(
+        {
+          error: "OpenAI API key not configured. Please add OPENAI_API_KEY to your environment variables.",
+        },
+        { status: 500 },
+      )
+    }
+
+    return NextResponse.json(
+      {
+        error: "Failed to process chat message. Please try again.",
+      },
+      { status: 500 },
+    )
   }
-}
-
-function generateParkingResponse(message: string): string {
-  const lowerMessage = message.toLowerCase()
-
-  // Location-based responses
-  if (lowerMessage.includes("london") || lowerMessage.includes("central")) {
-    return "🏙️ Great choice! London has many parking options. I found several spots in Central London:\n\n📍 **NCP Car Park** - £4.50/hour\n📍 **Q-Park** - £5.20/hour\n📍 **Street parking** - £3.60/hour (2hr max)\n\nWhich area specifically? I can show you the closest available spots!"
-  }
-
-  if (lowerMessage.includes("airport")) {
-    return "✈️ Airport parking sorted! Here are your options:\n\n🅿️ **Short Stay** - £6/hour (perfect for pickups)\n🅿️ **Long Stay** - £12/day (great for holidays)\n🅿️ **Premium** - £18/day (covered, closest to terminal)\n\nHow long will you be parking for?"
-  }
-
-  if (lowerMessage.includes("cheap") || lowerMessage.includes("affordable")) {
-    return "💰 Budget-friendly options coming up!\n\n🆓 **Free street parking** - Residential areas (2hr limit)\n💷 **Council car parks** - £8/day\n🚌 **Park & Ride** - £3/day + free bus\n\nWhere do you need to be? I'll find the cheapest option nearby!"
-  }
-
-  if (lowerMessage.includes("restaurant") || lowerMessage.includes("dinner")) {
-    return "🍽️ Perfect for dining out! Restaurant parking options:\n\n✅ **Validated parking** - Many restaurants offer 2-3 hours free\n🏢 **Evening rates** - Most car parks cheaper after 6pm\n🚶 **Walk-friendly spots** - I can find parking within 5 minutes walk\n\nWhich restaurant or area are you heading to?"
-  }
-
-  if (lowerMessage.includes("urgent") || lowerMessage.includes("asap") || lowerMessage.includes("now")) {
-    return "🚨 Urgent parking needed! Let me find immediate availability:\n\n⚡ **Live spots available:**\n📍 City Centre Multi-storey - 23 spaces free\n📍 High Street Car Park - 8 spaces free\n📍 Station Road - 3 street spaces\n\nI can reserve one for you right now! Which location works best?"
-  }
-
-  if (lowerMessage.includes("shopping") || lowerMessage.includes("mall")) {
-    return "🛍️ Shopping trip parking sorted!\n\n🏬 **Shopping centre parking** - First 2 hours free with purchase\n🅿️ **Nearby alternatives** - £2/hour if centre is full\n🎫 **Validation deals** - Spend £20+ get 4 hours free\n\nWhich shopping area are you visiting?"
-  }
-
-  // Default helpful response
-  return `I'd love to help you find parking! Based on "${message}", let me ask a few quick questions:\n\n📍 **Where** exactly do you need to park?\n⏰ **How long** will you be there?\n💰 **Any budget** preferences?\n🚗 **Special requirements** (covered, disabled access, etc.)?\n\nThe more details you give me, the better I can help! 🚗`
 }
