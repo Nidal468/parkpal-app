@@ -179,11 +179,11 @@ SEARCH BEHAVIOR:
 - If no matches found, suggest nearby areas or alternatives
 
 RESPONSE GUIDELINES:
-- Be conversational, helpful, and parking-focused
-- Present available spaces naturally with key details
-- Include specific information: location, price, features
-- Use UK pricing (£) and London locations
-- Use emojis sparingly but effectively (🚗, 📍, £, 🔒)
+- Be brief and conversational - users can see details in the cards below
+- For parking searches, use a short intro like "Here are some great parking options for you:" or "I found these available spaces:"
+- Don't repeat detailed information that's shown in the parking cards
+- Keep responses to 1-2 sentences maximum for parking results
+- Use minimal emojis (🚗 or 📍 occasionally)
 
 CURRENT SEARCH CONTEXT:
 ${
@@ -198,20 +198,7 @@ ${
   parkingSpaces.length > 0
     ? `
 AVAILABLE SPACES (up to 3 best matches):
-${parkingSpaces
-  .map(
-    (space, index) => `
-${index + 1}. ${space.title || "Parking Space"} in ${space.location || "Location"}
-   Price: £${space.price_per_day || "N/A"}/day
-   Address: ${space.address || "No address"}
-   Postcode: ${space.postcode || "No postcode"}
-   Features: ${Array.isArray(space.features) ? space.features.join(", ") : space.features || "Standard parking"}
-   Description: ${space.description || "No description available"}
-`,
-  )
-  .join("\n")}
-
-Present these spaces in a friendly way and mention that detailed cards will be shown below your response.
+Present these spaces with just a brief intro like "Here are some available parking spaces for you:" or "I found these options near [location]:" - don't repeat the detailed information since it's shown in the cards below.
 `
     : `
 No spaces found matching the criteria. Respond with helpful suggestions for nearby areas like:
