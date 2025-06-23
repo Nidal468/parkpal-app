@@ -4,11 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MapPin, PoundSterlingIcon as Pound, Clock, Calendar, Navigation } from "lucide-react"
+import { MapPin, PoundSterlingIcon as Pound, Clock, Calendar, Navigation, Users } from "lucide-react"
 import type { ParkingSpaceDisplay } from "@/lib/supabase-types"
 
 interface ParkingSpaceCardProps {
-  space: ParkingSpaceDisplay & { distance?: number | null }
+  space: ParkingSpaceDisplay & { distance?: number | null; available_spaces?: number }
   onBook?: (spaceId: string) => void
 }
 
@@ -48,6 +48,24 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
       .slice(0, 2)
   }
 
+  // Calculate availability status
+  const totalSpaces = space.total_spaces || 1
+  const bookedSpaces = space.booked_spaces || 0
+  const availableSpaces = space.available_spaces || totalSpaces - bookedSpaces
+
+  const getAvailabilityColor = () => {
+    if (availableSpaces === 0) return "bg-red-600"
+    if (availableSpaces <= 2) return "bg-orange-600"
+    return "bg-green-600"
+  }
+
+  const getAvailabilityText = () => {
+    if (availableSpaces === 0) return "Fully Booked"
+    if (availableSpaces === 1) return "1 spot left"
+    if (availableSpaces <= 3) return `${availableSpaces} spots left`
+    return `${availableSpaces} available`
+  }
+
   return (
     <Card className="w-full max-w-sm">
       <div className="aspect-video relative overflow-hidden rounded-t-lg">
@@ -63,6 +81,11 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
             {space.distance} mi
           </Badge>
         )}
+        {/* Availability badge */}
+        <Badge className={`absolute top-2 left-2 text-white ${getAvailabilityColor()}`}>
+          <Users className="w-3 h-3 mr-1" />
+          {getAvailabilityText()}
+        </Badge>
       </div>
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">{space.title}</CardTitle>
@@ -121,8 +144,13 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
             <span className="font-semibold text-green-600">£{space.price_per_day || 0}</span>
             <span className="text-sm text-muted-foreground">/day</span>
           </div>
-          <Button size="sm" onClick={() => onBook?.(space.id)} className="bg-purple-600 hover:bg-purple-700">
-            Book Now
+          <Button
+            size="sm"
+            onClick={() => onBook?.(space.id)}
+            className="bg-purple-600 hover:bg-purple-700"
+            disabled={availableSpaces === 0}
+          >
+            {availableSpaces === 0 ? "Fully Booked" : "Book Now"}
           </Button>
         </div>
       </CardContent>

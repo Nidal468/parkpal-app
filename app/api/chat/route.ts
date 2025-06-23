@@ -13,17 +13,15 @@ const isSupabaseConfigured = () => {
   return !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
 }
 
-// Simplified and more robust search function
+// Enhanced search function with availability checking
 async function searchParkingSpaces(searchParams: any) {
   try {
     console.log("🔍 Starting parking space search with params:", searchParams)
 
-    // Try Supabase first if configured
     if (isSupabaseConfigured()) {
-      // Simplified search - just get available spaces first
       console.log("📊 Searching your actual database spaces...")
 
-      // First, get ALL available spaces to see what we have
+      // Get spaces that are available AND have capacity
       const { data: allAvailable, error: allError } = await supabaseServer
         .from("spaces")
         .select("*")
@@ -42,11 +40,28 @@ async function searchParkingSpaces(searchParams: any) {
         return searchMockParkingSpaces(searchParams).slice(0, 3)
       }
 
-      // If we have a location filter, try to match it
-      let filteredSpaces = allAvailable
+      // Filter out spaces that are fully booked
+      const spacesWithCapacity = allAvailable.filter((space) => {
+        const totalSpaces = space.total_spaces || 1
+        const bookedSpaces = space.booked_spaces || 0
+        const availableSpaces = totalSpaces - bookedSpaces
+
+        console.log(`Space "${space.title}": ${availableSpaces}/${totalSpaces} available`)
+        return availableSpaces > 0
+      })
+
+      console.log(`🎯 ${spacesWithCapacity.length} spaces have available capacity`)
+
+      if (spacesWithCapacity.length === 0) {
+        console.log("🚫 All spaces are fully booked")
+        return []
+      }
+
+      // Apply location filtering if specified
+      let filteredSpaces = spacesWithCapacity
       if (searchParams.location) {
         const locationTerm = searchParams.location.toLowerCase()
-        filteredSpaces = allAvailable.filter(
+        filteredSpaces = spacesWithCapacity.filter(
           (space) =>
             (space.location && space.location.toLowerCase().includes(locationTerm)) ||
             (space.address && space.address.toLowerCase().includes(locationTerm)) ||
@@ -57,28 +72,35 @@ async function searchParkingSpaces(searchParams: any) {
         // If no location matches, return all available spaces
         if (filteredSpaces.length === 0) {
           console.log("📍 No location matches, showing all available spaces")
-          filteredSpaces = allAvailable
+          filteredSpaces = spacesWithCapacity
         }
       }
 
-      // Transform the data
-      const transformedSpaces = filteredSpaces.map((space) => ({
-        ...space,
-        features:
-          typeof space.features === "string"
-            ? space.features
-                .split(",")
-                .map((f) => f.trim())
-                .filter((f) => f.length > 0)
-            : space.features || [],
-        host: {
-          id: space.host_id || "host-1",
-          name: "Space Owner",
-          email: "owner@example.com",
-        },
-      }))
+      // Transform the data with availability info
+      const transformedSpaces = filteredSpaces.map((space) => {
+        const totalSpaces = space.total_spaces || 1
+        const bookedSpaces = space.booked_spaces || 0
+        const availableSpaces = totalSpaces - bookedSpaces
 
-      console.log(`🎯 Returning ${transformedSpaces.length} spaces from YOUR database`)
+        return {
+          ...space,
+          available_spaces: availableSpaces,
+          features:
+            typeof space.features === "string"
+              ? space.features
+                  .split(",")
+                  .map((f) => f.trim())
+                  .filter((f) => f.length > 0)
+              : space.features || [],
+          host: {
+            id: space.host_id || "host-1",
+            name: "Space Owner",
+            email: "owner@example.com",
+          },
+        }
+      })
+
+      console.log(`🎯 Returning ${transformedSpaces.length} spaces with available capacity`)
       return transformedSpaces.slice(0, 3)
     }
 
@@ -105,6 +127,7 @@ function extractSearchParams(message: string) {
     /([a-zA-Z0-9\s]+)\s+parking/i,
     /(?:find|book|need)\s+(?:parking\s+)?(?:in|at|near)\s+([a-zA-Z0-9\s]+)/i,
     /park\s+me\s+(?:in|near)\s+([a-zA-Z0-9\s]+)/i,
+    /park\s+me\s+asap/i, // Handle "park me asap"
   ]
 
   for (const pattern of locationPatterns) {
@@ -114,6 +137,12 @@ function extractSearchParams(message: string) {
       console.log(`📍 Extracted location: "${location}"`)
       break
     }
+  }
+
+  // Handle "park me asap" - no specific location
+  if (lowerMessage.includes("park me asap") || lowerMessage.includes("asap")) {
+    location = null // Show all available spaces
+    console.log("⚡ ASAP request - showing all available spaces")
   }
 
   // Extract price constraints
@@ -164,23 +193,23 @@ export async function POST(request: NextRequest) {
       console.log(`🏁 Search completed. Found ${parkingSpaces.length} spaces`)
     }
 
-    // Enhanced system prompt
+    // Enhanced system prompt with availability messaging
     const systemPrompt = `You are a helpful Parking Assistant for Parkpal. Your primary role is to help users find and book parking spaces in London.
 
 CORE ASSISTANT LOGIC:
 When users ask for parking, you search the Supabase spaces table and return matches based on:
 - Location proximity (especially for SE1, SE17, Kennington, Borough, Southwark areas)
-- Availability and pricing
-- Features and requirements
+- Availability and capacity (only show spaces with available spots)
+- Pricing and features
 
-SEARCH BEHAVIOR:
-- Display up to 3 best matches with title, price per day, location, and key features
-- Order results by best value (price) and proximity
-- If no matches found, suggest nearby areas or alternatives
+AVAILABILITY LOGIC:
+- Only show spaces that have available capacity (total_spaces > booked_spaces)
+- If all spaces in an area are fully booked, suggest nearby alternatives
+- Mention when spaces have limited availability (e.g., "Only 2 spots left!")
 
 RESPONSE GUIDELINES:
 - Be brief and conversational - users can see details in the cards below
-- For parking searches, use a short intro like "Here are some great parking options for you:" or "I found these available spaces:"
+- For parking searches, use a short intro like "Here are some available parking spaces for you:" or "I found these options:"
 - Don't repeat detailed information that's shown in the parking cards
 - Keep responses to 1-2 sentences maximum for parking results
 - Use minimal emojis (🚗 or 📍 occasionally)
@@ -191,27 +220,28 @@ ${
     ? `
 - User query: "${message}"
 - Search parameters: ${JSON.stringify(searchParams)}
-- Found ${parkingSpaces.length} available spaces
+- Found ${parkingSpaces.length} available spaces with capacity
 - Data source: ${isSupabaseConfigured() ? "Live Supabase database" : "Demo data"}
 
 ${
   parkingSpaces.length > 0
     ? `
-AVAILABLE SPACES (up to 3 best matches):
+AVAILABLE SPACES (up to 3 best matches with capacity):
 Present these spaces with just a brief intro like "Here are some available parking spaces for you:" or "I found these options near [location]:" - don't repeat the detailed information since it's shown in the cards below.
 `
     : `
-No spaces found matching the criteria. Respond with helpful suggestions for nearby areas like:
-- For SE17/Kennington: try Elephant & Castle, Borough, Waterloo, or Southwark
-- Different dates or price ranges
-- Alternative search terms
+No spaces found with available capacity. Respond with helpful suggestions:
+- "All spaces in that area are currently fully booked. Let me suggest some nearby alternatives:"
+- Suggest nearby areas like Elephant & Castle, Borough, Waterloo, or Southwark for SE17 searches
+- Offer to check different dates or price ranges
+- Mention they can try "Park me asap" for the quickest available options
 `
 }
 `
     : "No parking search performed - respond to general queries and guide towards parking assistance."
 }
 
-IMPORTANT: Always be helpful and suggest alternatives if no exact matches are found.`
+IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity are found.`
 
     // Convert conversation to OpenAI format
     const messages = [

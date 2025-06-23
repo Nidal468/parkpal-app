@@ -10,6 +10,32 @@ export async function POST(request: NextRequest) {
     // TODO: Add user authentication to get real user_id
     const mockUserId = "550e8400-e29b-41d4-a716-446655440003" // Mock user for demo
 
+    // First, check if the space has available capacity
+    const { data: spaceData, error: spaceError } = await supabaseServer
+      .from("spaces")
+      .select("total_spaces, booked_spaces, title")
+      .eq("id", bookingData.spaceId)
+      .single()
+
+    if (spaceError || !spaceData) {
+      console.error("❌ Error fetching space data:", spaceError)
+      return NextResponse.json({ error: "Space not found" }, { status: 404 })
+    }
+
+    const totalSpaces = spaceData.total_spaces || 1
+    const bookedSpaces = spaceData.booked_spaces || 0
+    const availableSpaces = totalSpaces - bookedSpaces
+
+    if (availableSpaces <= 0) {
+      console.log("🚫 Space is fully booked")
+      return NextResponse.json(
+        {
+          error: "This parking space is currently fully booked. Please try another location.",
+        },
+        { status: 400 },
+      )
+    }
+
     // Insert booking into database
     const { data, error } = await supabaseServer
       .from("bookings")
@@ -32,7 +58,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create booking" }, { status: 500 })
     }
 
+    // Update the booked_spaces count
+    const { error: updateError } = await supabaseServer
+      .from("spaces")
+      .update({ booked_spaces: bookedSpaces + 1 })
+      .eq("id", bookingData.spaceId)
+
+    if (updateError) {
+      console.error("❌ Error updating booked spaces count:", updateError)
+      // Note: In production, you'd want to rollback the booking here
+    }
+
     console.log("✅ Booking created successfully:", data)
+    console.log(`📊 Space "${spaceData.title}" now has ${availableSpaces - 1} available spots`)
 
     // TODO: Send confirmation email
     // TODO: Send notification to space host
@@ -41,6 +79,7 @@ export async function POST(request: NextRequest) {
       success: true,
       booking: data,
       message: "Booking confirmed successfully!",
+      remainingSpaces: availableSpaces - 1,
     })
   } catch (error) {
     console.error("💥 Booking API error:", error)

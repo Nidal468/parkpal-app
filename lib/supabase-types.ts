@@ -18,7 +18,7 @@ export interface Vehicle {
   colour: string | null
 }
 
-// Parking Space interface (updated)
+// Parking Space interface (updated with inventory tracking)
 export interface ParkingSpace {
   id: string
   host_id: string
@@ -38,6 +38,8 @@ export interface ParkingSpace {
   what3words: string | null
   available_days: string | null // Default: 'Mon,Tue,Wed,Thu,Fri,Sat,Sun'
   available_hours: string | null // Default: '00:00-23:59'
+  total_spaces: number | null // Total parking spaces available
+  booked_spaces: number | null // Currently booked spaces
 }
 
 // Booking interface (for future implementation)
@@ -75,6 +77,7 @@ export interface ChatSession {
 export interface ParkingSpaceDisplay extends Omit<ParkingSpace, "features"> {
   features: string[] // Parsed from comma-separated string
   host?: User // Optional host information
+  available_spaces?: number // Calculated: total_spaces - booked_spaces
 }
 
 // Enhanced search parameters
