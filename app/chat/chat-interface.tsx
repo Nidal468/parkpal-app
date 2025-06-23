@@ -6,9 +6,12 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle, Map, Grid } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ParkingSpaceCard } from "@/components/parking-space-card"
+import { ParkingMap } from "@/components/parking-map"
+import { BookingModal, type BookingData } from "@/components/booking-modal"
 import type { ParkingSpace } from "@/lib/supabase-types"
 
 interface Message {
@@ -23,6 +26,9 @@ export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null)
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<"grid" | "map">("grid")
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -145,10 +151,51 @@ export default function ChatInterface() {
   }
 
   const handleBookSpace = (spaceId: string) => {
-    // TODO: Implement booking functionality
-    console.log("Booking space:", spaceId)
-    // You can add booking logic here or navigate to a booking page
+    // Find the space from the latest message with parking spaces
+    const latestMessageWithSpaces = [...messages].reverse().find((msg) => msg.parkingSpaces?.length)
+    const space = latestMessageWithSpaces?.parkingSpaces?.find((s) => s.id === spaceId)
+
+    if (space) {
+      setSelectedSpace(space)
+      setIsBookingModalOpen(true)
+    }
   }
+
+  const handleSelectSpaceFromMap = (space: ParkingSpace) => {
+    setSelectedSpace(space)
+    setIsBookingModalOpen(true)
+  }
+
+  const handleConfirmBooking = async (bookingData: BookingData) => {
+    try {
+      // TODO: Implement actual booking API call
+      console.log("Creating booking:", bookingData)
+
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      // Add confirmation message to chat
+      const confirmationMessage: Message = {
+        role: "assistant",
+        content: `🎉 Booking confirmed! Your parking space "${selectedSpace?.title}" has been booked from ${bookingData.startDate.toLocaleDateString()} to ${bookingData.endDate.toLocaleDateString()}. 
+
+Total cost: £${bookingData.totalPrice}
+Vehicle: ${bookingData.vehicleReg}
+
+You'll receive a confirmation email at ${bookingData.contactEmail} with all the details and access instructions.`,
+        timestamp: new Date().toLocaleTimeString(),
+      }
+
+      setMessages((prev) => [...prev, confirmationMessage])
+      setSelectedSpace(null)
+    } catch (error) {
+      console.error("Booking error:", error)
+      throw error
+    }
+  }
+
+  // Get all parking spaces from messages for map view
+  const allParkingSpaces = messages.filter((msg) => msg.parkingSpaces?.length).flatMap((msg) => msg.parkingSpaces || [])
 
   return (
     <div className="flex-1 flex flex-col bg-background">
@@ -216,15 +263,43 @@ export default function ChatInterface() {
                 </div>
               </div>
 
-              {/* Parking Spaces Cards */}
+              {/* Parking Spaces Results */}
               {message.parkingSpaces && message.parkingSpaces.length > 0 && (
                 <div className="ml-11 space-y-3">
-                  <h4 className="text-sm font-medium text-muted-foreground">Available Parking Spaces:</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {message.parkingSpaces.map((space) => (
-                      <ParkingSpaceCard key={space.id} space={space} onBook={handleBookSpace} />
-                    ))}
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium text-muted-foreground">
+                      Found {message.parkingSpaces.length} parking space(s):
+                    </h4>
+                    <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "grid" | "map")}>
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="grid" className="flex items-center gap-1">
+                          <Grid className="w-4 h-4" />
+                          Grid
+                        </TabsTrigger>
+                        <TabsTrigger value="map" className="flex items-center gap-1">
+                          <Map className="w-4 h-4" />
+                          Map
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
                   </div>
+
+                  <Tabs value={viewMode} className="w-full">
+                    <TabsContent value="grid" className="mt-0">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {message.parkingSpaces.map((space) => (
+                          <ParkingSpaceCard key={space.id} space={space} onBook={handleBookSpace} />
+                        ))}
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="map" className="mt-0">
+                      <ParkingMap
+                        spaces={message.parkingSpaces}
+                        onSelectSpace={handleSelectSpaceFromMap}
+                        selectedSpaceId={selectedSpace?.id}
+                      />
+                    </TabsContent>
+                  </Tabs>
                 </div>
               )}
             </div>
@@ -238,7 +313,7 @@ export default function ChatInterface() {
             <div className="flex-1 relative">
               <Textarea
                 ref={textareaRef}
-                placeholder="Try: 'I need parking in Kennington from June 23–July 1'"
+                placeholder="Try: 'I need secure parking with CCTV in Kennington from June 23–July 1'"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -255,6 +330,17 @@ export default function ChatInterface() {
           </div>
         </div>
       </div>
+
+      {/* Booking Modal */}
+      <BookingModal
+        space={selectedSpace}
+        isOpen={isBookingModalOpen}
+        onClose={() => {
+          setIsBookingModalOpen(false)
+          setSelectedSpace(null)
+        }}
+        onConfirm={handleConfirmBooking}
+      />
     </div>
   )
 }
