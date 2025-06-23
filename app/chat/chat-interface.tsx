@@ -6,13 +6,16 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2 } from "lucide-react"
+import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ParkingSpaceCard } from "@/components/parking-space-card"
+import type { ParkingSpace } from "@/lib/supabase-types"
 
 interface Message {
   role: "assistant" | "user"
   content: string
   timestamp: string
+  parkingSpaces?: ParkingSpace[]
 }
 
 export default function ChatInterface() {
@@ -23,9 +26,16 @@ export default function ChatInterface() {
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load chat history on component mount
+  // Load initial message on component mount
   useEffect(() => {
-    loadChatHistory()
+    setMessages([
+      {
+        role: "assistant",
+        content:
+          "Hi, I'm Parkpal 👋 Where would you like to park? Just tell me the location and dates, and I'll find available spaces for you!",
+        timestamp: new Date().toLocaleTimeString(),
+      },
+    ])
   }, [])
 
   // Auto-scroll to bottom when new messages are added
@@ -37,37 +47,6 @@ export default function ChatInterface() {
       }
     }
   }, [messages])
-
-  const loadChatHistory = async () => {
-    try {
-      const response = await fetch("/api/chat/history?limit=20")
-      if (response.ok) {
-        const data = await response.json()
-        if (data.messages && data.messages.length > 0) {
-          setMessages(data.messages)
-        } else {
-          // Show initial message if no history
-          setMessages([
-            {
-              role: "assistant",
-              content: "Hi, I'm Parkpal 👋 Where would you like to park?",
-              timestamp: new Date().toLocaleTimeString(),
-            },
-          ])
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load chat history:", error)
-      // Show initial message on error
-      setMessages([
-        {
-          role: "assistant",
-          content: "Hi, I'm Parkpal 👋 Where would you like to park?",
-          timestamp: new Date().toLocaleTimeString(),
-        },
-      ])
-    }
-  }
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return
@@ -89,7 +68,7 @@ export default function ChatInterface() {
     // Add thinking message
     const thinkingMessage: Message = {
       role: "assistant",
-      content: "Thinking...",
+      content: "Searching for parking spaces...",
       timestamp: new Date().toLocaleTimeString(),
     }
 
@@ -103,24 +82,39 @@ export default function ChatInterface() {
         },
         body: JSON.stringify({
           message: userMessage,
-          conversation: messages.filter((msg) => msg.content !== "Thinking..."),
+          conversation: messages.filter((msg) => msg.content !== "Searching for parking spaces..."),
         }),
       })
 
+      // Check if response is ok
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to send message")
+        const errorText = await response.text()
+        console.error("API Error:", errorText)
+        throw new Error(`Server error: ${response.status}`)
+      }
+
+      // Check content type
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const errorText = await response.text()
+        console.error("Non-JSON response:", errorText)
+        throw new Error("Server returned invalid response format")
       }
 
       const data = await response.json()
+
+      if (data.error) {
+        throw new Error(data.error)
+      }
 
       // Replace thinking message with actual response
       setMessages((prev) => {
         const newMessages = [...prev]
         newMessages[newMessages.length - 1] = {
           role: "assistant",
-          content: data.message,
+          content: data.message || "Sorry, I couldn't process that request.",
           timestamp: new Date().toLocaleTimeString(),
+          parkingSpaces: data.parkingSpaces || undefined,
         }
         return newMessages
       })
@@ -128,8 +122,16 @@ export default function ChatInterface() {
       console.error("Error sending message:", error)
       setError(error instanceof Error ? error.message : "Failed to send message")
 
-      // Remove thinking message on error
-      setMessages((prev) => prev.slice(0, -1))
+      // Replace thinking message with error message
+      setMessages((prev) => {
+        const newMessages = [...prev]
+        newMessages[newMessages.length - 1] = {
+          role: "assistant",
+          content: "Sorry, I'm having trouble connecting right now. Please try again.",
+          timestamp: new Date().toLocaleTimeString(),
+        }
+        return newMessages
+      })
     } finally {
       setIsLoading(false)
     }
@@ -142,69 +144,89 @@ export default function ChatInterface() {
     }
   }
 
+  const handleBookSpace = (spaceId: string) => {
+    // TODO: Implement booking functionality
+    console.log("Booking space:", spaceId)
+    // You can add booking logic here or navigate to a booking page
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-background">
       {error && (
-        <div className="mx-4 mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-          <p className="text-sm text-destructive">{error}</p>
+        <div className="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-400 text-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
         </div>
       )}
 
       <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message, index) => (
-            <div
-              key={index}
-              className={cn("flex gap-3 max-w-[85%]", message.role === "user" && "ml-auto flex-row-reverse")}
-            >
-              {/* Avatar */}
-              <div
-                className={cn(
-                  "h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-medium",
-                  message.role === "assistant" ? "bg-purple-600 text-white" : "bg-gray-600 text-white",
-                )}
-              >
-                {message.role === "assistant" ? "🚗" : "You"}
-              </div>
-
-              <div className="space-y-2 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{message.role === "assistant" ? "Parkpal" : "You"}</span>
-                  <span className="text-xs text-muted-foreground">{message.timestamp}</span>
-                </div>
-
+            <div key={index} className="space-y-4">
+              <div className={cn("flex gap-3 max-w-[85%]", message.role === "user" && "ml-auto flex-row-reverse")}>
+                {/* Avatar */}
                 <div
                   className={cn(
-                    "p-3 rounded-lg prose prose-sm max-w-none",
-                    message.role === "assistant"
-                      ? "bg-muted/50 text-foreground"
-                      : "bg-primary text-primary-foreground ml-auto",
+                    "h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-medium",
+                    message.role === "assistant" ? "bg-purple-600 text-white" : "bg-gray-600 text-white",
                   )}
                 >
-                  {message.content === "Thinking..." ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Thinking...</span>
-                    </div>
-                  ) : (
-                    <div className="whitespace-pre-wrap">{message.content}</div>
-                  )}
+                  {message.role === "assistant" ? "🚗" : "You"}
                 </div>
 
-                {message.role === "assistant" && message.content !== "Thinking..." && (
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <ThumbsUp className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <ThumbsDown className="h-3 w-3" />
-                    </Button>
+                <div className="space-y-2 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{message.role === "assistant" ? "Parkpal" : "You"}</span>
+                    <span className="text-xs text-muted-foreground">{message.timestamp}</span>
                   </div>
-                )}
+
+                  <div
+                    className={cn(
+                      "p-3 rounded-lg prose prose-sm max-w-none",
+                      message.role === "assistant"
+                        ? "bg-muted/50 text-foreground"
+                        : "bg-primary text-primary-foreground ml-auto",
+                    )}
+                  >
+                    {message.content === "Searching for parking spaces..." ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Searching for parking spaces...</span>
+                      </div>
+                    ) : (
+                      <div className="whitespace-pre-wrap">{message.content}</div>
+                    )}
+                  </div>
+
+                  {message.role === "assistant" && message.content !== "Searching for parking spaces..." && (
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <ThumbsUp className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <ThumbsDown className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Parking Spaces Cards */}
+              {message.parkingSpaces && message.parkingSpaces.length > 0 && (
+                <div className="ml-11 space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">Available Parking Spaces:</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {message.parkingSpaces.map((space) => (
+                      <ParkingSpaceCard key={space.id} space={space} onBook={handleBookSpace} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -216,7 +238,7 @@ export default function ChatInterface() {
             <div className="flex-1 relative">
               <Textarea
                 ref={textareaRef}
-                placeholder="Where are you looking to park?"
+                placeholder="Try: 'I need parking in Kennington from June 23–July 1'"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
