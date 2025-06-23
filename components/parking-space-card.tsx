@@ -4,11 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MapPin, PoundSterlingIcon as Pound, Clock, Calendar, Navigation } from "lucide-react"
+import { MapPin, PoundSterlingIcon as Pound, Clock, Calendar } from "lucide-react"
 import type { ParkingSpaceDisplay } from "@/lib/supabase-types"
 
 interface ParkingSpaceCardProps {
-  space: ParkingSpaceDisplay & { distance?: number | null }
+  space: ParkingSpaceDisplay
   onBook?: (spaceId: string) => void
 }
 
@@ -56,13 +56,6 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
           alt={space.title}
           className="object-cover w-full h-full"
         />
-        {/* Distance badge */}
-        {space.distance && (
-          <Badge className="absolute top-2 right-2 bg-blue-600 text-white">
-            <Navigation className="w-3 h-3 mr-1" />
-            {space.distance} mi
-          </Badge>
-        )}
       </div>
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">{space.title}</CardTitle>
