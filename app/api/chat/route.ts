@@ -20,118 +20,50 @@ async function searchParkingSpaces(searchParams: any) {
 
     // Try Supabase first if configured
     if (isSupabaseConfigured()) {
-      console.log("📊 Using Supabase database...")
+      // Simplified search - just get available spaces first
+      console.log("📊 Searching your actual database spaces...")
 
-      // First, let's check if we have any spaces at all
-      const { data: totalSpaces, error: countError } = await supabaseServer.from("spaces").select("id").limit(1)
+      // First, get ALL available spaces to see what we have
+      const { data: allAvailable, error: allError } = await supabaseServer
+        .from("spaces")
+        .select("*")
+        .eq("is_available", true)
+        .order("price_per_day", { ascending: true })
 
-      if (countError) {
-        console.error("❌ Error checking database:", countError)
-        console.log("🎭 Falling back to mock data due to database error")
+      if (allError) {
+        console.error("❌ Error getting available spaces:", allError)
         return searchMockParkingSpaces(searchParams).slice(0, 3)
       }
 
-      if (!totalSpaces || totalSpaces.length === 0) {
-        console.log("📭 No spaces found in database, falling back to mock data")
+      console.log(`✅ Found ${allAvailable?.length || 0} available spaces in database`)
+
+      if (!allAvailable || allAvailable.length === 0) {
+        console.log("📭 No available spaces found, using mock data")
         return searchMockParkingSpaces(searchParams).slice(0, 3)
       }
 
-      console.log("✅ Database has spaces, proceeding with search...")
-
-      // Start with basic query - only check for available spaces
-      let query = supabaseServer.from("spaces").select("*").eq("is_available", true)
-
-      // Location search - be more flexible with SE17 searches
+      // If we have a location filter, try to match it
+      let filteredSpaces = allAvailable
       if (searchParams.location) {
-        console.log(`📍 Adding location filter: "${searchParams.location}"`)
         const locationTerm = searchParams.location.toLowerCase()
+        filteredSpaces = allAvailable.filter(
+          (space) =>
+            (space.location && space.location.toLowerCase().includes(locationTerm)) ||
+            (space.address && space.address.toLowerCase().includes(locationTerm)) ||
+            (space.postcode && space.postcode.toLowerCase().includes(locationTerm)) ||
+            (space.title && space.title.toLowerCase().includes(locationTerm)),
+        )
 
-        // Handle SE17 specifically - search for SE17, Kennington, and nearby areas
-        if (locationTerm.includes("se17") || locationTerm.includes("se1")) {
-          console.log("🎯 SE17/SE1 specific search")
-          query = query.or(
-            `location.ilike.%SE17%,location.ilike.%SE1%,location.ilike.%Kennington%,location.ilike.%Elephant%,location.ilike.%Borough%,location.ilike.%Southwark%,postcode.ilike.%SE1%,address.ilike.%SE1%`,
-          )
-        } else {
-          // General location search
-          const locationPattern = `%${searchParams.location}%`
-          query = query.or(
-            `title.ilike.${locationPattern},location.ilike.${locationPattern},address.ilike.${locationPattern},postcode.ilike.${locationPattern}`,
-          )
+        // If no location matches, return all available spaces
+        if (filteredSpaces.length === 0) {
+          console.log("📍 No location matches, showing all available spaces")
+          filteredSpaces = allAvailable
         }
-      } else {
-        // If no specific location, just get available spaces
-        console.log("📍 No specific location, getting all available spaces")
       }
-
-      // Price filtering
-      if (searchParams.maxPrice) {
-        console.log(`💰 Adding price filter: <= £${searchParams.maxPrice}`)
-        query = query.lte("price_per_day", searchParams.maxPrice)
-      }
-
-      // Features filtering
-      if (searchParams.features && searchParams.features.length > 0) {
-        console.log(`🏷️ Adding features filter: ${searchParams.features.join(", ")}`)
-        const featureQueries = searchParams.features.map((feature: string) => `features.ilike.%${feature}%`)
-        query = query.or(featureQueries.join(","))
-      }
-
-      // Order by price and limit results
-      const { data, error } = await query.order("price_per_day", { ascending: true }).limit(6)
-
-      if (error) {
-        console.error("❌ Supabase query error:", error)
-        console.log("🎭 Falling back to mock data due to query error")
-        return searchMockParkingSpaces(searchParams).slice(0, 3)
-      }
-
-      if (!data || data.length === 0) {
-        console.log("📭 No results from Supabase query")
-
-        // Try a broader search without location filter
-        console.log("🔄 Trying broader search...")
-        const { data: broadData, error: broadError } = await supabaseServer
-          .from("spaces")
-          .select("*")
-          .eq("is_available", true)
-          .order("price_per_day", { ascending: true })
-          .limit(3)
-
-        if (broadError) {
-          console.error("❌ Broad search error:", broadError)
-          return searchMockParkingSpaces(searchParams).slice(0, 3)
-        }
-
-        if (broadData && broadData.length > 0) {
-          console.log(`✅ Broad search found ${broadData.length} spaces`)
-          return broadData.map((space) => ({
-            ...space,
-            features:
-              typeof space.features === "string"
-                ? space.features
-                    .split(",")
-                    .map((f) => f.trim())
-                    .filter((f) => f.length > 0)
-                : space.features || [],
-            host: {
-              id: space.host_id || "mock-host",
-              name: "Host",
-              email: "host@example.com",
-            },
-          }))
-        }
-
-        console.log("❌ No results from broad search either, using mock data")
-        return searchMockParkingSpaces(searchParams).slice(0, 3)
-      }
-
-      console.log(`✅ Supabase query found ${data.length} spaces`)
 
       // Transform the data
-      const transformedSpaces = data.map((space) => ({
+      const transformedSpaces = filteredSpaces.map((space) => ({
         ...space,
-        is_available: space.is_available === true || space.is_available === "true",
         features:
           typeof space.features === "string"
             ? space.features
@@ -140,12 +72,13 @@ async function searchParkingSpaces(searchParams: any) {
                 .filter((f) => f.length > 0)
             : space.features || [],
         host: {
-          id: space.host_id || "mock-host",
-          name: "Host",
-          email: "host@example.com",
+          id: space.host_id || "host-1",
+          name: "Space Owner",
+          email: "owner@example.com",
         },
       }))
 
+      console.log(`🎯 Returning ${transformedSpaces.length} spaces from YOUR database`)
       return transformedSpaces.slice(0, 3)
     }
 
