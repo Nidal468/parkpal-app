@@ -86,7 +86,7 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
   const { price, period } = getCurrentPrice()
 
   return (
-    <Card className="w-full max-w-sm">
+    <Card className="w-full max-w-sm mx-auto">
       <div className="aspect-video relative overflow-hidden rounded-t-lg">
         <img
           src={space.image_url || "/placeholder.svg?height=200&width=300"}
@@ -95,76 +95,77 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
         />
         {/* Distance badge */}
         {space.distance && (
-          <Badge className="absolute top-2 right-2 bg-blue-600 text-white">
+          <Badge className="absolute top-2 right-2 bg-blue-600 text-white text-xs">
             <Navigation className="w-3 h-3 mr-1" />
             {space.distance} mi
           </Badge>
         )}
         {/* Availability badge */}
-        <Badge className={`absolute top-2 left-2 text-white ${getAvailabilityColor()}`}>
+        <Badge className={`absolute top-2 left-2 text-white text-xs ${getAvailabilityColor()}`}>
           <Users className="w-3 h-3 mr-1" />
-          {getAvailabilityText()}
+          <span className="hidden sm:inline">{getAvailabilityText()}</span>
+          <span className="sm:hidden">{availableSpaces === 0 ? "Full" : `${availableSpaces} left`}</span>
         </Badge>
       </div>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">{space.title}</CardTitle>
+      <CardHeader className="pb-3 px-4 sm:px-6">
+        <CardTitle className="text-base sm:text-lg leading-tight">{space.title}</CardTitle>
         <div className="space-y-2">
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <MapPin className="w-4 h-4" />
-            <span>{space.location}</span>
+          <div className="flex items-center gap-1 text-xs sm:text-sm text-muted-foreground">
+            <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+            <span className="truncate">{space.location}</span>
           </div>
           {space.postcode && <div className="text-xs text-muted-foreground">{space.postcode}</div>}
 
           {/* Host Information */}
           {space.host && (
             <div className="flex items-center gap-2 pt-1">
-              <Avatar className="w-6 h-6">
+              <Avatar className="w-5 h-5 sm:w-6 sm:h-6">
                 <AvatarImage src="/placeholder.svg" alt={space.host.name || "Host"} />
                 <AvatarFallback className="text-xs">{getHostInitials(space.host.name)}</AvatarFallback>
               </Avatar>
-              <span className="text-xs text-muted-foreground">Hosted by {space.host.name || "Host"}</span>
+              <span className="text-xs text-muted-foreground truncate">Hosted by {space.host.name || "Host"}</span>
             </div>
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground line-clamp-2">{space.description}</p>
+      <CardContent className="space-y-3 px-4 sm:px-6">
+        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">{space.description}</p>
 
         {/* Availability Info */}
         <div className="space-y-1 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
+            <Clock className="w-3 h-3 flex-shrink-0" />
             <span>{formatAvailableHours(space.available_hours)}</span>
           </div>
           <div className="flex items-center gap-1">
-            <Calendar className="w-3 h-3" />
-            <span>{formatAvailableDays(space.available_days)}</span>
+            <Calendar className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate">{formatAvailableDays(space.available_days)}</span>
           </div>
         </div>
 
         {space.features && space.features.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {space.features.slice(0, 3).map((feature, index) => (
+            {space.features.slice(0, 2).map((feature, index) => (
               <Badge key={index} variant="secondary" className="text-xs">
                 {feature}
               </Badge>
             ))}
-            {space.features.length > 3 && (
+            {space.features.length > 2 && (
               <Badge variant="outline" className="text-xs">
-                +{space.features.length - 3} more
+                +{space.features.length - 2} more
               </Badge>
             )}
           </div>
         )}
 
-        {/* Pricing Toggle and Price Display */}
+        {/* Pricing Toggle and Price Display - Mobile Optimized */}
         <div className="space-y-3 pt-2">
           {/* Toggle Switch */}
           <div className="flex items-center justify-center">
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setPricingMode("daily")}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
+                className={`px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${
                   pricingMode === "daily" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                 }`}
               >
@@ -172,7 +173,7 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
               </button>
               <button
                 onClick={() => setPricingMode("monthly")}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
+                className={`px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${
                   pricingMode === "monthly" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                 }`}
               >
@@ -181,22 +182,22 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
             </div>
           </div>
 
-          {/* Price Display with Animation */}
+          {/* Price Display with Animation - Mobile Optimized */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <Pound className="w-4 h-4 text-green-600" />
+              <Pound className="w-4 h-4 text-green-600 flex-shrink-0" />
               <div className="transition-all duration-300 ease-in-out">
-                <span className="font-semibold text-green-600 text-lg">£{price}</span>
-                <span className="text-sm text-muted-foreground ml-1">{period}</span>
+                <span className="font-semibold text-green-600 text-base sm:text-lg">£{price}</span>
+                <span className="text-xs sm:text-sm text-muted-foreground ml-1">{period}</span>
               </div>
             </div>
             <Button
               size="sm"
               onClick={() => onBook?.(space.id)}
-              className="bg-purple-600 hover:bg-purple-700 transition-colors duration-200"
+              className="bg-purple-600 hover:bg-purple-700 transition-colors duration-200 text-xs sm:text-sm px-3 sm:px-4 py-2"
               disabled={availableSpaces === 0}
             >
-              {availableSpaces === 0 ? "Fully Booked" : "Book Now"}
+              {availableSpaces === 0 ? "Full" : "Book"}
             </Button>
           </div>
         </div>
