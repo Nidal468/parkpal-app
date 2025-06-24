@@ -4,9 +4,9 @@ import type React from "react"
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Car, Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { ThemeToggle } from "@/components/theme-toggle"
+import Image from "next/image"
 
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -21,73 +21,82 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-100 via-pink-50 to-blue-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* Header - Mobile Optimized */}
-      <header className="flex items-center justify-between p-4 sm:p-6">
-        <div className="flex items-center space-x-2">
-          <Car className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
-          <span className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white">parkpal.ai</span>
+    <div className="min-h-screen bg-[#f0ebf8] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex flex-col m-0 p-0">
+      {/* Header */}
+      <header className="flex items-center justify-between px-9 pt-10">
+        <div className="flex items-center">
+          <Image src="/parkpal-logo-clean.png" alt="Parkpal" width={120} height={40} />
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Button
             variant="outline"
             size="sm"
-            className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 text-xs sm:text-sm px-3 sm:px-4"
+            className="bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 text-sm px-4"
           >
             Log in
           </Button>
         </div>
       </header>
 
-      {/* Hero Section - Mobile Optimized */}
-      <main className="flex flex-col items-center justify-center px-4 sm:px-6 py-8 sm:py-20">
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-20">
         <div className="text-center max-w-4xl mx-auto w-full">
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-bold text-gray-800 dark:text-white mb-4 sm:mb-6 leading-tight">
-            Hi, I'm Parkpal
-          </h1>
-          <p className="text-base sm:text-lg text-gray-600 dark:text-gray-300 mb-8 sm:mb-12 px-2">
-            Find parking that suits your precise needs.
-          </p>
+          {/* Main Heading */}
+          <h1 className="text-6xl font-bold text-black mb-8 leading-tight">Hi, I'm Parkpal</h1>
 
-          {/* Updated Search Input - Mobile Optimized */}
-          <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto mb-4 px-2">
-            <div className="relative bg-gray-900 dark:bg-gray-800 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-2xl">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Where are you looking to park?"
-                  className="flex-1 bg-transparent text-white placeholder-gray-400 text-base sm:text-lg outline-none min-w-0"
-                />
+          {/* Instructions */}
+          <p className="text-lg text-black mb-12">How it works? Type: 'Park me asap' or 'Park me near [post-code]'</p>
+
+          {/* Search Input */}
+          <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto">
+            <div className="relative bg-[#021e34] rounded-2xl p-4 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder=""
+                    className="w-full bg-transparent text-white text-lg outline-none"
+                  />
+                  {!searchQuery && (
+                    <div className="absolute inset-0 flex items-center text-gray-400 text-lg pointer-events-none">
+                      <span className="text-white animate-pulse" style={{ animationDuration: "0.8s" }}>
+                        |
+                      </span>
+                      <span className="ml-1">Where are you looking to park today?</span>
+                    </div>
+                  )}
+                </div>
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-8 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold transition-colors duration-200 flex-shrink-0 text-sm sm:text-base"
+                  className="bg-[#9ef01a] hover:bg-[#8ed617] text-black px-4 py-2 rounded-xl font-bold transition-colors duration-200 flex-shrink-0"
                 >
                   PARK
                 </button>
               </div>
             </div>
           </form>
-
-          {/* How it works - Mobile Optimized */}
-          <div className="mb-6 sm:mb-8 px-2">
-            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-              How it works? Type: 'Park me asap' or 'Park me near'
-            </p>
-          </div>
-
-          {/* Terms and Privacy Disclaimer - Mobile Optimized */}
-          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 max-w-2xl mx-auto px-4 leading-relaxed">
-            By sending a message, you agree to our{" "}
-            <button className="text-blue-600 dark:text-blue-400 hover:underline">Terms of Use</button> and acknowledge
-            that you have read and understand our{" "}
-            <button className="text-blue-600 dark:text-blue-400 hover:underline">Privacy Policy</button>.
-          </div>
         </div>
       </main>
+
+      {/* Footer Section */}
+      <footer className="pb-4 px-6">
+        <div className="text-center max-w-6xl mx-auto">
+          {/* Large Pp Logo - positioned above disclaimer text with negative margin */}
+          <div className="-mb-4">
+            <Image src="/parkpal-logo-minimal.png" alt="Pp" width={86} height={86} className="mx-auto opacity-30" />
+          </div>
+
+          {/* Terms and Privacy Disclaimer - single line */}
+          <div className="text-sm text-black whitespace-nowrap">
+            By sending a message, you agree to our{" "}
+            <button className="underline hover:no-underline">Terms of Use</button> and acknowledge that you have read
+            and understand our <button className="underline hover:no-underline">Privacy Policy</button>.
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

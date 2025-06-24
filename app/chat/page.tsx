@@ -1,8 +1,8 @@
 import { Suspense } from "react"
-import ChatInterface from "./chat-interface"
+import AirlineChatInterface from "./airline-chat-interface"
 
 function ChatPageContent() {
-  return <ChatInterface />
+  return <AirlineChatInterface />
 }
 
 export default function ChatPage() {

@@ -14,6 +14,7 @@ import { ParkingSpaceCard } from "@/components/parking-space-card"
 import { ParkingMap } from "@/components/parking-map"
 import { BookingModal, type BookingData } from "@/components/booking-modal"
 import type { ParkingSpace } from "@/lib/supabase-types"
+import Image from "next/image"
 
 interface Message {
   role: "assistant" | "user"
@@ -236,10 +237,14 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
                 <div
                   className={cn(
                     "h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-medium",
-                    message.role === "assistant" ? "bg-purple-600 text-white" : "bg-gray-600 text-white",
+                    message.role === "assistant" ? "bg-[#021e34] text-white" : "bg-gray-600 text-white",
                   )}
                 >
-                  {message.role === "assistant" ? "🚗" : "You"}
+                  {message.role === "assistant" ? (
+                    <Image src="/parkpal-logo-minimal.png" alt="P" width={20} height={20} className="w-5 h-5" />
+                  ) : (
+                    "You"
+                  )}
                 </div>
 
                 <div className="space-y-2 flex-1">
