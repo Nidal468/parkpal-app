@@ -20,12 +20,6 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [mapLoaded, setMapLoaded] = useState(false)
   const markersRef = useRef<any[]>([])
-  const [tooltip, setTooltip] = useState<{ show: boolean; x: number; y: number; content: string }>({
-    show: false,
-    x: 0,
-    y: 0,
-    content: "",
-  })
 
   // Debug: Log spaces data
   useEffect(() => {
@@ -167,41 +161,15 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
         cursor: pointer;
         text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
         white-space: nowrap;
-        transition: all 0.2s ease;
         user-select: none;
         pointer-events: auto;
-        position: relative;
         ${selectedSpaceId === space.id ? "transform: scale(1.2); color: #ff4444;" : ""}
       `
 
       const price = space.price_per_day ? `£${Number.parseFloat(space.price_per_day.toString()).toFixed(2)}` : "£N/A"
       markerElement.innerHTML = price
 
-      // Hover events with proper positioning
-      markerElement.addEventListener("mouseenter", (e) => {
-        const rect = markerElement.getBoundingClientRect()
-        const mapRect = mapContainer.current!.getBoundingClientRect()
-
-        setTooltip({
-          show: true,
-          x: rect.left - mapRect.left + rect.width / 2,
-          y: rect.top - mapRect.top - 10,
-          content: `
-            <div style="font-weight: bold; margin-bottom: 4px;">${space.title}</div>
-            <div style="opacity: 0.9;">${space.description || space.location || ""}</div>
-          `,
-        })
-        markerElement.style.transform = "scale(1.1)"
-      })
-
-      markerElement.addEventListener("mouseleave", () => {
-        setTooltip({ show: false, x: 0, y: 0, content: "" })
-        if (selectedSpaceId !== space.id) {
-          markerElement.style.transform = "scale(1)"
-        }
-      })
-
-      // Click event to open modal
+      // Click event to open modal (only interaction)
       markerElement.addEventListener("click", () => {
         setSelectedSpace(space)
         setIsModalOpen(true)
@@ -255,36 +223,6 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
     <>
       <div className="relative w-full h-full">
         <div ref={mapContainer} className="w-full h-full" />
-
-        {/* Custom Tooltip */}
-        {tooltip.show && (
-          <div
-            className="absolute z-50 pointer-events-none"
-            style={{
-              left: tooltip.x,
-              top: tooltip.y,
-              transform: "translateX(-50%) translateY(-100%)",
-            }}
-          >
-            <div
-              className="px-3 py-2 text-white text-sm rounded-lg shadow-lg"
-              style={{ backgroundColor: "rgba(0,0,0,0.9)" }}
-              dangerouslySetInnerHTML={{ __html: tooltip.content }}
-            />
-            {/* Arrow */}
-            <div
-              className="absolute left-1/2 top-full"
-              style={{
-                transform: "translateX(-50%)",
-                width: 0,
-                height: 0,
-                borderLeft: "6px solid transparent",
-                borderRight: "6px solid transparent",
-                borderTop: "6px solid rgba(0,0,0,0.9)",
-              }}
-            />
-          </div>
-        )}
 
         {/* Debug info */}
         <div className="absolute top-4 left-4 bg-red-500/80 text-white px-3 py-2 rounded-lg text-xs">
