@@ -223,12 +223,6 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
       <div className="relative w-full h-full">
         <div ref={mapContainer} className="w-full h-full" />
 
-        {/* Debug info */}
-        <div className="absolute top-4 left-4 bg-red-500/80 text-white px-3 py-2 rounded-lg text-xs">
-          Debug: {spaces.length} total, {spaces.filter((s) => s.latitude && s.longitude).length} with coords, Map:{" "}
-          {mapLoaded ? "✅" : "⏳"}
-        </div>
-
         {/* Map controls overlay */}
         <div className="absolute top-4 right-4 bg-black/80 text-white px-3 py-2 rounded-lg text-sm">
           {spaces.length} parking spaces found

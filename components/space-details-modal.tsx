@@ -1,113 +1,107 @@
 "use client"
-
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import type { Space } from "@/types"
+import { Calendar } from "@/components/ui/calendar"
+import { cn } from "@/lib/utils"
+import { format } from "date-fns"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useState } from "react"
-import { X } from "lucide-react"
-import type { ParkingSpace } from "@/lib/supabase-types"
 
 interface SpaceDetailsModalProps {
-  space: ParkingSpace | null
-  isOpen: boolean
-  onClose: () => void
+  space: Space
 }
 
-export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalProps) {
-  const [pricingMode, setPricingMode] = useState<"daily" | "monthly">("daily")
-
-  if (!isOpen || !space) return null
-
-  const dailyPrice = space.price_per_day || 10
-  const monthlyPrice = space.price_per_month || 275
-  const availableSpaces = space.available_spaces || space.total_spaces || 3
+export function SpaceDetailsModal({ space }: SpaceDetailsModalProps) {
+  const [date, setDate] = useState<Date | undefined>(new Date())
 
   return (
-    <div className={`fixed top-0 right-0 h-full bg-white`} style={{ width: "50%" }}>
-      {/* Close button */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors z-10"
-      >
-        <X className="w-5 h-5 text-gray-900" />
-      </button>
-
-      {/* Content */}
-      <div className="p-8 h-full flex flex-col">
-        <h1 className="text-4xl font-bold text-gray-900 mb-6">{space.title || "Car park on Ambergate Street"}</h1>
-
-        <p className="text-gray-700 mb-6">
-          Description: {space.description || "A car park space suitable for cars and vans. Max length allowed 16ft."}
-        </p>
-
-        {/* Availability and Pricing Toggle Row */}
-        <div className="flex items-center justify-between mb-6">
-          {/* Left side - Availability */}
-          <div className="flex items-center gap-3">
-            <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-            <span className="text-gray-700">{availableSpaces} spaces available</span>
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline">View Details</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>{space.name}</DialogTitle>
+          <DialogDescription>Learn more about this space and its features.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="name" className="text-right">
+              Name
+            </Label>
+            <Input type="text" id="name" value={space.name} className="col-span-3" disabled />
           </div>
-
-          {/* Right side - Pricing Toggle */}
-          <div className="flex bg-gray-100 rounded-full p-1">
-            <button
-              onClick={() => setPricingMode("daily")}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                pricingMode === "daily" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Daily
-            </button>
-            <button
-              onClick={() => setPricingMode("monthly")}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                pricingMode === "monthly" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Monthly
-            </button>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="description" className="text-right">
+              Description
+            </Label>
+            <Input type="text" id="description" value={space.description} className="col-span-3" disabled />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="location" className="text-right">
+              Location
+            </Label>
+            <Input type="text" id="location" value={space.location} className="col-span-3" disabled />
           </div>
         </div>
-
-        {/* Features Section */}
-        <div className="mb-8">
-          <div className="flex items-center gap-8">
-            <span className="text-gray-900 font-medium">Features:</span>
-            <span className="text-gray-700">Secure parking</span>
-            <span className="text-gray-700">24/7 access</span>
-          </div>
-        </div>
-
-        {/* Image Section - Larger and Lower */}
-        <div className="mb-8 flex justify-end">
-          <div className="w-48 h-36 bg-black rounded-lg flex items-center justify-center">
-            {space.image_url ? (
-              <img
-                src={space.image_url || "/placeholder.svg"}
-                alt="Parking space"
-                className="w-full h-full object-cover rounded-lg"
+        <Separator />
+        <div className="flex items-center justify-center space-x-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn("w-[280px] justify-start text-left font-normal", !date && "text-muted-foreground")}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {date ? format(date, "PPP") : <span>Pick a date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="center">
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={setDate}
+                disabled={(date) => date < new Date()}
+                initialFocus
               />
-            ) : (
-              <div className="text-white">
-                <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            )}
+            </PopoverContent>
+          </Popover>
+        </div>
+        <Separator />
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="start-time" className="text-right">
+              Start Time
+            </Label>
+            <Input type="time" id="start-time" className="col-span-3" />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="end-time" className="text-right">
+              End Time
+            </Label>
+            <Input type="time" id="end-time" className="col-span-3" />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="guests" className="text-right">
+              Number of Guests
+            </Label>
+            <Input type="number" id="guests" className="col-span-3" />
           </div>
         </div>
-
-        {/* Available Spaces - Bottom Section */}
-        <div className="mt-auto space-y-4">
-          {Array.from({ length: availableSpaces }, (_, index) => (
-            <div key={index} className="flex items-center justify-between py-4 border-t border-gray-200">
-              <div className="text-2xl font-bold text-gray-900">
-                £{pricingMode === "daily" ? dailyPrice.toFixed(2) : monthlyPrice.toFixed(2)}
-              </div>
-              <button className="bg-gray-900 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">
-                Reserve
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
+
+import { CalendarIcon } from "@radix-ui/react-icons"
