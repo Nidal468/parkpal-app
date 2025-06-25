@@ -20,6 +20,12 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [mapLoaded, setMapLoaded] = useState(false)
   const markersRef = useRef<any[]>([])
+  const [tooltip, setTooltip] = useState<{ show: boolean; x: number; y: number; content: string }>({
+    show: false,
+    x: 0,
+    y: 0,
+    content: "",
+  })
 
   // Debug: Log spaces data
   useEffect(() => {
@@ -164,37 +170,32 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
         transition: all 0.2s ease;
         user-select: none;
         pointer-events: auto;
+        position: relative;
         ${selectedSpaceId === space.id ? "transform: scale(1.2); color: #ff4444;" : ""}
       `
 
       const price = space.price_per_day ? `£${Number.parseFloat(space.price_per_day.toString()).toFixed(2)}` : "£N/A"
       markerElement.innerHTML = price
 
-      // Create popup for hover (using Mapbox popup instead of custom tooltip)
-      const popup = new mapboxgl.Popup({
-        closeButton: false,
-        closeOnClick: false,
-        offset: [0, -10],
-      }).setHTML(`
-        <div style="padding: 8px; font-size: 12px; background: rgba(0,0,0,0.9); color: white; border-radius: 6px; border: none;">
-          <div style="font-weight: bold; margin-bottom: 4px;">${space.title}</div>
-          <div style="opacity: 0.9;">${space.description || space.location || ""}</div>
-        </div>
-      `)
+      // Hover events with proper positioning
+      markerElement.addEventListener("mouseenter", (e) => {
+        const rect = markerElement.getBoundingClientRect()
+        const mapRect = mapContainer.current!.getBoundingClientRect()
 
-      // Create marker
-      const marker = new mapboxgl.Marker(markerElement)
-        .setLngLat([space.longitude!, space.latitude!])
-        .addTo(map.current)
-
-      // Hover events using Mapbox popup
-      markerElement.addEventListener("mouseenter", () => {
-        popup.setLngLat([space.longitude!, space.latitude!]).addTo(map.current)
+        setTooltip({
+          show: true,
+          x: rect.left - mapRect.left + rect.width / 2,
+          y: rect.top - mapRect.top - 10,
+          content: `
+            <div style="font-weight: bold; margin-bottom: 4px;">${space.title}</div>
+            <div style="opacity: 0.9;">${space.description || space.location || ""}</div>
+          `,
+        })
         markerElement.style.transform = "scale(1.1)"
       })
 
       markerElement.addEventListener("mouseleave", () => {
-        popup.remove()
+        setTooltip({ show: false, x: 0, y: 0, content: "" })
         if (selectedSpaceId !== space.id) {
           markerElement.style.transform = "scale(1)"
         }
@@ -206,6 +207,11 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
         setIsModalOpen(true)
         onSpaceSelect?.(space)
       })
+
+      // Create marker
+      const marker = new mapboxgl.Marker(markerElement)
+        .setLngLat([space.longitude!, space.latitude!])
+        .addTo(map.current)
 
       markersRef.current.push(marker)
       console.log(`🗺️ Marker ${index + 1} added successfully`)
@@ -249,6 +255,36 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
     <>
       <div className="relative w-full h-full">
         <div ref={mapContainer} className="w-full h-full" />
+
+        {/* Custom Tooltip */}
+        {tooltip.show && (
+          <div
+            className="absolute z-50 pointer-events-none"
+            style={{
+              left: tooltip.x,
+              top: tooltip.y,
+              transform: "translateX(-50%) translateY(-100%)",
+            }}
+          >
+            <div
+              className="px-3 py-2 text-white text-sm rounded-lg shadow-lg"
+              style={{ backgroundColor: "rgba(0,0,0,0.9)" }}
+              dangerouslySetInnerHTML={{ __html: tooltip.content }}
+            />
+            {/* Arrow */}
+            <div
+              className="absolute left-1/2 top-full"
+              style={{
+                transform: "translateX(-50%)",
+                width: 0,
+                height: 0,
+                borderLeft: "6px solid transparent",
+                borderRight: "6px solid transparent",
+                borderTop: "6px solid rgba(0,0,0,0.9)",
+              }}
+            />
+          </div>
+        )}
 
         {/* Debug info */}
         <div className="absolute top-4 left-4 bg-red-500/80 text-white px-3 py-2 rounded-lg text-xs">
