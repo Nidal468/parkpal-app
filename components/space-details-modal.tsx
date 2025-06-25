@@ -17,12 +17,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
   const availableSpaces = space.available_spaces || space.total_spaces || 3
 
   return (
-    <div
-      className={`fixed top-0 right-0 h-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 ${
-        isOpen ? "translate-x-0" : "translate-x-full"
-      }`}
-      style={{ width: "50vw" }}
-    >
+    <div className={`fixed top-0 right-0 h-full bg-white`} style={{ width: "50%" }}>
       {/* Close button */}
       <button
         onClick={onClose}
