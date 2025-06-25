@@ -1,5 +1,6 @@
 "use server"
 
 export async function getMapboxToken() {
-  return process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ""
+  // Using your specific Mapbox token
+  return "pk.eyJ1IjoicGFya3BhbDMzIiwiYSI6ImNtYzlvZ294MzFneDQyanNhYmI4YXU3eXIifQ.mefS2K8EuZDUCIG-eOVKnQ"
 }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { ParkingSpace } from "@/lib/supabase-types"
 import { getMapboxToken } from "@/lib/mapbox-config"
+import { SpaceDetailsModal } from "./space-details-modal"
 
 interface MapboxParkingMapProps {
   spaces: ParkingSpace[]
@@ -15,6 +16,8 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
   const map = useRef<any>(null)
   const [mapboxgl, setMapboxgl] = useState<any>(null)
   const [mapboxToken, setMapboxToken] = useState<string>("")
+  const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Load Mapbox token from server
   useEffect(() => {
@@ -43,8 +46,8 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
     // Set Mapbox access token
     mapboxgl.accessToken = mapboxToken
 
-    // Default center (London)
-    let center = [-0.1278, 51.5074]
+    // Default center (London SE17 area)
+    let center = [-0.0877, 51.4948] // SE17 coordinates
 
     // If we have spaces with coordinates, center on the first one
     if (spaces.length > 0 && spaces[0].latitude && spaces[0].longitude) {
@@ -53,9 +56,9 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: "mapbox://styles/mapbox/dark-v11", // Dark theme to match your design
+      style: "mapbox://styles/parkpal33/cmcca0287043d01s53esbas0y", // Your custom style
       center: center,
-      zoom: 13,
+      zoom: 14,
     })
 
     map.current.on("load", () => {
@@ -76,54 +79,74 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
     spaces.forEach((space) => {
       if (!space.latitude || !space.longitude) return
 
-      // Create custom marker element
+      // Create custom marker element with price
       const markerElement = document.createElement("div")
       markerElement.className = "parking-marker"
       markerElement.style.cssText = `
-        width: 24px;
-        height: 24px;
-        background-color: #fbbf24;
+        background-color: #ffffff;
         border: 2px solid #f59e0b;
-        border-radius: 50%;
+        border-radius: 8px;
         cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 10px;
+        padding: 4px 8px;
+        font-size: 12px;
         font-weight: bold;
         color: #000;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        ${selectedSpaceId === space.id ? "transform: scale(1.2); background-color: #ef4444; border-color: #dc2626;" : ""}
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        white-space: nowrap;
+        transition: all 0.2s ease;
+        ${selectedSpaceId === space.id ? "transform: scale(1.1); border-color: #dc2626; background-color: #fef2f2;" : ""}
       `
-      markerElement.textContent = "P"
+      markerElement.innerHTML = `£${space.price_per_day || "N/A"}`
 
-      // Create popup
-      const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-        <div style="padding: 8px; min-width: 200px;">
-          <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold;">${space.title}</h3>
-          <p style="margin: 0 0 4px 0; font-size: 12px; color: #666;">${space.location || ""}</p>
-          <p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">${space.postcode || ""}</p>
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 12px; color: #666;">
-              ${space.available_spaces || space.total_spaces || "X"} spaces available
-            </span>
-            <span style="font-size: 14px; font-weight: bold; color: #059669;">
-              £${space.price_per_day || "N/A"}/day
-            </span>
-          </div>
-        </div>
-      `)
+      // Create hover tooltip
+      const tooltip = document.createElement("div")
+      tooltip.className = "marker-tooltip"
+      tooltip.style.cssText = `
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.9);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        z-index: 1000;
+        margin-bottom: 8px;
+      `
+      tooltip.innerHTML = `
+        <div style="font-weight: bold;">${space.title}</div>
+        <div style="opacity: 0.8; margin-top: 2px;">${space.description || space.location || ""}</div>
+      `
 
-      // Create marker
-      const marker = new mapboxgl.Marker(markerElement)
-        .setLngLat([space.longitude, space.latitude])
-        .setPopup(popup)
-        .addTo(map.current)
+      markerElement.appendChild(tooltip)
 
-      // Add click handler
+      // Hover events
+      markerElement.addEventListener("mouseenter", () => {
+        tooltip.style.opacity = "1"
+        markerElement.style.transform = "scale(1.05)"
+      })
+
+      markerElement.addEventListener("mouseleave", () => {
+        tooltip.style.opacity = "0"
+        if (selectedSpaceId !== space.id) {
+          markerElement.style.transform = "scale(1)"
+        }
+      })
+
+      // Click event to open modal
       markerElement.addEventListener("click", () => {
+        setSelectedSpace(space)
+        setIsModalOpen(true)
         onSpaceSelect?.(space)
       })
+
+      // Create marker
+      const marker = new mapboxgl.Marker(markerElement).setLngLat([space.longitude, space.latitude]).addTo(map.current)
     })
 
     // Fit map to show all markers if we have multiple spaces
@@ -139,7 +162,7 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
 
         map.current.fitBounds(bounds, {
           padding: 50,
-          maxZoom: 15,
+          maxZoom: 16,
         })
       }
     }
@@ -162,28 +185,33 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
   // Show loading state while token is being fetched
   if (!mapboxToken) {
     return (
-      <div className="w-full h-full bg-black flex items-center justify-center">
-        <div className="text-white text-lg">Loading map...</div>
+      <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+        <div className="text-gray-600 text-lg">Loading map...</div>
       </div>
     )
   }
 
   return (
-    <div className="relative w-full h-full">
-      <div ref={mapContainer} className="w-full h-full" />
+    <>
+      <div className="relative w-full h-full">
+        <div ref={mapContainer} className="w-full h-full" />
 
-      {/* Map controls overlay */}
-      <div className="absolute top-4 right-4 bg-black/80 text-white px-3 py-2 rounded-lg text-sm">
-        {spaces.length} parking spaces found
-      </div>
+        {/* Map controls overlay */}
+        <div className="absolute top-4 right-4 bg-black/80 text-white px-3 py-2 rounded-lg text-sm">
+          {spaces.length} parking spaces found
+        </div>
 
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-black/80 text-white px-3 py-2 rounded-lg text-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-yellow-400 border border-yellow-500 rounded-full"></div>
-          <span>Available Parking</span>
+        {/* Legend */}
+        <div className="absolute bottom-4 left-4 bg-black/80 text-white px-3 py-2 rounded-lg text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-white border border-yellow-500 rounded"></div>
+            <span>Available Parking</span>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Space Details Modal */}
+      <SpaceDetailsModal space={selectedSpace} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    </>
   )
 }
