@@ -151,60 +151,50 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
         price: space.price_per_day,
       })
 
-      // Create custom marker element with price
+      // Create custom marker element - just the price text with your green color
       const markerElement = document.createElement("div")
       markerElement.className = "parking-marker"
       markerElement.style.cssText = `
-        background-color: #ffffff;
-        border: 2px solid #f59e0b;
-        border-radius: 8px;
-        cursor: pointer;
-        padding: 4px 8px;
-        font-size: 12px;
+        color: #16fe35;
+        font-size: 14px;
         font-weight: bold;
-        color: #000;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        cursor: pointer;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
         white-space: nowrap;
         transition: all 0.2s ease;
-        ${selectedSpaceId === space.id ? "transform: scale(1.1); border-color: #dc2626; background-color: #fef2f2;" : ""}
-      `
-      markerElement.innerHTML = `£${space.price_per_day || "N/A"}`
-
-      // Create hover tooltip
-      const tooltip = document.createElement("div")
-      tooltip.className = "marker-tooltip"
-      tooltip.style.cssText = `
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0,0,0,0.9);
-        color: white;
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-size: 12px;
-        white-space: nowrap;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.2s ease;
-        z-index: 1000;
-        margin-bottom: 8px;
-      `
-      tooltip.innerHTML = `
-        <div style="font-weight: bold;">${space.title}</div>
-        <div style="opacity: 0.8; margin-top: 2px;">${space.description || space.location || ""}</div>
+        user-select: none;
+        pointer-events: auto;
+        ${selectedSpaceId === space.id ? "transform: scale(1.2); color: #ff4444;" : ""}
       `
 
-      markerElement.appendChild(tooltip)
+      const price = space.price_per_day ? `£${Number.parseFloat(space.price_per_day.toString()).toFixed(2)}` : "£N/A"
+      markerElement.innerHTML = price
 
-      // Hover events
+      // Create popup for hover (using Mapbox popup instead of custom tooltip)
+      const popup = new mapboxgl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: [0, -10],
+      }).setHTML(`
+        <div style="padding: 8px; font-size: 12px; background: rgba(0,0,0,0.9); color: white; border-radius: 6px; border: none;">
+          <div style="font-weight: bold; margin-bottom: 4px;">${space.title}</div>
+          <div style="opacity: 0.9;">${space.description || space.location || ""}</div>
+        </div>
+      `)
+
+      // Create marker
+      const marker = new mapboxgl.Marker(markerElement)
+        .setLngLat([space.longitude!, space.latitude!])
+        .addTo(map.current)
+
+      // Hover events using Mapbox popup
       markerElement.addEventListener("mouseenter", () => {
-        tooltip.style.opacity = "1"
-        markerElement.style.transform = "scale(1.05)"
+        popup.setLngLat([space.longitude!, space.latitude!]).addTo(map.current)
+        markerElement.style.transform = "scale(1.1)"
       })
 
       markerElement.addEventListener("mouseleave", () => {
-        tooltip.style.opacity = "0"
+        popup.remove()
         if (selectedSpaceId !== space.id) {
           markerElement.style.transform = "scale(1)"
         }
@@ -217,17 +207,8 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
         onSpaceSelect?.(space)
       })
 
-      // Create marker
-      try {
-        const marker = new mapboxgl.Marker(markerElement)
-          .setLngLat([space.longitude!, space.latitude!])
-          .addTo(map.current)
-
-        markersRef.current.push(marker)
-        console.log(`🗺️ Marker ${index + 1} added successfully`)
-      } catch (error) {
-        console.error(`🗺️ Failed to add marker ${index + 1}:`, error)
-      }
+      markersRef.current.push(marker)
+      console.log(`🗺️ Marker ${index + 1} added successfully`)
     })
 
     // Fit map to show all markers if we have multiple spaces
@@ -283,7 +264,7 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
         {/* Legend */}
         <div className="absolute bottom-4 left-4 bg-black/80 text-white px-3 py-2 rounded-lg text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-white border border-yellow-500 rounded"></div>
+            <div className="w-4 h-4" style={{ backgroundColor: "#16fe35" }}></div>
             <span>Available Parking</span>
           </div>
         </div>
