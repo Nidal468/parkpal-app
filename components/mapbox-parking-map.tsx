@@ -18,6 +18,8 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
   const [mapboxToken, setMapboxToken] = useState<string>("")
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [mapLoaded, setMapLoaded] = useState(false)
+  const markersRef = useRef<any[]>([])
 
   // Debug: Log spaces data
   useEffect(() => {
@@ -54,7 +56,7 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
     loadMapbox()
   }, [])
 
-  // Initialize map
+  // Initialize map once
   useEffect(() => {
     if (!mapboxgl || !mapContainer.current || map.current || !mapboxToken) {
       console.log("🗺️ Map initialization blocked:", {
@@ -72,13 +74,7 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
     mapboxgl.accessToken = mapboxToken
 
     // Default center (London SE17 area)
-    let center = [-0.0877, 51.4948] // SE17 coordinates
-
-    // If we have spaces with coordinates, center on the first one
-    if (spaces.length > 0 && spaces[0].latitude && spaces[0].longitude) {
-      center = [spaces[0].longitude, spaces[0].latitude]
-      console.log("🗺️ Centering on first space:", center)
-    }
+    const center = [-0.0877, 51.4948] // SE17 coordinates
 
     try {
       map.current = new mapboxgl.Map({
@@ -90,7 +86,12 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
 
       map.current.on("load", () => {
         console.log("🗺️ Map loaded successfully")
-        addParkingSpaces()
+        setMapLoaded(true)
+      })
+
+      map.current.on("styledata", () => {
+        console.log("🗺️ Map style loaded")
+        setMapLoaded(true)
       })
 
       map.current.on("error", (e: any) => {
@@ -103,20 +104,43 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
     return () => {
       if (map.current) {
         map.current.remove()
+        map.current = null
+        setMapLoaded(false)
       }
     }
-  }, [mapboxgl, mapboxToken, spaces])
+  }, [mapboxgl, mapboxToken])
 
-  const addParkingSpaces = () => {
-    if (!map.current || !spaces.length) {
-      console.log("🗺️ Cannot add spaces:", { map: !!map.current, spacesCount: spaces.length })
+  // Clear existing markers
+  const clearMarkers = () => {
+    markersRef.current.forEach((marker) => {
+      marker.remove()
+    })
+    markersRef.current = []
+  }
+
+  // Add parking spaces when map is loaded and spaces are available
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !spaces.length) {
+      console.log("🗺️ Cannot add spaces:", {
+        map: !!map.current,
+        mapLoaded,
+        spacesCount: spaces.length,
+      })
       return
     }
 
     console.log("🗺️ Adding parking spaces to map...")
 
+    // Clear existing markers first
+    clearMarkers()
+
     const spacesWithCoords = spaces.filter((space) => space.latitude && space.longitude)
     console.log("🗺️ Spaces with coordinates:", spacesWithCoords.length)
+
+    if (spacesWithCoords.length === 0) {
+      console.log("🗺️ No spaces with coordinates found")
+      return
+    }
 
     // Add markers for each parking space
     spacesWithCoords.forEach((space, index) => {
@@ -199,6 +223,7 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
           .setLngLat([space.longitude!, space.latitude!])
           .addTo(map.current)
 
+        markersRef.current.push(marker)
         console.log(`🗺️ Marker ${index + 1} added successfully`)
       } catch (error) {
         console.error(`🗺️ Failed to add marker ${index + 1}:`, error)
@@ -222,29 +247,13 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
       } catch (error) {
         console.error("🗺️ Failed to fit bounds:", error)
       }
+    } else if (spacesWithCoords.length === 1) {
+      // Center on single space
+      const space = spacesWithCoords[0]
+      map.current.setCenter([space.longitude!, space.latitude!])
+      map.current.setZoom(15)
     }
-  }
-
-  // Update markers when spaces change
-  useEffect(() => {
-    if (!map.current) return
-
-    console.log("🗺️ Updating markers for new spaces...")
-
-    // Remove existing markers and re-add them
-    const markers = document.querySelectorAll(".parking-marker")
-    markers.forEach((marker) => {
-      const parent = marker.parentElement
-      if (parent) parent.remove()
-    })
-
-    // Add new markers
-    if (map.current.isStyleLoaded()) {
-      addParkingSpaces()
-    } else {
-      map.current.on("styledata", addParkingSpaces)
-    }
-  }, [spaces])
+  }, [mapLoaded, spaces, selectedSpaceId])
 
   // Show loading state while token is being fetched
   if (!mapboxToken) {
@@ -262,7 +271,8 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
 
         {/* Debug info */}
         <div className="absolute top-4 left-4 bg-red-500/80 text-white px-3 py-2 rounded-lg text-xs">
-          Debug: {spaces.length} total, {spaces.filter((s) => s.latitude && s.longitude).length} with coords
+          Debug: {spaces.length} total, {spaces.filter((s) => s.latitude && s.longitude).length} with coords, Map:{" "}
+          {mapLoaded ? "✅" : "⏳"}
         </div>
 
         {/* Map controls overlay */}
