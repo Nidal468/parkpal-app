@@ -151,7 +151,7 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
         price: space.price_per_day,
       })
 
-      // Create custom marker element - just the price text with your green color
+      // Create custom marker element - always green, no color change
       const markerElement = document.createElement("div")
       markerElement.className = "parking-marker"
       markerElement.style.cssText = `
@@ -163,13 +163,12 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
         white-space: nowrap;
         user-select: none;
         pointer-events: auto;
-        ${selectedSpaceId === space.id ? "transform: scale(1.2); color: #ff4444;" : ""}
       `
 
       const price = space.price_per_day ? `£${Number.parseFloat(space.price_per_day.toString()).toFixed(2)}` : "£N/A"
       markerElement.innerHTML = price
 
-      // Click event to open modal (only interaction)
+      // Click event to open modal (no color change)
       markerElement.addEventListener("click", () => {
         setSelectedSpace(space)
         setIsModalOpen(true)
