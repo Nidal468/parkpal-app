@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X } from "lucide-react"
-import type { ParkingSpace } from "@/lib/supabase-types"
+import { X, Star } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import type { ParkingSpace, Review } from "@/lib/supabase-types"
 
 interface SpaceDetailsModalProps {
   space: ParkingSpace | null
@@ -12,13 +13,74 @@ interface SpaceDetailsModalProps {
 
 export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalProps) {
   const [isMonthly, setIsMonthly] = useState(false)
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [averageRating, setAverageRating] = useState(0)
+  const [totalReviews, setTotalReviews] = useState(0)
+  const [loading, setLoading] = useState(false)
 
-  // Reset to daily when modal opens
+  // Reset to daily when modal opens and fetch reviews
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && space) {
       setIsMonthly(false)
+      fetchReviews(space.id)
     }
-  }, [isOpen])
+  }, [isOpen, space])
+
+  const fetchReviews = async (spaceId: string) => {
+    setLoading(true)
+    try {
+      const { data: reviewsData, error } = await supabase
+        .from("reviews")
+        .select("*")
+        .eq("space_id", spaceId)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("Error fetching reviews:", error)
+        return
+      }
+
+      setReviews(reviewsData || [])
+
+      // Calculate average rating and total reviews
+      if (reviewsData && reviewsData.length > 0) {
+        const avgRating = reviewsData.reduce((sum, review) => sum + review.rating, 0) / reviewsData.length
+        setAverageRating(Math.round(avgRating * 10) / 10) // Round to 1 decimal place
+        setTotalReviews(reviewsData.length)
+      } else {
+        setAverageRating(0)
+        setTotalReviews(0)
+      }
+    } catch (error) {
+      console.error("Error fetching reviews:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renderStars = (rating: number, size: "sm" | "lg" = "sm") => {
+    const stars = []
+    const sizeClass = size === "lg" ? "w-5 h-5" : "w-4 h-4"
+
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <Star
+          key={i}
+          className={`${sizeClass} ${i <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+        />,
+      )
+    }
+    return stars
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })
+  }
 
   if (!isOpen || !space) return null
 
@@ -46,13 +108,26 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
 
         {/* Content */}
         <div className="h-full overflow-y-auto p-6">
-          {/* Header */}
+          {/* Header with Rating */}
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">{space.title || "Parking Space"}</h2>
-            <p className="text-gray-600">
-              {space.location && `${space.location}, `}
-              {space.postcode}
-            </p>
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">{space.title || "Parking Space"}</h2>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-1">{renderStars(Math.round(averageRating))}</div>
+                  <span className="text-sm font-medium text-gray-900">
+                    {averageRating > 0 ? averageRating.toFixed(1) : "0.0"}
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    ({totalReviews} review{totalReviews !== 1 ? "s" : ""})
+                  </span>
+                </div>
+                <p className="text-gray-600">
+                  {space.location && `${space.location}, `}
+                  {space.postcode}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Daily/Monthly Toggle */}
@@ -103,7 +178,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
           </div>
 
           {/* Bottom Reservation Sections - No separators */}
-          <div className="space-y-4">
+          <div className="space-y-4 mb-8">
             {/* Row 1 */}
             <div className="flex items-center justify-between py-3">
               <div>
@@ -142,6 +217,37 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
                 Reserve
               </button>
             </div>
+          </div>
+
+          {/* Reviews Section */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Reviews ({totalReviews})</h3>
+
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+              </div>
+            ) : reviews.length > 0 ? (
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <div key={review.id} className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">{renderStars(review.rating)}</div>
+                        <span className="text-sm font-medium text-gray-900">{review.rating}.0</span>
+                      </div>
+                      <span className="text-sm text-gray-500">{formatDate(review.created_at)}</span>
+                    </div>
+                    {review.comment && <p className="text-gray-700 text-sm leading-relaxed">{review.comment}</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>No reviews yet</p>
+                <p className="text-sm">Be the first to leave a review!</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
