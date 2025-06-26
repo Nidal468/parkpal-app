@@ -3,7 +3,6 @@ export interface User {
   id: string
   email: string
   full_name?: string
-  phone?: string
   created_at: string
   updated_at: string
 }
@@ -24,9 +23,9 @@ export interface Vehicle {
 export interface Review {
   id: string
   space_id: string
-  user_id: string
+  user_id: string | null
   rating: number
-  comment: string
+  comment?: string
   created_at: string
   updated_at: string
 }
@@ -34,14 +33,14 @@ export interface Review {
 // Parking Space interface (updated with inventory tracking and monthly pricing)
 export interface ParkingSpace {
   id: string
-  host_id: string
+  host_id?: string
   title: string
-  description: string
-  location: string
-  postcode: string
+  description?: string
+  location?: string
+  postcode?: string
   price_per_day: number
-  price_per_month: number
-  total_spaces: number
+  price_per_month?: number
+  total_spaces?: number
   booked_spaces?: number
   available_spaces?: number
   image_url?: string
@@ -49,9 +48,9 @@ export interface ParkingSpace {
   longitude?: number
   address?: string
   features?: string
-  is_available: boolean
-  available_from: string
-  available_to: string
+  is_available?: boolean
+  available_from?: string
+  available_to?: string
   what3words?: string
   available_days?: string
   available_hours?: string
@@ -213,7 +212,7 @@ export interface Database {
         Row: {
           id: string
           space_id: string
-          user_id: string
+          user_id: string | null
           rating: number
           comment: string
           created_at: string
@@ -222,7 +221,7 @@ export interface Database {
         Insert: {
           id?: string
           space_id: string
-          user_id: string
+          user_id: string | null
           rating: number
           comment: string
           created_at?: string
@@ -231,7 +230,7 @@ export interface Database {
         Update: {
           id?: string
           space_id?: string
-          user_id?: string
+          user_id?: string | null
           rating?: number
           comment?: string
           created_at?: string
