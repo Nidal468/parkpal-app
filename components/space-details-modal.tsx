@@ -92,9 +92,12 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
           <div className="mb-8">
             <div className="w-full h-64 bg-gray-200 rounded-lg overflow-hidden">
               <img
-                src="/placeholder.svg?height=256&width=400"
-                alt="Parking space"
+                src={space.image_url || "/placeholder.svg?height=256&width=400"}
+                alt={space.title || "Parking space"}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = "/placeholder.svg?height=256&width=400"
+                }}
               />
             </div>
           </div>
