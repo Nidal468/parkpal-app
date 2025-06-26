@@ -144,7 +144,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
           rating: 4,
           comment: "Good value for money. Easy booking process.",
           created_at: "2024-01-15T09:15:00Z",
-          updated_at: "2024-01-15T09:15:Z",
+          updated_at: "2024-01-15T09:15:00Z",
         },
         {
           id: "fallback-4",
