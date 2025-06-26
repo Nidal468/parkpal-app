@@ -39,8 +39,21 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
       setLoading(true)
       console.log("Fetching reviews for space:", space!.id)
 
+      // Check if environment variables are available
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+      console.log("Supabase URL available:", !!supabaseUrl)
+      console.log("Supabase Key available:", !!supabaseAnonKey)
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        console.log("Supabase credentials not available, using mock data")
+        throw new Error("Supabase credentials not configured")
+      }
+
       // Dynamic import to avoid SSR issues
-      const { supabase } = await import("@/lib/supabase")
+      const { createClient } = await import("@supabase/supabase-js")
+      const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
       // First, let's test the connection by getting all reviews
       const { data: allReviews, error: allError } = await supabase.from("reviews").select("*")
