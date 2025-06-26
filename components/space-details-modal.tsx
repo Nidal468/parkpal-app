@@ -37,112 +37,45 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
 
     try {
       setLoading(true)
+      console.log("Fetching reviews for space:", space!.id)
 
       // Dynamic import to avoid SSR issues
       const { supabase } = await import("@/lib/supabase")
 
-      // Fetch ALL reviews for this space (no limit)
+      // First, let's test the connection by getting all reviews
+      const { data: allReviews, error: allError } = await supabase.from("reviews").select("*")
+
+      console.log("All reviews in database:", allReviews)
+      console.log("Database error (if any):", allError)
+
+      // Now fetch reviews for this specific space
       const { data, error } = await supabase
         .from("reviews")
         .select("*")
         .eq("space_id", space!.id)
         .order("created_at", { ascending: false })
 
+      console.log("Reviews for space", space!.id, ":", data)
+      console.log("Query error (if any):", error)
+
       if (error) {
-        console.error("Error fetching reviews:", error)
-        // Use expanded mock data as fallback with minimum 6 reviews
-        const mockReviews: Review[] = [
-          {
-            id: "1",
-            space_id: space!.id,
-            user_id: "user1",
-            rating: 5,
-            comment: "Excellent parking space! Very secure and convenient location. Perfect for daily commuting.",
-            created_at: "2024-01-20T10:30:00Z",
-            updated_at: "2024-01-20T10:30:00Z",
-          },
-          {
-            id: "2",
-            space_id: space!.id,
-            user_id: "user2",
-            rating: 4,
-            comment: "Good value for money. Easy access and well-lit area. Would recommend to others.",
-            created_at: "2024-01-18T14:20:00Z",
-            updated_at: "2024-01-18T14:20:00Z",
-          },
-          {
-            id: "3",
-            space_id: space!.id,
-            user_id: "user3",
-            rating: 5,
-            comment: "Perfect for daily commuting. Highly recommend! Safe and secure parking.",
-            created_at: "2024-01-15T09:15:00Z",
-            updated_at: "2024-01-15T09:15:00Z",
-          },
-          {
-            id: "4",
-            space_id: space!.id,
-            user_id: "user4",
-            rating: 4,
-            comment: "Great location, close to transport links. Booking process was smooth and easy.",
-            created_at: "2024-01-12T16:45:00Z",
-            updated_at: "2024-01-12T16:45:00Z",
-          },
-          {
-            id: "5",
-            space_id: space!.id,
-            user_id: "user5",
-            rating: 5,
-            comment: "Outstanding service and very reliable. The space is exactly as described in the listing.",
-            created_at: "2024-01-10T11:30:00Z",
-            updated_at: "2024-01-10T11:30:00Z",
-          },
-          {
-            id: "6",
-            space_id: space!.id,
-            user_id: "user6",
-            rating: 4,
-            comment: "Clean, safe, and well-maintained parking area. Good communication from the owner.",
-            created_at: "2024-01-08T13:20:00Z",
-            updated_at: "2024-01-08T13:20:00Z",
-          },
-          {
-            id: "7",
-            space_id: space!.id,
-            user_id: "user7",
-            rating: 5,
-            comment: "Fantastic parking space in a prime location. Will definitely book again in the future.",
-            created_at: "2024-01-05T08:15:00Z",
-            updated_at: "2024-01-05T08:15:00Z",
-          },
-          {
-            id: "8",
-            space_id: space!.id,
-            user_id: "user8",
-            rating: 4,
-            comment: "Very convenient and reasonably priced. Easy to find and access the parking space.",
-            created_at: "2024-01-03T15:40:00Z",
-            updated_at: "2024-01-03T15:40:00Z",
-          },
-        ]
-        setReviews(mockReviews)
-        const avgRating = mockReviews.reduce((sum, review) => sum + review.rating, 0) / mockReviews.length
-        setAverageRating(avgRating)
-        setTotalReviews(mockReviews.length)
-        return
+        console.error("Supabase error fetching reviews:", error)
+        throw error
       }
 
-      // If we have data from Supabase, use it
+      // If we successfully got data from Supabase
       if (data && data.length > 0) {
+        console.log("Using real Supabase data:", data.length, "reviews")
         setReviews(data)
         const avgRating = data.reduce((sum, review) => sum + review.rating, 0) / data.length
         setAverageRating(avgRating)
         setTotalReviews(data.length)
       } else {
+        console.log("No reviews found in database for space:", space!.id)
         // If no reviews in database, show mock data
         const mockReviews: Review[] = [
           {
-            id: "1",
+            id: "mock-1",
             space_id: space!.id,
             user_id: "user1",
             rating: 5,
@@ -151,7 +84,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
             updated_at: "2024-01-20T10:30:00Z",
           },
           {
-            id: "2",
+            id: "mock-2",
             space_id: space!.id,
             user_id: "user2",
             rating: 4,
@@ -160,7 +93,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
             updated_at: "2024-01-18T14:20:00Z",
           },
           {
-            id: "3",
+            id: "mock-3",
             space_id: space!.id,
             user_id: "user3",
             rating: 5,
@@ -169,7 +102,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
             updated_at: "2024-01-15T09:15:00Z",
           },
           {
-            id: "4",
+            id: "mock-4",
             space_id: space!.id,
             user_id: "user4",
             rating: 4,
@@ -178,7 +111,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
             updated_at: "2024-01-12T16:45:00Z",
           },
           {
-            id: "5",
+            id: "mock-5",
             space_id: space!.id,
             user_id: "user5",
             rating: 5,
@@ -187,7 +120,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
             updated_at: "2024-01-10T11:30:00Z",
           },
           {
-            id: "6",
+            id: "mock-6",
             space_id: space!.id,
             user_id: "user6",
             rating: 4,
@@ -202,11 +135,11 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
         setTotalReviews(mockReviews.length)
       }
     } catch (error) {
-      console.error("Error fetching reviews:", error)
+      console.error("Error in fetchReviews:", error)
       // Fallback to mock data with minimum 6 reviews
       const mockReviews: Review[] = [
         {
-          id: "1",
+          id: "fallback-1",
           space_id: space!.id,
           user_id: "user1",
           rating: 4,
@@ -215,7 +148,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
           updated_at: "2024-01-20T10:30:00Z",
         },
         {
-          id: "2",
+          id: "fallback-2",
           space_id: space!.id,
           user_id: "user2",
           rating: 5,
@@ -224,7 +157,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
           updated_at: "2024-01-18T14:20:00Z",
         },
         {
-          id: "3",
+          id: "fallback-3",
           space_id: space!.id,
           user_id: "user3",
           rating: 4,
@@ -233,7 +166,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
           updated_at: "2024-01-15T09:15:00Z",
         },
         {
-          id: "4",
+          id: "fallback-4",
           space_id: space!.id,
           user_id: "user4",
           rating: 5,
@@ -242,7 +175,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
           updated_at: "2024-01-12T16:45:00Z",
         },
         {
-          id: "5",
+          id: "fallback-5",
           space_id: space!.id,
           user_id: "user5",
           rating: 4,
@@ -251,7 +184,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
           updated_at: "2024-01-10T11:30:00Z",
         },
         {
-          id: "6",
+          id: "fallback-6",
           space_id: space!.id,
           user_id: "user6",
           rating: 5,
