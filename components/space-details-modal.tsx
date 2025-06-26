@@ -28,9 +28,10 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
     try {
       setLoading(true)
 
-      // Dynamic import to avoid SSR issues
+      // Only run in browser to avoid SSR issues
       if (typeof window !== "undefined") {
         try {
+          // Dynamic import to avoid SSR issues
           const { supabase } = await import("@/lib/supabase")
           const { data, error } = await supabase
             .from("reviews")

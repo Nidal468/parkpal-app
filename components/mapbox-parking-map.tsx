@@ -11,7 +11,7 @@ mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ""
 
 interface MapboxParkingMapProps {
   spaces: ParkingSpace[]
-  onSpaceSelect?: (space: ParkingSpace) => void
+  onSpaceSelect: (space: ParkingSpace) => void
   selectedSpaceId?: string
 }
 
@@ -111,9 +111,7 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
         console.log("🗺️ Marker clicked for space:", space.title)
         setSelectedSpace(space)
         setIsModalOpen(true)
-        if (onSpaceSelect) {
-          onSpaceSelect(space)
-        }
+        onSpaceSelect(space)
       })
 
       markers.current.push(marker)
