@@ -11,141 +11,152 @@ mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ""
 
 interface MapboxParkingMapProps {
   spaces: ParkingSpace[]
-  onSpaceSelect?: (space: ParkingSpace) => void
-  selectedSpaceId?: string | null
+  onSpaceSelect: (space: ParkingSpace) => void
+  selectedSpaceId?: string
 }
 
 export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxParkingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<mapboxgl.Map | null>(null)
+  const markers = useRef<mapboxgl.Marker[]>([])
   const [mapLoaded, setMapLoaded] = useState(false)
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   console.log("🗺️ MapboxParkingMap received spaces:", spaces)
-  console.log(
-    "🗺️ Spaces with coordinates:",
-    spaces.filter((s) => s.latitude && s.longitude),
+
+  // Filter spaces that have coordinates
+  const spacesWithCoords = spaces.filter(
+    (space) => space.latitude && space.longitude && !isNaN(space.latitude) && !isNaN(space.longitude),
   )
 
-  // Initialize map
+  console.log("🗺️ Spaces with coordinates:", spacesWithCoords)
+
   useEffect(() => {
-    if (!mapContainer.current) return
-
-    console.log("🗺️ Mapbox token loaded:", mapboxgl.accessToken ? "✅" : "❌")
-
-    if (!mapboxgl.accessToken) {
-      console.log("🗺️ Map initialization blocked:", { reason: "No access token" })
+    if (!mapContainer.current) {
+      console.log("🗺️ Map container not ready")
       return
     }
 
-    try {
+    if (!mapboxgl.accessToken) {
+      console.log("🗺️ Mapbox token not available")
+      return
+    }
+
+    console.log("🗺️ Mapbox token loaded: ✅")
+
+    // Initialize map
+    if (!map.current) {
+      console.log("🗺️ Initializing Mapbox map...")
+
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: "mapbox://styles/mapbox/streets-v12",
-        center: [-0.1276, 51.5074], // London center
-        zoom: 12,
+        center: [-0.1097, 51.4875], // London coordinates
+        zoom: 13,
       })
 
       map.current.on("load", () => {
-        console.log("🗺️ Mapbox GL loaded:", "✅")
+        console.log("🗺️ Map loaded successfully")
         setMapLoaded(true)
       })
 
       map.current.on("error", (e) => {
-        console.error("🗺️ Mapbox error:", e)
+        console.error("🗺️ Map error:", e)
       })
-    } catch (error) {
-      console.error("🗺️ Map initialization error:", error)
     }
 
     return () => {
-      if (map.current) {
-        map.current.remove()
-      }
+      // Cleanup markers
+      markers.current.forEach((marker) => marker.remove())
+      markers.current = []
     }
   }, [])
 
-  // Add markers when map is loaded and spaces change
+  // Add markers when map is loaded and spaces are available
   useEffect(() => {
-    if (!map.current || !mapLoaded || !spaces.length) {
-      console.log("🗺️ Cannot add spaces:", {
+    if (!map.current || !mapLoaded || spacesWithCoords.length === 0) {
+      console.log("🗺️ Cannot add markers:", {
         mapExists: !!map.current,
         mapLoaded,
-        spacesCount: spaces.length,
+        spacesCount: spacesWithCoords.length,
       })
       return
     }
 
+    console.log("🗺️ Adding markers for spaces:", spacesWithCoords.length)
+
     // Clear existing markers
-    const existingMarkers = document.querySelectorAll(".mapbox-marker")
-    existingMarkers.forEach((marker) => marker.remove())
+    markers.current.forEach((marker) => marker.remove())
+    markers.current = []
 
     // Add new markers
-    spaces.forEach((space) => {
-      if (!space.latitude || !space.longitude) {
-        console.log("🗺️ Skipping space without coordinates:", space.title)
-        return
-      }
+    spacesWithCoords.forEach((space) => {
+      if (!space.latitude || !space.longitude) return
 
       // Create marker element
       const markerEl = document.createElement("div")
-      markerEl.className = "mapbox-marker"
-      markerEl.style.cssText = `
-        background-color: #10b981;
-        color: white;
-        border-radius: 20px;
-        padding: 4px 8px;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        border: 2px solid white;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        white-space: nowrap;
+      markerEl.className = "cursor-pointer"
+      markerEl.innerHTML = `
+        <div class="bg-green-500 text-white px-2 py-1 rounded-md text-sm font-medium shadow-lg border-2 border-white hover:bg-green-600 transition-colors">
+          £${space.price_per_day}
+        </div>
       `
-      markerEl.textContent = `£${space.price_per_day || 10}`
+
+      // Create marker
+      const marker = new mapboxgl.Marker(markerEl).setLngLat([space.longitude, space.latitude]).addTo(map.current!)
 
       // Add click handler
       markerEl.addEventListener("click", () => {
+        console.log("🗺️ Marker clicked for space:", space.title)
         setSelectedSpace(space)
         setIsModalOpen(true)
-        if (onSpaceSelect) {
-          onSpaceSelect(space)
-        }
+        onSpaceSelect(space)
       })
 
-      // Create and add marker
-      new mapboxgl.Marker(markerEl).setLngLat([space.longitude, space.latitude]).addTo(map.current!)
-
-      console.log("🗺️ Added marker for:", space.title, "at", [space.longitude, space.latitude])
+      markers.current.push(marker)
     })
 
     // Fit map to show all markers if we have spaces
-    if (spaces.length > 0) {
-      const coordinates = spaces
-        .filter((space) => space.latitude && space.longitude)
-        .map((space) => [space.longitude!, space.latitude!] as [number, number])
+    if (spacesWithCoords.length > 0) {
+      const bounds = new mapboxgl.LngLatBounds()
+      spacesWithCoords.forEach((space) => {
+        if (space.latitude && space.longitude) {
+          bounds.extend([space.longitude, space.latitude])
+        }
+      })
 
-      if (coordinates.length > 0) {
-        const bounds = new mapboxgl.LngLatBounds()
-        coordinates.forEach((coord) => bounds.extend(coord))
-
-        map.current.fitBounds(bounds, {
-          padding: 50,
-          maxZoom: 15,
-        })
-      }
+      map.current.fitBounds(bounds, {
+        padding: 50,
+        maxZoom: 15,
+      })
     }
-  }, [mapLoaded, spaces, onSpaceSelect])
+  }, [mapLoaded, spacesWithCoords, onSpaceSelect])
+
+  if (!mapboxgl.accessToken) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <p className="text-gray-600">Map configuration required</p>
+          <p className="text-sm text-gray-500">Mapbox access token needed</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
-      {!mapboxgl.accessToken && (
+
+      {!mapLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-          <p className="text-gray-600">Map requires Mapbox access token</p>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
+            <p className="text-gray-600">Loading map...</p>
+          </div>
         </div>
       )}
+
       {/* Map controls overlay */}
       <div className="absolute top-4 right-4 bg-black/80 text-white px-3 py-2 rounded-lg text-sm">
         {spaces.length} parking spaces found

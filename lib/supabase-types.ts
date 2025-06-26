@@ -3,6 +3,7 @@ export interface User {
   id: string
   email: string
   full_name?: string
+  phone?: string
   created_at: string
   updated_at: string
 }
@@ -23,9 +24,9 @@ export interface Vehicle {
 export interface Review {
   id: string
   space_id: string
-  user_id?: string | null
+  user_id: string
   rating: number
-  comment?: string | null
+  comment: string
   created_at: string
   updated_at: string
 }
@@ -33,17 +34,27 @@ export interface Review {
 // Parking Space interface (updated with inventory tracking and monthly pricing)
 export interface ParkingSpace {
   id: string
+  host_id: string
   title: string
-  description?: string
-  location?: string
-  postcode?: string
-  price_per_day?: number
-  price_per_month?: number
+  description: string
+  location: string
+  postcode: string
+  price_per_day: number
+  price_per_month: number
+  total_spaces: number
+  booked_spaces?: number
+  available_spaces?: number
+  image_url?: string
   latitude?: number
   longitude?: number
-  image_url?: string
-  available_spaces?: number
-  total_spaces?: number
+  address?: string
+  features?: string
+  is_available: boolean
+  available_from: string
+  available_to: string
+  what3words?: string
+  available_days?: string
+  available_hours?: string
   created_at: string
   updated_at: string
 }
@@ -121,49 +132,79 @@ export interface Database {
       spaces: {
         Row: {
           id: string
+          host_id: string
           title: string
-          description?: string
-          location?: string
-          postcode?: string
-          price_per_day?: number
-          price_per_month?: number
+          description: string
+          location: string
+          postcode: string
+          price_per_day: number
+          price_per_month: number
+          total_spaces: number
+          booked_spaces?: number
+          available_spaces?: number
+          image_url?: string
           latitude?: number
           longitude?: number
-          image_url?: string
-          available_spaces?: number
-          total_spaces?: number
+          address?: string
+          features?: string
+          is_available: boolean
+          available_from: string
+          available_to: string
+          what3words?: string
+          available_days?: string
+          available_hours?: string
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
+          host_id: string
           title: string
-          description?: string
-          location?: string
-          postcode?: string
-          price_per_day?: number
-          price_per_month?: number
+          description: string
+          location: string
+          postcode: string
+          price_per_day: number
+          price_per_month: number
+          total_spaces: number
+          booked_spaces?: number
+          available_spaces?: number
+          image_url?: string
           latitude?: number
           longitude?: number
-          image_url?: string
-          available_spaces?: number
-          total_spaces?: number
+          address?: string
+          features?: string
+          is_available: boolean
+          available_from: string
+          available_to: string
+          what3words?: string
+          available_days?: string
+          available_hours?: string
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
+          host_id?: string
           title?: string
           description?: string
           location?: string
           postcode?: string
           price_per_day?: number
           price_per_month?: number
+          total_spaces?: number
+          booked_spaces?: number
+          available_spaces?: number
+          image_url?: string
           latitude?: number
           longitude?: number
-          image_url?: string
-          available_spaces?: number
-          total_spaces?: number
+          address?: string
+          features?: string
+          is_available?: boolean
+          available_from?: string
+          available_to?: string
+          what3words?: string
+          available_days?: string
+          available_hours?: string
           created_at?: string
           updated_at?: string
         }
@@ -172,27 +213,27 @@ export interface Database {
         Row: {
           id: string
           space_id: string
-          user_id?: string | null
+          user_id: string
           rating: number
-          comment?: string | null
+          comment: string
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
           space_id: string
-          user_id?: string | null
+          user_id: string
           rating: number
-          comment?: string | null
+          comment: string
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           space_id?: string
-          user_id?: string | null
+          user_id?: string
           rating?: number
-          comment?: string | null
+          comment?: string
           created_at?: string
           updated_at?: string
         }
@@ -222,6 +263,7 @@ export interface Database {
           id: string
           email: string
           full_name?: string
+          phone?: string
           created_at: string
           updated_at: string
         }
@@ -229,6 +271,7 @@ export interface Database {
           id?: string
           email: string
           full_name?: string
+          phone?: string
           created_at?: string
           updated_at?: string
         }
@@ -236,6 +279,7 @@ export interface Database {
           id?: string
           email?: string
           full_name?: string
+          phone?: string
           created_at?: string
           updated_at?: string
         }
