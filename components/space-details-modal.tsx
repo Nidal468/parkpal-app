@@ -32,60 +32,28 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
   }, [isOpen, space?.id])
 
   const fetchReviews = async () => {
-    // Only run in browser to avoid SSR issues
-    if (typeof window === "undefined") return
-
     try {
       setLoading(true)
-      console.log("Fetching reviews for space:", space!.id)
+      console.log("🔍 Fetching reviews for space:", space!.id)
 
-      // Check if environment variables are available
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      // Use our API route instead of direct Supabase connection
+      const response = await fetch(`/api/reviews?space_id=${space!.id}`)
+      const data = await response.json()
 
-      console.log("Supabase URL available:", !!supabaseUrl)
-      console.log("Supabase Key available:", !!supabaseAnonKey)
+      console.log("📊 API response:", data)
 
-      if (!supabaseUrl || !supabaseAnonKey) {
-        console.log("Supabase credentials not available, using mock data")
-        throw new Error("Supabase credentials not configured")
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch reviews")
       }
 
-      // Dynamic import to avoid SSR issues
-      const { createClient } = await import("@supabase/supabase-js")
-      const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-      // First, let's test the connection by getting all reviews
-      const { data: allReviews, error: allError } = await supabase.from("reviews").select("*")
-
-      console.log("All reviews in database:", allReviews)
-      console.log("Database error (if any):", allError)
-
-      // Now fetch reviews for this specific space
-      const { data, error } = await supabase
-        .from("reviews")
-        .select("*")
-        .eq("space_id", space!.id)
-        .order("created_at", { ascending: false })
-
-      console.log("Reviews for space", space!.id, ":", data)
-      console.log("Query error (if any):", error)
-
-      if (error) {
-        console.error("Supabase error fetching reviews:", error)
-        throw error
-      }
-
-      // If we successfully got data from Supabase
-      if (data && data.length > 0) {
-        console.log("Using real Supabase data:", data.length, "reviews")
-        setReviews(data)
-        const avgRating = data.reduce((sum, review) => sum + review.rating, 0) / data.length
-        setAverageRating(avgRating)
-        setTotalReviews(data.length)
+      if (data.reviews && data.reviews.length > 0) {
+        console.log("✅ Using real database reviews:", data.reviews.length)
+        setReviews(data.reviews)
+        setAverageRating(data.averageRating)
+        setTotalReviews(data.totalReviews)
       } else {
-        console.log("No reviews found in database for space:", space!.id)
-        // If no reviews in database, show mock data
+        console.log("⚠️ No reviews found, using mock data")
+        // Fallback to mock data
         const mockReviews: Review[] = [
           {
             id: "mock-1",
@@ -148,8 +116,8 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
         setTotalReviews(mockReviews.length)
       }
     } catch (error) {
-      console.error("Error in fetchReviews:", error)
-      // Fallback to mock data with minimum 6 reviews
+      console.error("❌ Error fetching reviews:", error)
+      // Fallback to mock data on error
       const mockReviews: Review[] = [
         {
           id: "fallback-1",
@@ -176,7 +144,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
           rating: 4,
           comment: "Good value for money. Easy booking process.",
           created_at: "2024-01-15T09:15:00Z",
-          updated_at: "2024-01-15T09:15:00Z",
+          updated_at: "2024-01-15T09:15:Z",
         },
         {
           id: "fallback-4",
