@@ -3,13 +3,11 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { Send, User, MessageSquare } from "lucide-react"
+import { Send, Mic, MicOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { AirlineNav } from "@/components/airline-nav"
-import { ParkingResultCard } from "@/components/parking-result-card"
-import MapboxParkingMap from "@/components/mapbox-parking-map"
+import { MapboxParkingMap } from "@/components/mapbox-parking-map"
+import { SpaceDetailsModal } from "@/components/space-details-modal"
 import type { ParkingSpace } from "@/lib/supabase-types"
 
 interface Message {
@@ -25,15 +23,17 @@ export default function AirlineChatInterface() {
     {
       id: "1",
       content:
-        "Hello! I'm your ParkPal assistant. I can help you find parking spaces in London. Try asking me about parking in SE17, Kennington, or any other area!",
+        "Hello! I'm your ParkPal assistant. I can help you find parking spaces in London. Try asking me about parking in areas like SE17, Kennington, or Elephant and Castle.",
       isUser: false,
       timestamp: new Date(),
     },
   ])
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [foundSpaces, setFoundSpaces] = useState<ParkingSpace[]>([])
+  const [isListening, setIsListening] = useState(false)
+  const [spaces, setSpaces] = useState<ParkingSpace[]>([])
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -80,14 +80,14 @@ export default function AirlineChatInterface() {
         content: data.message,
         isUser: false,
         timestamp: new Date(),
-        spaces: data.spaces || [],
+        spaces: data.parkingSpaces || [],
       }
 
       setMessages((prev) => [...prev, botMessage])
 
-      // Update found spaces for the map
-      if (data.spaces && data.spaces.length > 0) {
-        setFoundSpaces(data.spaces)
+      // Update spaces for the map
+      if (data.parkingSpaces && data.parkingSpaces.length > 0) {
+        setSpaces(data.parkingSpaces)
       }
     } catch (error) {
       console.error("Error sending message:", error)
@@ -112,77 +112,97 @@ export default function AirlineChatInterface() {
 
   const handleSpaceSelect = (space: ParkingSpace) => {
     setSelectedSpace(space)
-    console.log("Selected space:", space)
+    setIsModalOpen(true)
+  }
+
+  const handleVoiceToggle = () => {
+    if (!isListening) {
+      // Start voice recognition
+      if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
+        const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+        const recognition = new SpeechRecognition()
+
+        recognition.continuous = false
+        recognition.interimResults = false
+        recognition.lang = "en-US"
+
+        recognition.onstart = () => {
+          setIsListening(true)
+        }
+
+        recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript
+          setInputValue(transcript)
+          setIsListening(false)
+        }
+
+        recognition.onerror = () => {
+          setIsListening(false)
+        }
+
+        recognition.onend = () => {
+          setIsListening(false)
+        }
+
+        recognition.start()
+      } else {
+        alert("Speech recognition is not supported in your browser.")
+      }
+    } else {
+      setIsListening(false)
+    }
   }
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Left Panel - Chat */}
+      {/* Chat Section */}
       <div className="w-1/2 flex flex-col bg-white border-r border-gray-200">
         {/* Header */}
-        <AirlineNav />
+        <div className="p-4 border-b border-gray-200 bg-white">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold">P</span>
+            </div>
+            <div>
+              <h1 className="font-semibold text-gray-900">ParkPal Assistant</h1>
+              <p className="text-sm text-gray-500">Find parking spaces in London</p>
+            </div>
+          </div>
+        </div>
 
-        {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((message) => (
             <div key={message.id} className={`flex ${message.isUser ? "justify-end" : "justify-start"}`}>
               <div
-                className={`flex items-start space-x-3 max-w-[80%] ${message.isUser ? "flex-row-reverse space-x-reverse" : ""}`}
+                className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                  message.isUser ? "bg-black text-white" : "bg-gray-100 text-gray-900"
+                }`}
               >
-                <Avatar className="w-8 h-8 flex-shrink-0">
-                  <AvatarFallback className={message.isUser ? "bg-blue-500 text-white" : "bg-gray-500 text-white"}>
-                    {message.isUser ? <User className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
-                  </AvatarFallback>
-                </Avatar>
-                <div
-                  className={`rounded-lg p-3 ${message.isUser ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-900"}`}
-                >
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  <p className={`text-xs mt-1 ${message.isUser ? "text-blue-100" : "text-gray-500"}`}>
-                    {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
+                <p className="text-sm">{message.content}</p>
+                {message.spaces && message.spaces.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <p className="text-xs text-gray-500 mb-2">
+                      Found {message.spaces.length} parking space{message.spaces.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           ))}
-
-          {/* Show parking results if available */}
-          {messages.length > 0 &&
-            messages[messages.length - 1].spaces &&
-            messages[messages.length - 1].spaces!.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold text-gray-900">Found Parking Spaces:</h3>
-                {messages[messages.length - 1].spaces!.map((space) => (
-                  <ParkingResultCard
-                    key={space.id}
-                    space={space}
-                    onSelect={() => handleSpaceSelect(space)}
-                    isSelected={selectedSpace?.id === space.id}
-                  />
-                ))}
-              </div>
-            )}
-
           {isLoading && (
             <div className="flex justify-start">
-              <div className="flex items-start space-x-3 max-w-[80%]">
-                <Avatar className="w-8 h-8 flex-shrink-0">
-                  <AvatarFallback className="bg-gray-500 text-white">
-                    <MessageSquare className="w-4 h-4" />
-                  </AvatarFallback>
-                </Avatar>
-                <div className="bg-gray-100 rounded-lg p-3">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.1s" }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.2s" }}
-                    ></div>
-                  </div>
+              <div className="bg-gray-100 rounded-lg px-4 py-2">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.1s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.2s" }}
+                  ></div>
                 </div>
               </div>
             </div>
@@ -190,28 +210,49 @@ export default function AirlineChatInterface() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="border-t border-gray-200 p-4">
-          <div className="flex space-x-2">
+        {/* Input */}
+        <div className="p-4 border-t border-gray-200 bg-white">
+          <div className="flex items-center space-x-2">
             <Input
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me about parking in London..."
+              placeholder="Ask about parking in London..."
               className="flex-1"
               disabled={isLoading}
             />
-            <Button onClick={handleSendMessage} disabled={isLoading || !inputValue.trim()} size="sm">
-              <Send className="w-4 h-4" />
+            <Button
+              onClick={handleVoiceToggle}
+              variant="outline"
+              size="icon"
+              className={isListening ? "bg-red-100 border-red-300" : ""}
+              disabled={isLoading}
+            >
+              {isListening ? <MicOff className="h-4 w-4 text-red-600" /> : <Mic className="h-4 w-4" />}
+            </Button>
+            <Button onClick={handleSendMessage} disabled={isLoading || !inputValue.trim()}>
+              <Send className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Right Panel - Map */}
+      {/* Map Section */}
       <div className="w-1/2 relative">
-        <MapboxParkingMap spaces={foundSpaces} onSpaceSelect={handleSpaceSelect} selectedSpaceId={selectedSpace?.id} />
+        <MapboxParkingMap spaces={spaces} onSpaceSelect={handleSpaceSelect} selectedSpaceId={selectedSpace?.id} />
       </div>
+
+      {/* Space Details Modal */}
+      {selectedSpace && (
+        <SpaceDetailsModal
+          space={selectedSpace}
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false)
+            setSelectedSpace(null)
+          }}
+        />
+      )}
     </div>
   )
 }
