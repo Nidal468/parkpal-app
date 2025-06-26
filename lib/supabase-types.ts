@@ -102,3 +102,14 @@ export interface UserProfile extends User {
 export interface SpaceWithHost extends ParkingSpace {
   host: User
 }
+
+// Review interface
+export interface Review {
+  id: string
+  space_id: string
+  user_id: string
+  rating: number
+  comment: string
+  created_at: string
+  updated_at: string
+}

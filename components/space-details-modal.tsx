@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X } from "lucide-react"
-import type { ParkingSpace } from "@/lib/supabase-types"
+import { X, Star } from "lucide-react"
+import type { ParkingSpace, Review } from "@/lib/supabase-types"
+import { supabase } from "@/lib/supabase"
 
 interface SpaceDetailsModalProps {
   space: ParkingSpace | null
@@ -12,6 +13,10 @@ interface SpaceDetailsModalProps {
 
 export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalProps) {
   const [isMonthly, setIsMonthly] = useState(false)
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [loading, setLoading] = useState(false)
+  const [averageRating, setAverageRating] = useState(0)
+  const [totalReviews, setTotalReviews] = useState(0)
 
   // Reset to daily when modal opens
   useEffect(() => {
@@ -19,6 +24,62 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
       setIsMonthly(false)
     }
   }, [isOpen])
+
+  // Fetch reviews when modal opens
+  useEffect(() => {
+    if (isOpen && space?.id) {
+      fetchReviews()
+    }
+  }, [isOpen, space?.id])
+
+  const fetchReviews = async () => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("*")
+        .eq("space_id", space!.id)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("Error fetching reviews:", error)
+        return
+      }
+
+      setReviews(data || [])
+      if (data && data.length > 0) {
+        const avgRating = data.reduce((sum, review) => sum + review.rating, 0) / data.length
+        setAverageRating(avgRating)
+        setTotalReviews(data.length)
+      }
+    } catch (error) {
+      console.error("Error fetching reviews:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const renderStars = (rating: number, size: "sm" | "md" = "md") => {
+    const sizeClass = size === "sm" ? "w-4 h-4" : "w-5 h-5"
+    return (
+      <div className="flex items-center">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            className={`${sizeClass} ${star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })
+  }
 
   if (!isOpen || !space) return null
 
@@ -48,7 +109,17 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
         <div className="h-full overflow-y-auto p-6">
           {/* Header */}
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">{space.title || "Parking Space"}</h2>
+            <div className="flex items-center gap-3 mb-2">
+              <h2 className="text-2xl font-bold text-gray-900">{space.title || "Parking Space"}</h2>
+              {totalReviews > 0 && (
+                <div className="flex items-center gap-2">
+                  {renderStars(averageRating, "sm")}
+                  <span className="text-sm font-medium text-gray-700">
+                    {averageRating.toFixed(1)} stars ({totalReviews} reviews)
+                  </span>
+                </div>
+              )}
+            </div>
             <p className="text-gray-600">
               {space.location && `${space.location}, `}
               {space.postcode}
@@ -142,6 +213,36 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
                 Reserve
               </button>
             </div>
+          </div>
+
+          {/* Reviews Section */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Reviews</h3>
+
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                <p className="text-gray-600 mt-2">Loading reviews...</p>
+              </div>
+            ) : reviews.length > 0 ? (
+              <div className="space-y-4 max-h-64 overflow-y-auto">
+                {reviews.map((review) => (
+                  <div key={review.id} className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      {renderStars(review.rating, "sm")}
+                      <span className="text-sm text-gray-500">{formatDate(review.created_at)}</span>
+                    </div>
+                    <p className="text-gray-700 text-sm">{review.comment}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Star className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>No reviews yet</p>
+                <p className="text-sm">Be the first to leave a review!</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
