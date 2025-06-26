@@ -2,60 +2,45 @@
 export interface User {
   id: string
   email: string
-  full_name?: string
-  created_at: string
-  updated_at: string
+  name: string | null
+  role: string | null
+  created_at: string | null
 }
 
 // Vehicle interface
 export interface Vehicle {
   id: string
+  created_at: string
   user_id: string
-  make: string
-  model: string
-  color: string
-  license_plate: string
-  created_at: string
-  updated_at: string
-}
-
-// Review interface
-export interface Review {
-  id: string
-  space_id: string
-  user_id: string | null
-  rating: number
-  comment?: string
-  created_at: string
-  updated_at: string
+  reg: string | null // Registration number
+  make: string | null
+  model: string | null
+  colour: string | null
 }
 
 // Parking Space interface (updated with inventory tracking and monthly pricing)
 export interface ParkingSpace {
   id: string
-  host_id?: string
+  host_id: string
   title: string
-  description?: string
-  location?: string
-  postcode?: string
-  price_per_day: number
-  price_per_month?: number
-  total_spaces?: number
-  booked_spaces?: number
-  available_spaces?: number
-  image_url?: string
-  latitude?: number
-  longitude?: number
-  address?: string
-  features?: string
-  is_available?: boolean
-  available_from?: string
-  available_to?: string
-  what3words?: string
-  available_days?: string
-  available_hours?: string
-  created_at: string
-  updated_at: string
+  location: string
+  features: string // Stored as comma-separated string in DB
+  is_available: boolean | null
+  description: string | null
+  price_per_day: number | null
+  price_per_month: number | null // Monthly pricing
+  available_from: string | null // date string
+  available_to: string | null // date string
+  image_url: string | null
+  address: string | null
+  postcode: string | null
+  latitude: number | null
+  longitude: number | null
+  what3words: string | null
+  available_days: string | null // Default: 'Mon,Tue,Wed,Thu,Fri,Sat,Sun'
+  available_hours: string | null // Default: '00:00-23:59'
+  total_spaces: number | null // Total parking spaces available
+  booked_spaces: number | null // Currently booked spaces
 }
 
 // Booking interface (for future implementation)
@@ -63,10 +48,10 @@ export interface Booking {
   id: string
   user_id: string
   space_id: string
-  vehicle_id?: string
+  vehicle_id: string | null
   start_date: string
   end_date: string
-  total_price: number
+  total_price: number | null
   status: "pending" | "confirmed" | "cancelled" | "completed"
   created_at: string
   updated_at: string
@@ -75,9 +60,9 @@ export interface Booking {
 // Message interface (existing)
 export interface Message {
   id: string
-  created_at: string
   user_message: string
-  bot_response: string
+  bot_response: string | null
+  created_at: string | null
 }
 
 // Chat Session interface (existing)
@@ -116,251 +101,4 @@ export interface UserProfile extends User {
 // Space with host information
 export interface SpaceWithHost extends ParkingSpace {
   host: User
-}
-
-// Space with reviews and rating summary
-export interface SpaceWithReviews extends ParkingSpace {
-  reviews: Review[]
-  average_rating: number
-  total_reviews: number
-}
-
-export interface Database {
-  public: {
-    Tables: {
-      spaces: {
-        Row: {
-          id: string
-          host_id: string
-          title: string
-          description: string
-          location: string
-          postcode: string
-          price_per_day: number
-          price_per_month: number
-          total_spaces: number
-          booked_spaces?: number
-          available_spaces?: number
-          image_url?: string
-          latitude?: number
-          longitude?: number
-          address?: string
-          features?: string
-          is_available: boolean
-          available_from: string
-          available_to: string
-          what3words?: string
-          available_days?: string
-          available_hours?: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          host_id: string
-          title: string
-          description: string
-          location: string
-          postcode: string
-          price_per_day: number
-          price_per_month: number
-          total_spaces: number
-          booked_spaces?: number
-          available_spaces?: number
-          image_url?: string
-          latitude?: number
-          longitude?: number
-          address?: string
-          features?: string
-          is_available: boolean
-          available_from: string
-          available_to: string
-          what3words?: string
-          available_days?: string
-          available_hours?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          host_id?: string
-          title?: string
-          description?: string
-          location?: string
-          postcode?: string
-          price_per_day?: number
-          price_per_month?: number
-          total_spaces?: number
-          booked_spaces?: number
-          available_spaces?: number
-          image_url?: string
-          latitude?: number
-          longitude?: number
-          address?: string
-          features?: string
-          is_available?: boolean
-          available_from?: string
-          available_to?: string
-          what3words?: string
-          available_days?: string
-          available_hours?: string
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      reviews: {
-        Row: {
-          id: string
-          space_id: string
-          user_id: string | null
-          rating: number
-          comment: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          space_id: string
-          user_id: string | null
-          rating: number
-          comment: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          space_id?: string
-          user_id?: string | null
-          rating?: number
-          comment?: string
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      messages: {
-        Row: {
-          id: string
-          content: string
-          role: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          content: string
-          role: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          content?: string
-          role?: string
-          created_at?: string
-        }
-      }
-      users: {
-        Row: {
-          id: string
-          email: string
-          full_name?: string
-          phone?: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          email: string
-          full_name?: string
-          phone?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          email?: string
-          full_name?: string
-          phone?: string
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      vehicles: {
-        Row: {
-          id: string
-          user_id: string
-          make: string
-          model: string
-          color: string
-          license_plate: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          make: string
-          model: string
-          color: string
-          license_plate: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          make?: string
-          model?: string
-          color?: string
-          license_plate?: string
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      bookings: {
-        Row: {
-          id: string
-          user_id: string
-          space_id: string
-          vehicle_id?: string
-          start_date: string
-          end_date: string
-          total_price: number
-          status: "pending" | "confirmed" | "cancelled" | "completed"
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          space_id: string
-          vehicle_id?: string
-          start_date: string
-          end_date: string
-          total_price: number
-          status?: "pending" | "confirmed" | "cancelled" | "completed"
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          space_id?: string
-          vehicle_id?: string
-          start_date?: string
-          end_date?: string
-          total_price?: number
-          status?: "pending" | "confirmed" | "cancelled" | "completed"
-          created_at?: string
-          updated_at?: string
-        }
-      }
-    }
-  }
-}
-
-// Chat Message interface
-export interface ChatMessage {
-  id: string
-  message: string
-  response: string
-  created_at: string
 }
