@@ -11,7 +11,7 @@ interface MapboxParkingMapProps {
   selectedSpaceId?: string
 }
 
-export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxParkingMapProps) {
+function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxParkingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<any>(null)
   const [mapboxgl, setMapboxgl] = useState<any>(null)
@@ -242,3 +242,6 @@ export function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: Map
     </>
   )
 }
+
+export default MapboxParkingMap
+export { MapboxParkingMap }
