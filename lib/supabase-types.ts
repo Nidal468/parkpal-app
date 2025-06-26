@@ -3,17 +3,14 @@ export interface ParkingSpace {
   title: string
   description?: string
   location?: string
-  address?: string
-  postcode?: string
+  postcode: string
   price_per_day: number
   price_per_month?: number
-  total_spaces?: number
-  booked_spaces?: number
+  total_spaces: number
   available_spaces?: number
-  is_available: boolean
+  booked_spaces?: number
   features?: string
   image_url?: string
-  host_id?: string
   latitude?: number
   longitude?: number
   created_at: string
@@ -30,17 +27,10 @@ export interface Review {
   updated_at: string
 }
 
-export interface Message {
-  id: string
-  created_at: string
-  user_message: string
-  bot_response: string
-}
-
 export interface User {
   id: string
   email: string
-  name?: string
+  full_name?: string
   created_at: string
   updated_at: string
 }
@@ -66,4 +56,11 @@ export interface Booking {
   status: "pending" | "confirmed" | "cancelled" | "completed"
   created_at: string
   updated_at: string
+}
+
+export interface Message {
+  id: string
+  content: string
+  role: "user" | "assistant"
+  created_at: string
 }

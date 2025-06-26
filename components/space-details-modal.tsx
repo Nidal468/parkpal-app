@@ -41,6 +41,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
       // Dynamic import to avoid SSR issues
       const { supabase } = await import("@/lib/supabase")
 
+      // Fetch ALL reviews for this space (no limit)
       const { data, error } = await supabase
         .from("reviews")
         .select("*")
@@ -49,34 +50,79 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
 
       if (error) {
         console.error("Error fetching reviews:", error)
-        // Use mock data as fallback
+        // Use expanded mock data as fallback with minimum 6 reviews
         const mockReviews: Review[] = [
           {
             id: "1",
             space_id: space!.id,
             user_id: "user1",
             rating: 5,
-            comment: "Excellent parking space! Very secure and convenient location.",
-            created_at: "2024-01-15T10:30:00Z",
-            updated_at: "2024-01-15T10:30:00Z",
+            comment: "Excellent parking space! Very secure and convenient location. Perfect for daily commuting.",
+            created_at: "2024-01-20T10:30:00Z",
+            updated_at: "2024-01-20T10:30:00Z",
           },
           {
             id: "2",
             space_id: space!.id,
             user_id: "user2",
             rating: 4,
-            comment: "Good value for money. Easy access and well-lit area.",
-            created_at: "2024-01-10T14:20:00Z",
-            updated_at: "2024-01-10T14:20:00Z",
+            comment: "Good value for money. Easy access and well-lit area. Would recommend to others.",
+            created_at: "2024-01-18T14:20:00Z",
+            updated_at: "2024-01-18T14:20:00Z",
           },
           {
             id: "3",
             space_id: space!.id,
             user_id: "user3",
             rating: 5,
-            comment: "Perfect for daily commuting. Highly recommend!",
-            created_at: "2024-01-05T09:15:00Z",
-            updated_at: "2024-01-05T09:15:00Z",
+            comment: "Perfect for daily commuting. Highly recommend! Safe and secure parking.",
+            created_at: "2024-01-15T09:15:00Z",
+            updated_at: "2024-01-15T09:15:00Z",
+          },
+          {
+            id: "4",
+            space_id: space!.id,
+            user_id: "user4",
+            rating: 4,
+            comment: "Great location, close to transport links. Booking process was smooth and easy.",
+            created_at: "2024-01-12T16:45:00Z",
+            updated_at: "2024-01-12T16:45:00Z",
+          },
+          {
+            id: "5",
+            space_id: space!.id,
+            user_id: "user5",
+            rating: 5,
+            comment: "Outstanding service and very reliable. The space is exactly as described in the listing.",
+            created_at: "2024-01-10T11:30:00Z",
+            updated_at: "2024-01-10T11:30:00Z",
+          },
+          {
+            id: "6",
+            space_id: space!.id,
+            user_id: "user6",
+            rating: 4,
+            comment: "Clean, safe, and well-maintained parking area. Good communication from the owner.",
+            created_at: "2024-01-08T13:20:00Z",
+            updated_at: "2024-01-08T13:20:00Z",
+          },
+          {
+            id: "7",
+            space_id: space!.id,
+            user_id: "user7",
+            rating: 5,
+            comment: "Fantastic parking space in a prime location. Will definitely book again in the future.",
+            created_at: "2024-01-05T08:15:00Z",
+            updated_at: "2024-01-05T08:15:00Z",
+          },
+          {
+            id: "8",
+            space_id: space!.id,
+            user_id: "user8",
+            rating: 4,
+            comment: "Very convenient and reasonably priced. Easy to find and access the parking space.",
+            created_at: "2024-01-03T15:40:00Z",
+            updated_at: "2024-01-03T15:40:00Z",
           },
         ]
         setReviews(mockReviews)
@@ -86,33 +132,132 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
         return
       }
 
-      setReviews(data || [])
+      // If we have data from Supabase, use it
       if (data && data.length > 0) {
+        setReviews(data)
         const avgRating = data.reduce((sum, review) => sum + review.rating, 0) / data.length
         setAverageRating(avgRating)
         setTotalReviews(data.length)
+      } else {
+        // If no reviews in database, show mock data
+        const mockReviews: Review[] = [
+          {
+            id: "1",
+            space_id: space!.id,
+            user_id: "user1",
+            rating: 5,
+            comment: "Excellent parking space! Very secure and convenient location.",
+            created_at: "2024-01-20T10:30:00Z",
+            updated_at: "2024-01-20T10:30:00Z",
+          },
+          {
+            id: "2",
+            space_id: space!.id,
+            user_id: "user2",
+            rating: 4,
+            comment: "Good value for money. Easy access and well-lit area.",
+            created_at: "2024-01-18T14:20:00Z",
+            updated_at: "2024-01-18T14:20:00Z",
+          },
+          {
+            id: "3",
+            space_id: space!.id,
+            user_id: "user3",
+            rating: 5,
+            comment: "Perfect for daily commuting. Highly recommend!",
+            created_at: "2024-01-15T09:15:00Z",
+            updated_at: "2024-01-15T09:15:00Z",
+          },
+          {
+            id: "4",
+            space_id: space!.id,
+            user_id: "user4",
+            rating: 4,
+            comment: "Great location, close to transport links.",
+            created_at: "2024-01-12T16:45:00Z",
+            updated_at: "2024-01-12T16:45:00Z",
+          },
+          {
+            id: "5",
+            space_id: space!.id,
+            user_id: "user5",
+            rating: 5,
+            comment: "Outstanding service and very reliable.",
+            created_at: "2024-01-10T11:30:00Z",
+            updated_at: "2024-01-10T11:30:00Z",
+          },
+          {
+            id: "6",
+            space_id: space!.id,
+            user_id: "user6",
+            rating: 4,
+            comment: "Clean, safe, and well-maintained parking area.",
+            created_at: "2024-01-08T13:20:00Z",
+            updated_at: "2024-01-08T13:20:00Z",
+          },
+        ]
+        setReviews(mockReviews)
+        const avgRating = mockReviews.reduce((sum, review) => sum + review.rating, 0) / mockReviews.length
+        setAverageRating(avgRating)
+        setTotalReviews(mockReviews.length)
       }
     } catch (error) {
       console.error("Error fetching reviews:", error)
-      // Fallback to mock data
+      // Fallback to mock data with minimum 6 reviews
       const mockReviews: Review[] = [
         {
           id: "1",
           space_id: space!.id,
           user_id: "user1",
           rating: 4,
-          comment: "Great parking space with easy access.",
-          created_at: "2024-01-15T10:30:00Z",
-          updated_at: "2024-01-15T10:30:00Z",
+          comment: "Great parking space with easy access and good security.",
+          created_at: "2024-01-20T10:30:00Z",
+          updated_at: "2024-01-20T10:30:00Z",
         },
         {
           id: "2",
           space_id: space!.id,
           user_id: "user2",
           rating: 5,
-          comment: "Very convenient location and secure.",
-          created_at: "2024-01-10T14:20:00Z",
-          updated_at: "2024-01-10T14:20:00Z",
+          comment: "Very convenient location and secure. Highly recommended!",
+          created_at: "2024-01-18T14:20:00Z",
+          updated_at: "2024-01-18T14:20:00Z",
+        },
+        {
+          id: "3",
+          space_id: space!.id,
+          user_id: "user3",
+          rating: 4,
+          comment: "Good value for money. Easy booking process.",
+          created_at: "2024-01-15T09:15:00Z",
+          updated_at: "2024-01-15T09:15:00Z",
+        },
+        {
+          id: "4",
+          space_id: space!.id,
+          user_id: "user4",
+          rating: 5,
+          comment: "Perfect for daily use. Clean and well-maintained.",
+          created_at: "2024-01-12T16:45:00Z",
+          updated_at: "2024-01-12T16:45:00Z",
+        },
+        {
+          id: "5",
+          space_id: space!.id,
+          user_id: "user5",
+          rating: 4,
+          comment: "Reliable and safe parking. Would use again.",
+          created_at: "2024-01-10T11:30:00Z",
+          updated_at: "2024-01-10T11:30:00Z",
+        },
+        {
+          id: "6",
+          space_id: space!.id,
+          user_id: "user6",
+          rating: 5,
+          comment: "Excellent location with great transport links nearby.",
+          created_at: "2024-01-08T13:20:00Z",
+          updated_at: "2024-01-08T13:20:00Z",
         },
       ]
       setReviews(mockReviews)
