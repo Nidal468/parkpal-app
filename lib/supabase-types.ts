@@ -1,21 +1,27 @@
 export interface ParkingSpace {
   id: string
   title: string
-  location: string
+  description: string
   address: string
   postcode: string
-  price_per_day: number
-  price_per_month?: number
   latitude?: number
   longitude?: number
-  is_available: boolean
-  total_spaces?: number
-  booked_spaces?: number
+  price_per_hour?: number
+  price_per_day?: number
+  price_per_month?: number
+  availability: "available" | "occupied" | "reserved"
+  space_type: "driveway" | "garage" | "street" | "car_park"
   features?: string[]
-  description?: string
-  host_id?: string
-  created_at?: string
-  updated_at?: string
+  owner_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Message {
+  id: string
+  content: string
+  role: "user" | "assistant"
+  created_at: string
 }
 
 export interface Review {
@@ -25,14 +31,7 @@ export interface Review {
   rating: number
   comment: string
   created_at: string
-  updated_at?: string
-}
-
-export interface Message {
-  id: string
-  user_message: string
-  bot_response: string
-  created_at: string
+  updated_at: string
 }
 
 export interface Booking {
@@ -42,7 +41,7 @@ export interface Booking {
   start_date: string
   end_date: string
   total_price: number
-  status: "pending" | "confirmed" | "cancelled"
+  status: "pending" | "confirmed" | "cancelled" | "completed"
   created_at: string
-  updated_at?: string
+  updated_at: string
 }
