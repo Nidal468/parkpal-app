@@ -269,20 +269,36 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
 
     const botResponse = completion.choices[0]?.message?.content || "Sorry, I couldn't process that request."
 
-    // Store the conversation in Supabase (only if configured)
+    // Store the conversation in Supabase with proper error handling and logging
     if (isSupabaseConfigured()) {
       try {
-        const { error: supabaseError } = await supabaseServer.from("messages").insert({
-          user_message: message,
-          bot_response: botResponse,
-        })
+        console.log("💾 Attempting to store message in Supabase...")
+
+        const { data, error: supabaseError } = await supabaseServer
+          .from("messages")
+          .insert({
+            user_message: message,
+            bot_response: botResponse,
+            created_at: new Date().toISOString(),
+          })
+          .select()
 
         if (supabaseError) {
-          console.error("Supabase error:", supabaseError)
+          console.error("❌ Supabase storage error:", supabaseError)
+          console.error("Error details:", {
+            code: supabaseError.code,
+            message: supabaseError.message,
+            details: supabaseError.details,
+            hint: supabaseError.hint,
+          })
+        } else {
+          console.log("✅ Message stored successfully in Supabase:", data)
         }
       } catch (dbError) {
-        console.error("Database storage error:", dbError)
+        console.error("💥 Database storage exception:", dbError)
       }
+    } else {
+      console.log("⚠️ Supabase not configured - message not stored")
     }
 
     // Return response with parking spaces data if available

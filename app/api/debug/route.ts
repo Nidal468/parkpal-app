@@ -1,85 +1,75 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { supabaseServer } from "@/lib/supabase-server"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    console.log("🔍 Debug API called")
+    console.log("🔍 Testing Supabase connection...")
 
-    // Check if spaces table exists and get its structure
-    let tableInfo = null
-    try {
-      const { data: tableCheck, error: tableError } = await supabaseServer
-        .from("spaces")
-        .select("*")
-        .limit(1)
-      
-      if (tableError) {
-        console.error("❌ Table error:", tableError)
-        tableInfo = { error: tableError.message, exists: false }
-      } else {
-        tableInfo = { exists: true, hasData: tableCheck && tableCheck.length > 0 }
-      }
-    } catch (err) {
-      tableInfo = { error: "Table might not exist", exists: false }
-    }
-
-    // Check all tables to see what exists
-    let allTables = []
-    try {
-      // Try to get some basic info about available tables
-      const { data: messages } = await supabaseServer.from("messages").select("id").limit(1)
-      if (messages !== null) allTables.push("messages")
-    } catch (e) {
-      // messages table doesn't exist
-    }
-
-    try {
-      const { data: users } = await supabaseServer.from("users").select("id").limit(1)
-      if (users !== null) allTables.push("users")
-    } catch (e) {
-      // users table doesn't exist
-    }
-
-    try {
-      const { data: vehicles } = await supabaseServer.from("vehicles").select("id").limit(1)
-      if (vehicles !== null) allTables.push("vehicles")
-    } catch (e) {
-      // vehicles table doesn't exist
-    }
-
-    try {
-      const { data: spaces } = await supabaseServer.from("spaces").select("id").limit(1)
-      if (spaces !== null) allTables.push("spaces")
-    } catch (e) {
-      // spaces table doesn't exist
-    }
-
-    // Check what's in messages table (we know this works)
-    const { data: messageCount } = await supabaseServer
+    // Test basic connection
+    const { data: connectionTest, error: connectionError } = await supabaseServer
       .from("messages")
-      .select("id", { count: "exact" })
-      .limit(0)
+      .select("count")
+      .limit(1)
+
+    if (connectionError) {
+      console.error("❌ Connection test failed:", connectionError)
+      return NextResponse.json({
+        status: "error",
+        message: "Failed to connect to Supabase",
+        error: connectionError,
+        env_check: {
+          SUPABASE_URL: !!process.env.SUPABASE_URL,
+          SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+        },
+      })
+    }
+
+    // Test message insertion
+    console.log("💾 Testing message insertion...")
+    const testMessage = {
+      user_message: "Test message from debug endpoint",
+      bot_response: "Test response from debug endpoint",
+      created_at: new Date().toISOString(),
+    }
+
+    const { data: insertData, error: insertError } = await supabaseServer.from("messages").insert(testMessage).select()
+
+    if (insertError) {
+      console.error("❌ Insert test failed:", insertError)
+      return NextResponse.json({
+        status: "error",
+        message: "Failed to insert test message",
+        error: insertError,
+        connection_ok: true,
+      })
+    }
+
+    // Get recent messages
+    const { data: recentMessages, error: selectError } = await supabaseServer
+      .from("messages")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(5)
+
+    console.log("✅ Debug test completed successfully")
 
     return NextResponse.json({
-      supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
-      spacesTable: tableInfo,
-      existingTables: allTables,
-      messagesCount: messageCount?.length || 0,
-      envVars: {
-        hasSupabaseUrl: !!process.env.SUPABASE_URL,
-        hasSupabaseAnonKey: !!process.env.SUPABASE_ANON_KEY,
-        hasSupabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      }
+      status: "success",
+      message: "Supabase connection and operations working correctly",
+      test_insert: insertData,
+      recent_messages: recentMessages,
+      total_messages: recentMessages?.length || 0,
+      env_check: {
+        SUPABASE_URL: !!process.env.SUPABASE_URL,
+        SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+      },
     })
   } catch (error) {
-    console.error("❌ Debug API error:", error)
-    return NextResponse.json(
-      {
-        error: "Debug failed",
-        details: error instanceof Error ? error.message : "Unknown error",
-        supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
-      },
-      { status: 500 },
-    )
+    console.error("💥 Debug endpoint error:", error)
+    return NextResponse.json({
+      status: "error",
+      message: "Debug endpoint failed",
+      error: error instanceof Error ? error.message : "Unknown error",
+    })
   }
 }
