@@ -1,7 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import OpenAI from "openai"
-import { generateText } from "ai"
-import { openai as openaiSDK } from "@ai-sdk/openai"
 import { supabaseServer } from "@/lib/supabase-server"
 import { searchMockParkingSpaces } from "@/lib/mock-data"
 
@@ -166,7 +164,7 @@ function extractSearchParams(message: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { message } = await request.json()
+    const { message, conversation } = await request.json()
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 })
@@ -174,25 +172,6 @@ export async function POST(request: NextRequest) {
 
     console.log("💬 Received message:", message)
     console.log("🔧 Supabase configured:", isSupabaseConfigured())
-
-    // Store user message in Supabase
-    const { data: userMessage, error: userError } = await supabaseServer
-      .from("messages")
-      .insert([
-        {
-          content: message,
-          role: "user",
-          created_at: new Date().toISOString(),
-        },
-      ])
-      .select()
-      .single()
-
-    if (userError) {
-      console.error("Error storing user message:", userError)
-    } else {
-      console.log("User message stored successfully:", userMessage.id)
-    }
 
     // Extract search parameters from the user's message
     const searchParams = extractSearchParams(message)
@@ -214,51 +193,130 @@ export async function POST(request: NextRequest) {
       console.log(`🏁 Search completed. Found ${parkingSpaces.length} spaces`)
     }
 
-    // Generate AI response
-    const { text } = await generateText({
-      model: openaiSDK("gpt-4o"),
-      system: `You are ParkPal's helpful parking assistant. You help users find and book parking spaces in London. 
-      
-      Key information:
-      - We offer hourly (£3/hour), daily (£15/day), and monthly (£300/month) parking
-      - We have spaces in SE1, SE17, and other London areas
-      - Users can search by postcode or area
-      - We provide secure, convenient parking solutions
-      - Our booking system handles reservations and payments
-      
-      Be friendly, helpful, and focus on parking-related queries. If asked about non-parking topics, politely redirect to parking assistance.`,
-      prompt: message,
+    // Enhanced system prompt with availability messaging
+    const systemPrompt = `You are a helpful Parking Assistant for Parkpal. Your primary role is to help users find and book parking spaces in London.
+
+CORE ASSISTANT LOGIC:
+When users ask for parking, you search the Supabase spaces table and return matches based on:
+- Location proximity (especially for SE1, SE17, Kennington, Borough, Southwark areas)
+- Availability and capacity (only show spaces with available spots)
+- Pricing and features
+
+AVAILABILITY LOGIC:
+- Only show spaces that have available capacity (total_spaces > booked_spaces)
+- If all spaces in an area are fully booked, suggest nearby alternatives
+- Mention when spaces have limited availability (e.g., "Only 2 spots left!")
+
+RESPONSE GUIDELINES:
+- Be brief and conversational - users can see details in the cards below
+- For parking searches, use a short intro like "Here are some available parking spaces for you:" or "I found these options:"
+- Don't repeat detailed information that's shown in the parking cards
+- Keep responses to 1-2 sentences maximum for parking results
+- Use minimal emojis (🚗 or 📍 occasionally)
+
+CURRENT SEARCH CONTEXT:
+${
+  hasSearchResults
+    ? `
+- User query: "${message}"
+- Search parameters: ${JSON.stringify(searchParams)}
+- Found ${parkingSpaces.length} available spaces with capacity
+- Data source: ${isSupabaseConfigured() ? "Live Supabase database" : "Demo data"}
+
+${
+  parkingSpaces.length > 0
+    ? `
+AVAILABLE SPACES (up to 3 best matches with capacity):
+Present these spaces with just a brief intro like "Here are some available parking spaces for you:" or "I found these options near [location]:" - don't repeat the detailed information since it's shown in the cards below.
+`
+    : `
+No spaces found with available capacity. Respond with helpful suggestions:
+- "All spaces in that area are currently fully booked. Let me suggest some nearby alternatives:"
+- Suggest nearby areas like Elephant & Castle, Borough, Waterloo, or Southwark for SE17 searches
+- Offer to check different dates or price ranges
+- Mention they can try "Park me asap" for the quickest available options
+`
+}
+`
+    : "No parking search performed - respond to general queries and guide towards parking assistance."
+}
+
+IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity are found.`
+
+    // Convert conversation to OpenAI format
+    const messages = [
+      {
+        role: "system" as const,
+        content: systemPrompt,
+      },
+      ...conversation.map((msg: any) => ({
+        role: msg.role === "assistant" ? ("assistant" as const) : ("user" as const),
+        content: msg.content,
+      })),
+      {
+        role: "user" as const,
+        content: message,
+      },
+    ]
+
+    // Call OpenAI API
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: messages,
+      max_tokens: 800,
+      temperature: 0.7,
     })
 
-    console.log("Generated AI response:", text.substring(0, 100) + "...")
+    const botResponse = completion.choices[0]?.message?.content || "Sorry, I couldn't process that request."
 
-    // Store assistant response in Supabase
-    const { data: assistantMessage, error: assistantError } = await supabaseServer
-      .from("messages")
-      .insert([
-        {
-          content: text,
-          role: "assistant",
-          created_at: new Date().toISOString(),
-        },
-      ])
-      .select()
-      .single()
+    // Store the conversation in Supabase with proper error handling and logging
+    if (isSupabaseConfigured()) {
+      try {
+        console.log("💾 Attempting to store message in Supabase...")
 
-    if (assistantError) {
-      console.error("Error storing assistant message:", assistantError)
+        const { data, error: supabaseError } = await supabaseServer
+          .from("messages")
+          .insert({
+            user_message: message,
+            bot_response: botResponse,
+            created_at: new Date().toISOString(),
+          })
+          .select()
+
+        if (supabaseError) {
+          console.error("❌ Supabase storage error:", supabaseError)
+          console.error("Error details:", {
+            code: supabaseError.code,
+            message: supabaseError.message,
+            details: supabaseError.details,
+            hint: supabaseError.hint,
+          })
+        } else {
+          console.log("✅ Message stored successfully in Supabase:", data)
+        }
+      } catch (dbError) {
+        console.error("💥 Database storage exception:", dbError)
+      }
     } else {
-      console.log("Assistant message stored successfully:", assistantMessage.id)
+      console.log("⚠️ Supabase not configured - message not stored")
     }
 
+    // Return response with parking spaces data if available
     return NextResponse.json({
-      response: text,
+      message: botResponse,
+      timestamp: new Date().toISOString(),
       parkingSpaces: hasSearchResults && parkingSpaces.length > 0 ? parkingSpaces : undefined,
       searchParams: hasSearchResults ? searchParams : undefined,
       totalFound: parkingSpaces.length,
     })
   } catch (error) {
     console.error("Chat API error:", error)
-    return NextResponse.json({ error: "Failed to process chat message" }, { status: 500 })
+
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Failed to process chat message. Please try again.",
+      },
+      { status: 500 },
+    )
   }
 }
