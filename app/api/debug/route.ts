@@ -1,71 +1,73 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { supabaseServer } from "@/lib/supabase-server"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 Testing Supabase connection...")
+    console.log("Debug endpoint called")
 
-    // Test basic connection
-    const { data: connectionTest, error: connectionError } = await supabaseServer
-      .from("messages")
-      .select("count")
-      .limit(1)
+    // Test Supabase connection
+    const { data: testData, error: testError } = await supabaseServer.from("messages").select("count").limit(1)
 
-    if (connectionError) {
-      console.error("❌ Connection test failed:", connectionError)
+    if (testError) {
+      console.error("Supabase connection error:", testError)
       return NextResponse.json({
         status: "error",
-        message: "Failed to connect to Supabase",
-        error: connectionError,
-        env_check: {
-          SUPABASE_URL: !!process.env.SUPABASE_URL,
-          SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
-        },
+        message: "Supabase connection failed",
+        error: testError.message,
       })
     }
 
     // Test message insertion
-    console.log("💾 Testing message insertion...")
     const testMessage = {
-      user_message: "Test message from debug endpoint",
-      bot_response: "Test response from debug endpoint",
+      content: `Debug test message - ${new Date().toISOString()}`,
+      role: "user",
       created_at: new Date().toISOString(),
     }
 
-    const { data: insertData, error: insertError } = await supabaseServer.from("messages").insert(testMessage).select()
+    const { data: insertData, error: insertError } = await supabaseServer
+      .from("messages")
+      .insert([testMessage])
+      .select()
+      .single()
 
     if (insertError) {
-      console.error("❌ Insert test failed:", insertError)
+      console.error("Message insertion error:", insertError)
       return NextResponse.json({
         status: "error",
-        message: "Failed to insert test message",
-        error: insertError,
-        connection_ok: true,
+        message: "Message insertion failed",
+        error: insertError.message,
       })
     }
 
     // Get recent messages
-    const { data: recentMessages, error: selectError } = await supabaseServer
+    const { data: recentMessages, error: fetchError } = await supabaseServer
       .from("messages")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(5)
 
-    console.log("✅ Debug test completed successfully")
+    if (fetchError) {
+      console.error("Message fetch error:", fetchError)
+      return NextResponse.json({
+        status: "error",
+        message: "Message fetch failed",
+        error: fetchError.message,
+      })
+    }
 
     return NextResponse.json({
       status: "success",
-      message: "Supabase connection and operations working correctly",
-      test_insert: insertData,
-      recent_messages: recentMessages,
-      total_messages: recentMessages?.length || 0,
-      env_check: {
-        SUPABASE_URL: !!process.env.SUPABASE_URL,
-        SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+      message: "All tests passed",
+      data: {
+        supabaseConnection: "OK",
+        messageInsertion: "OK",
+        insertedMessage: insertData,
+        recentMessages: recentMessages,
+        messageCount: recentMessages.length,
       },
     })
   } catch (error) {
-    console.error("💥 Debug endpoint error:", error)
+    console.error("Debug endpoint error:", error)
     return NextResponse.json({
       status: "error",
       message: "Debug endpoint failed",

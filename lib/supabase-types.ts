@@ -16,6 +16,23 @@ export interface ParkingSpace {
   updated_at: string
 }
 
+export interface ParkingSpaceDisplay {
+  id: string
+  title: string
+  location: string
+  price_per_hour: number
+  price_per_day: number
+  price_per_month: number
+  latitude: number
+  longitude: number
+  image_url?: string
+  description?: string
+  features?: string[]
+  availability?: boolean
+  rating?: number
+  reviews_count?: number
+}
+
 export interface Review {
   id: string
   space_id: string
@@ -36,24 +53,30 @@ export interface User {
 
 export interface Vehicle {
   id: string
-  user_id: string
-  make: string
-  model: string
-  color: string
-  license_plate: string
   created_at: string
-  updated_at: string
+  user_id: string
+  reg: string | null
+  make: string | null
+  model: string | null
+  colour: string | null
 }
 
 export interface Booking {
   id: string
-  user_id: string
   space_id: string
-  vehicle_id: string
+  user_email: string
   start_date: string
   end_date: string
   total_price: number
-  status: "pending" | "confirmed" | "cancelled" | "completed"
+  status: "pending" | "confirmed" | "cancelled"
+  vehicle_registration: string
   created_at: string
   updated_at: string
+}
+
+export interface Message {
+  id: string
+  content: string
+  role: "user" | "assistant"
+  created_at: string
 }
