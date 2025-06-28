@@ -77,6 +77,7 @@ export default function ChatInterface() {
 
   // Load initial message on component mount
   useEffect(() => {
+    console.log("🚀 ChatInterface mounted")
     setMessages([
       {
         role: "assistant",
@@ -90,7 +91,9 @@ export default function ChatInterface() {
   // Handle URL query parameter
   useEffect(() => {
     const query = searchParams.get("q")
+    console.log("🔗 URL query parameter:", query)
     if (query && !hasProcessedQuery) {
+      console.log("📝 Processing URL query:", query)
       setHasProcessedQuery(true)
       setTimeout(() => {
         sendMessageWithText(query)
@@ -100,6 +103,7 @@ export default function ChatInterface() {
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
+    console.log("📜 Messages updated, count:", messages.length)
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector("[data-radix-scroll-area-viewport]")
       if (scrollContainer) {
@@ -109,7 +113,12 @@ export default function ChatInterface() {
   }, [messages, bookingStage])
 
   const sendMessageWithText = async (messageText: string) => {
-    if (!messageText.trim() || isLoading) return
+    console.log("📤 sendMessageWithText called with:", messageText)
+
+    if (!messageText.trim() || isLoading) {
+      console.log("❌ Message rejected - empty or loading")
+      return
+    }
 
     setError(null)
     setIsLoading(true)
@@ -121,10 +130,17 @@ export default function ChatInterface() {
       timestamp: new Date().toLocaleTimeString(),
     }
 
-    setMessages((prev) => [...prev, newUserMessage])
+    console.log("👤 Adding user message:", newUserMessage)
+    setMessages((prev) => {
+      console.log("📝 Previous messages count:", prev.length)
+      const newMessages = [...prev, newUserMessage]
+      console.log("📝 New messages count:", newMessages.length)
+      return newMessages
+    })
 
     // Handle simple commands
     if (messageText.toLowerCase().trim() === "date") {
+      console.log("📅 Date command detected")
       setBookingStage("date-selection")
       const dateMessage: Message = {
         role: "assistant",
@@ -137,6 +153,7 @@ export default function ChatInterface() {
     }
 
     if (messageText.toLowerCase().trim() === "time") {
+      console.log("🕐 Time command detected")
       setBookingStage("time-selection")
       const timeMessage: Message = {
         role: "assistant",
@@ -154,9 +171,12 @@ export default function ChatInterface() {
       content: "Searching for parking spaces...",
       timestamp: new Date().toLocaleTimeString(),
     }
+
+    console.log("🤔 Adding thinking message")
     setMessages((prev) => [...prev, thinkingMessage])
 
     try {
+      console.log("🌐 Making API call to /api/chat")
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -168,28 +188,43 @@ export default function ChatInterface() {
         }),
       })
 
+      console.log("📡 API Response status:", response.status)
+      console.log("📡 API Response ok:", response.ok)
+
       if (!response.ok) {
         const errorText = await response.text()
-        console.error("API Error:", errorText)
+        console.error("❌ API Error:", errorText)
         throw new Error(`Server error: ${response.status}`)
       }
 
       const contentType = response.headers.get("content-type")
+      console.log("📄 Content-Type:", contentType)
+
       if (!contentType || !contentType.includes("application/json")) {
         const errorText = await response.text()
-        console.error("Non-JSON response:", errorText)
+        console.error("❌ Non-JSON response:", errorText)
         throw new Error("Server returned invalid response format")
       }
 
       const data = await response.json()
-      console.log("📥 Full API Response:", data)
+      console.log("📥 Full API Response received:")
+      console.log("📥 - message:", data.message)
+      console.log("📥 - parkingSpaces:", data.parkingSpaces)
+      console.log("📥 - parkingSpaces length:", data.parkingSpaces?.length)
+      console.log("📥 - parkingSpaces type:", typeof data.parkingSpaces)
+      console.log("📥 - followUpMessage:", data.followUpMessage)
+      console.log("📥 - searchParams:", data.searchParams)
+      console.log("📥 - totalFound:", data.totalFound)
 
       if (data.error) {
+        console.error("❌ API returned error:", data.error)
         throw new Error(data.error)
       }
 
       // Replace thinking message with actual response
+      console.log("🔄 Replacing thinking message with API response")
       setMessages((prev) => {
+        console.log("📝 Before replacing thinking message, count:", prev.length)
         const newMessages = [...prev]
         newMessages[newMessages.length - 1] = {
           role: "assistant",
@@ -197,25 +232,51 @@ export default function ChatInterface() {
           timestamp: new Date().toLocaleTimeString(),
           parkingSpaces: data.parkingSpaces || undefined,
         }
+        console.log("📝 After replacing thinking message, count:", newMessages.length)
+        console.log("📝 Last message now has parkingSpaces:", !!newMessages[newMessages.length - 1].parkingSpaces)
+        console.log("📝 Last message parkingSpaces count:", newMessages[newMessages.length - 1].parkingSpaces?.length)
         return newMessages
       })
 
       // Store parking spaces and add follow-up if found
+      console.log("🔍 Checking if we should add follow-up message...")
+      console.log("🔍 - data.parkingSpaces exists:", !!data.parkingSpaces)
+      console.log("🔍 - data.parkingSpaces is array:", Array.isArray(data.parkingSpaces))
+      console.log("🔍 - data.parkingSpaces length:", data.parkingSpaces?.length)
+
       if (data.parkingSpaces && data.parkingSpaces.length > 0) {
+        console.log("✅ Parking spaces found! Setting latest spaces and adding follow-up")
+        console.log(
+          "✅ Spaces to store:",
+          data.parkingSpaces.map((s) => ({ id: s.id, title: s.title })),
+        )
+
         setLatestParkingSpaces(data.parkingSpaces)
 
         // Add simple follow-up message
+        console.log("⏰ Setting timeout for follow-up message (800ms)")
         setTimeout(() => {
+          console.log("📨 Adding follow-up message now")
           const followUpMessage: Message = {
             role: "assistant",
             content: "Type 'date' to set your booking duration, or click on any space to book directly.",
             timestamp: new Date().toLocaleTimeString(),
           }
-          setMessages((prevMessages) => [...prevMessages, followUpMessage])
+          console.log("📨 Follow-up message created:", followUpMessage)
+
+          setMessages((prevMessages) => {
+            console.log("📝 Adding follow-up to messages. Previous count:", prevMessages.length)
+            const newMessages = [...prevMessages, followUpMessage]
+            console.log("📝 New count after follow-up:", newMessages.length)
+            return newMessages
+          })
         }, 800)
+      } else {
+        console.log("❌ No parking spaces found or empty array")
+        console.log("❌ - data.parkingSpaces:", data.parkingSpaces)
       }
     } catch (error) {
-      console.error("Error sending message:", error)
+      console.error("💥 Error in sendMessageWithText:", error)
       setError(error instanceof Error ? error.message : "Failed to send message")
 
       // Replace thinking message with error message
@@ -231,12 +292,14 @@ export default function ChatInterface() {
         return newMessages
       })
     } finally {
+      console.log("🏁 sendMessageWithText completed, setting loading to false")
       setIsLoading(false)
     }
   }
 
   const sendMessage = async () => {
     const messageText = input.trim()
+    console.log("📤 sendMessage called, clearing input and calling sendMessageWithText")
     setInput("")
     await sendMessageWithText(messageText)
   }
@@ -249,6 +312,7 @@ export default function ChatInterface() {
   }
 
   const handleBookSpace = (spaceId: string) => {
+    console.log("🎯 handleBookSpace called for space:", spaceId)
     // Find the space from latest parking spaces or current message
     const space =
       latestParkingSpaces.find((s) => s.id === spaceId) ||
@@ -257,6 +321,8 @@ export default function ChatInterface() {
         .find((msg) => msg.parkingSpaces?.length)
         ?.parkingSpaces?.find((s) => s.id === spaceId)
 
+    console.log("🎯 Found space:", space ? { id: space.id, title: space.title } : "not found")
+
     if (space) {
       setSelectedSpace(space)
       setIsBookingModalOpen(true)
@@ -264,13 +330,14 @@ export default function ChatInterface() {
   }
 
   const handleSelectSpaceFromMap = (space: ParkingSpace) => {
+    console.log("🗺️ handleSelectSpaceFromMap called for space:", space.id)
     setSelectedSpace(space)
     setIsBookingModalOpen(true)
   }
 
   const handleConfirmBooking = async (bookingData: BookingData) => {
     try {
-      console.log("Creating booking:", bookingData)
+      console.log("📋 Creating booking:", bookingData)
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
       const confirmationMessage: Message = {
@@ -288,19 +355,21 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
       setSelectedSpace(null)
       setBookingStage("chat") // Reset to chat mode
     } catch (error) {
-      console.error("Booking error:", error)
+      console.error("💥 Booking error:", error)
       throw error
     }
   }
 
   const handleDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
     if (range) {
+      console.log("📅 Date range selected:", range)
       setSelectedDates(range)
     }
   }
 
   const handleConfirmDates = () => {
     if (selectedDates.from && selectedDates.to) {
+      console.log("✅ Confirming dates:", selectedDates)
       const confirmationMessage: Message = {
         role: "assistant",
         content: `Perfect! I've set your booking dates from ${selectedDates.from.toLocaleDateString()} to ${selectedDates.to.toLocaleDateString()}. Now type 'time' to select your arrival time, or click on any parking space to proceed with booking.`,
@@ -313,6 +382,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
 
   const handleTimeSelect = () => {
     if (selectedTime) {
+      console.log("🕐 Time selected:", selectedTime)
       const timeMessage: Message = {
         role: "assistant",
         content: `Excellent! Your arrival time is set to ${selectedTime}. You can now click on any parking space above to complete your booking with these pre-filled details.`,
@@ -324,6 +394,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
   }
 
   const handleBackToChat = () => {
+    console.log("🔙 Returning to chat mode")
     setBookingStage("chat")
   }
 
