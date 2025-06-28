@@ -279,6 +279,10 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
 
     const botResponse = completion.choices[0]?.message?.content || "Sorry, I couldn't process that request."
 
+    // Determine if we should add follow-up message - MUST be before the response
+    const shouldAddFollowUp = hasSearchResults && parkingSpaces.length > 0
+    console.log("🔄 Should add follow-up message:", shouldAddFollowUp, "Spaces found:", parkingSpaces.length)
+
     // Store the conversation in Supabase with proper error handling and logging
     if (isSupabaseConfigured()) {
       try {
@@ -312,8 +316,8 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
     }
 
     // Determine if we should add follow-up message
-    const shouldAddFollowUp = hasSearchResults && parkingSpaces.length > 0
-    console.log("🔄 Should add follow-up message:", shouldAddFollowUp, "Spaces found:", parkingSpaces.length)
+    // const shouldAddFollowUp = hasSearchResults && parkingSpaces.length > 0
+    // console.log("🔄 Should add follow-up message:", shouldAddFollowUp, "Spaces found:", parkingSpaces.length)
 
     // Return response with parking spaces data if available
     const response = {

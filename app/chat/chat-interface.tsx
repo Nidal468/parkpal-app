@@ -165,6 +165,9 @@ export default function ChatInterface() {
       })
 
       // Add follow-up message if provided and there are parking spaces
+      console.log("🔍 Checking for follow-up message:", data.followUpMessage)
+      console.log("🔍 Has parking spaces:", !!(data.parkingSpaces && data.parkingSpaces.length > 0))
+
       if (data.followUpMessage && data.parkingSpaces && data.parkingSpaces.length > 0) {
         console.log("📝 Adding follow-up message:", data.followUpMessage)
         setTimeout(() => {
@@ -173,8 +176,11 @@ export default function ChatInterface() {
             content: data.followUpMessage,
             timestamp: new Date().toLocaleTimeString(),
           }
-          setMessages((prev) => [...prev, followUpMessage])
-        }, 1000)
+          setMessages((prev) => {
+            console.log("📝 Actually adding follow-up message to state")
+            return [...prev, followUpMessage]
+          })
+        }, 1500) // Increased delay to 1.5 seconds
       }
     } catch (error) {
       console.error("Error sending message:", error)
