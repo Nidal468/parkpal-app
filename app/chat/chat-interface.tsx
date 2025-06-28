@@ -36,7 +36,6 @@ export default function ChatInterface() {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid")
   const [hasProcessedQuery, setHasProcessedQuery] = useState(false)
-  const [showCalendar, setShowCalendar] = useState(false)
   const [selectedDates, setSelectedDates] = useState<{
     from: Date | undefined
     to: Date | undefined
@@ -96,15 +95,26 @@ export default function ChatInterface() {
 
     setMessages((prev) => [...prev, newUserMessage])
 
-    // Add thinking message for non-date queries
-    if (messageText.toLowerCase().trim() !== "date") {
-      const thinkingMessage: Message = {
+    // Handle "date" command immediately
+    if (messageText.toLowerCase().trim() === "date") {
+      const calendarMessage: Message = {
         role: "assistant",
-        content: "Searching for parking spaces...",
+        content: "Please select your booking dates using the calendar below:",
         timestamp: new Date().toLocaleTimeString(),
+        showCalendar: true,
       }
-      setMessages((prev) => [...prev, thinkingMessage])
+      setMessages((prev) => [...prev, calendarMessage])
+      setIsLoading(false)
+      return
     }
+
+    // Add thinking message for other queries
+    const thinkingMessage: Message = {
+      role: "assistant",
+      content: "Searching for parking spaces...",
+      timestamp: new Date().toLocaleTimeString(),
+    }
+    setMessages((prev) => [...prev, thinkingMessage])
 
     try {
       const response = await fetch("/api/chat", {
@@ -118,14 +128,12 @@ export default function ChatInterface() {
         }),
       })
 
-      // Check if response is ok
       if (!response.ok) {
         const errorText = await response.text()
         console.error("API Error:", errorText)
         throw new Error(`Server error: ${response.status}`)
       }
 
-      // Check content type
       const contentType = response.headers.get("content-type")
       if (!contentType || !contentType.includes("application/json")) {
         const errorText = await response.text()
@@ -134,25 +142,13 @@ export default function ChatInterface() {
       }
 
       const data = await response.json()
-      console.log("📥 API Response:", data)
+      console.log("📥 Full API Response:", data)
 
       if (data.error) {
         throw new Error(data.error)
       }
 
-      // Handle date query response
-      if (messageText.toLowerCase().trim() === "date") {
-        const calendarMessage: Message = {
-          role: "assistant",
-          content: data.message || "Please select your booking dates using the calendar below:",
-          timestamp: new Date().toLocaleTimeString(),
-          showCalendar: true,
-        }
-        setMessages((prev) => [...prev, calendarMessage])
-        return
-      }
-
-      // Replace thinking message with actual response for parking queries
+      // Replace thinking message with actual response
       setMessages((prev) => {
         const newMessages = [...prev]
         newMessages[newMessages.length - 1] = {
@@ -164,23 +160,17 @@ export default function ChatInterface() {
         return newMessages
       })
 
-      // Add follow-up message if provided and there are parking spaces
-      console.log("🔍 Checking for follow-up message:", data.followUpMessage)
-      console.log("🔍 Has parking spaces:", !!(data.parkingSpaces && data.parkingSpaces.length > 0))
-
-      if (data.followUpMessage && data.parkingSpaces && data.parkingSpaces.length > 0) {
-        console.log("📝 Adding follow-up message:", data.followUpMessage)
+      // IMMEDIATELY add follow-up message if there are parking spaces
+      if (data.parkingSpaces && data.parkingSpaces.length > 0) {
+        console.log("🎯 Found parking spaces, adding follow-up message immediately")
         setTimeout(() => {
           const followUpMessage: Message = {
             role: "assistant",
-            content: data.followUpMessage,
+            content: "Type 'date' to set your booking duration.",
             timestamp: new Date().toLocaleTimeString(),
           }
-          setMessages((prev) => {
-            console.log("📝 Actually adding follow-up message to state")
-            return [...prev, followUpMessage]
-          })
-        }, 1500) // Increased delay to 1.5 seconds
+          setMessages((prev) => [...prev, followUpMessage])
+        }, 1000)
       }
     } catch (error) {
       console.error("Error sending message:", error)
@@ -195,13 +185,6 @@ export default function ChatInterface() {
             content: "Sorry, I'm having trouble connecting right now. Please try again.",
             timestamp: new Date().toLocaleTimeString(),
           }
-        } else {
-          // Add error message if no thinking message to replace
-          newMessages.push({
-            role: "assistant",
-            content: "Sorry, I'm having trouble connecting right now. Please try again.",
-            timestamp: new Date().toLocaleTimeString(),
-          })
         }
         return newMessages
       })
@@ -241,13 +224,9 @@ export default function ChatInterface() {
 
   const handleConfirmBooking = async (bookingData: BookingData) => {
     try {
-      // TODO: Implement actual booking API call
       console.log("Creating booking:", bookingData)
-
-      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      // Add confirmation message to chat
       const confirmationMessage: Message = {
         role: "assistant",
         content: `🎉 Booking confirmed! Your parking space "${selectedSpace?.title}" has been booked from ${bookingData.startDate.toLocaleDateString()} to ${bookingData.endDate.toLocaleDateString()}. 
@@ -282,7 +261,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
       }
       setMessages((prev) => [...prev, confirmationMessage])
 
-      // Update the message that has showCalendar to remove it
+      // Remove calendar from the message
       setMessages((prev) => prev.map((msg) => (msg.showCalendar ? { ...msg, showCalendar: false } : msg)))
     }
   }
@@ -357,7 +336,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
                 </div>
               </div>
 
-              {/* Calendar Component - Show inline in chat */}
+              {/* Calendar Component */}
               {message.showCalendar && (
                 <div className="ml-11">
                   <Card className="w-fit">
