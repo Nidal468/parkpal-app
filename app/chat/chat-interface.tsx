@@ -10,7 +10,21 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle, Map, Grid, CalendarIcon, X } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Copy,
+  ThumbsUp,
+  ThumbsDown,
+  Mic,
+  Send,
+  Loader2,
+  AlertCircle,
+  Map,
+  Grid,
+  CalendarIcon,
+  X,
+  Clock,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ParkingSpaceCard } from "@/components/parking-space-card"
 import { ParkingMap } from "@/components/parking-map"
@@ -23,8 +37,10 @@ interface Message {
   content: string
   timestamp: string
   parkingSpaces?: ParkingSpace[]
-  showCalendar?: boolean
 }
+
+// Simple booking flow stages
+type BookingStage = "chat" | "date-selection" | "time-selection" | "complete"
 
 export default function ChatInterface() {
   const searchParams = useSearchParams()
@@ -36,6 +52,9 @@ export default function ChatInterface() {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid")
   const [hasProcessedQuery, setHasProcessedQuery] = useState(false)
+
+  // Simple booking flow state
+  const [bookingStage, setBookingStage] = useState<BookingStage>("chat")
   const [selectedDates, setSelectedDates] = useState<{
     from: Date | undefined
     to: Date | undefined
@@ -43,8 +62,18 @@ export default function ChatInterface() {
     from: undefined,
     to: undefined,
   })
+  const [selectedTime, setSelectedTime] = useState("")
+  const [latestParkingSpaces, setLatestParkingSpaces] = useState<ParkingSpace[]>([])
+
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Generate 30-minute time slots
+  const timeSlots = Array.from({ length: 48 }, (_, i) => {
+    const hour = Math.floor(i / 2)
+    const min = i % 2 === 0 ? "00" : "30"
+    return `${hour.toString().padStart(2, "0")}:${min}`
+  })
 
   // Load initial message on component mount
   useEffect(() => {
@@ -52,7 +81,7 @@ export default function ChatInterface() {
       {
         role: "assistant",
         content:
-          "Hi, I'm Parkpal 👋 Where would you like to park? Just tell me the location and dates, and I'll find available spaces for you!",
+          "Hi, I'm Parkpal 👋 Where would you like to park? Just tell me the location and I'll find available spaces for you!",
         timestamp: new Date().toLocaleTimeString(),
       },
     ])
@@ -63,10 +92,9 @@ export default function ChatInterface() {
     const query = searchParams.get("q")
     if (query && !hasProcessedQuery) {
       setHasProcessedQuery(true)
-      // Auto-send the query from homepage
       setTimeout(() => {
         sendMessageWithText(query)
-      }, 500) // Small delay to ensure initial message is loaded
+      }, 500)
     }
   }, [searchParams, hasProcessedQuery])
 
@@ -78,7 +106,7 @@ export default function ChatInterface() {
         scrollContainer.scrollTop = scrollContainer.scrollHeight
       }
     }
-  }, [messages])
+  }, [messages, bookingStage])
 
   const sendMessageWithText = async (messageText: string) => {
     if (!messageText.trim() || isLoading) return
@@ -95,20 +123,32 @@ export default function ChatInterface() {
 
     setMessages((prev) => [...prev, newUserMessage])
 
-    // Handle "date" command immediately
+    // Handle simple commands
     if (messageText.toLowerCase().trim() === "date") {
-      const calendarMessage: Message = {
+      setBookingStage("date-selection")
+      const dateMessage: Message = {
         role: "assistant",
-        content: "Please select your booking dates using the calendar below:",
+        content: "Perfect! Please select your booking dates below:",
         timestamp: new Date().toLocaleTimeString(),
-        showCalendar: true,
       }
-      setMessages((prev) => [...prev, calendarMessage])
+      setMessages((prev) => [...prev, dateMessage])
       setIsLoading(false)
       return
     }
 
-    // Add thinking message for other queries
+    if (messageText.toLowerCase().trim() === "time") {
+      setBookingStage("time-selection")
+      const timeMessage: Message = {
+        role: "assistant",
+        content: "Great! Now select your preferred arrival time:",
+        timestamp: new Date().toLocaleTimeString(),
+      }
+      setMessages((prev) => [...prev, timeMessage])
+      setIsLoading(false)
+      return
+    }
+
+    // Add thinking message for parking searches
     const thinkingMessage: Message = {
       role: "assistant",
       content: "Searching for parking spaces...",
@@ -160,17 +200,19 @@ export default function ChatInterface() {
         return newMessages
       })
 
-      // IMMEDIATELY add follow-up message if there are parking spaces
+      // Store parking spaces and add follow-up if found
       if (data.parkingSpaces && data.parkingSpaces.length > 0) {
-        console.log("🎯 Found parking spaces, adding follow-up message immediately")
+        setLatestParkingSpaces(data.parkingSpaces)
+
+        // Add simple follow-up message
         setTimeout(() => {
           const followUpMessage: Message = {
             role: "assistant",
-            content: "Type 'date' to set your booking duration.",
+            content: "Type 'date' to set your booking duration, or click on any space to book directly.",
             timestamp: new Date().toLocaleTimeString(),
           }
-          setMessages((prev) => [...prev, followUpMessage])
-        }, 1000)
+          setMessages((prevMessages) => [...prevMessages, followUpMessage])
+        }, 800)
       }
     } catch (error) {
       console.error("Error sending message:", error)
@@ -207,9 +249,13 @@ export default function ChatInterface() {
   }
 
   const handleBookSpace = (spaceId: string) => {
-    // Find the space from the latest message with parking spaces
-    const latestMessageWithSpaces = [...messages].reverse().find((msg) => msg.parkingSpaces?.length)
-    const space = latestMessageWithSpaces?.parkingSpaces?.find((s) => s.id === spaceId)
+    // Find the space from latest parking spaces or current message
+    const space =
+      latestParkingSpaces.find((s) => s.id === spaceId) ||
+      [...messages]
+        .reverse()
+        .find((msg) => msg.parkingSpaces?.length)
+        ?.parkingSpaces?.find((s) => s.id === spaceId)
 
     if (space) {
       setSelectedSpace(space)
@@ -240,6 +286,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
 
       setMessages((prev) => [...prev, confirmationMessage])
       setSelectedSpace(null)
+      setBookingStage("chat") // Reset to chat mode
     } catch (error) {
       console.error("Booking error:", error)
       throw error
@@ -256,14 +303,28 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
     if (selectedDates.from && selectedDates.to) {
       const confirmationMessage: Message = {
         role: "assistant",
-        content: `Perfect! I've set your booking dates from ${selectedDates.from.toLocaleDateString()} to ${selectedDates.to.toLocaleDateString()}. These dates will be pre-filled when you reserve a space. You can click on any parking space above to proceed with booking.`,
+        content: `Perfect! I've set your booking dates from ${selectedDates.from.toLocaleDateString()} to ${selectedDates.to.toLocaleDateString()}. Now type 'time' to select your arrival time, or click on any parking space to proceed with booking.`,
         timestamp: new Date().toLocaleTimeString(),
       }
       setMessages((prev) => [...prev, confirmationMessage])
-
-      // Remove calendar from the message
-      setMessages((prev) => prev.map((msg) => (msg.showCalendar ? { ...msg, showCalendar: false } : msg)))
+      setBookingStage("chat")
     }
+  }
+
+  const handleTimeSelect = () => {
+    if (selectedTime) {
+      const timeMessage: Message = {
+        role: "assistant",
+        content: `Excellent! Your arrival time is set to ${selectedTime}. You can now click on any parking space above to complete your booking with these pre-filled details.`,
+        timestamp: new Date().toLocaleTimeString(),
+      }
+      setMessages((prev) => [...prev, timeMessage])
+      setBookingStage("chat")
+    }
+  }
+
+  const handleBackToChat = () => {
+    setBookingStage("chat")
   }
 
   return (
@@ -336,53 +397,6 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
                 </div>
               </div>
 
-              {/* Calendar Component */}
-              {message.showCalendar && (
-                <div className="ml-11">
-                  <Card className="w-fit">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center justify-between text-base">
-                        <div className="flex items-center gap-2">
-                          <CalendarIcon className="w-4 h-4" />
-                          Select Booking Dates
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setMessages((prev) =>
-                              prev.map((msg) => (msg.showCalendar ? { ...msg, showCalendar: false } : msg)),
-                            )
-                          }}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <Calendar
-                        mode="range"
-                        selected={selectedDates}
-                        onSelect={handleDateSelect}
-                        numberOfMonths={2}
-                        disabled={(date) => date < new Date()}
-                        className="rounded-md border"
-                      />
-                      {selectedDates.from && selectedDates.to && (
-                        <div className="flex items-center justify-between pt-2 border-t">
-                          <div className="text-sm text-muted-foreground">
-                            {selectedDates.from.toLocaleDateString()} - {selectedDates.to.toLocaleDateString()}
-                          </div>
-                          <Button onClick={handleConfirmDates} size="sm">
-                            Confirm Dates
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-
               {/* Parking Spaces Results */}
               {message.parkingSpaces && message.parkingSpaces.length > 0 && (
                 <div className="ml-11 space-y-3">
@@ -424,16 +438,116 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
               )}
             </div>
           ))}
+
+          {/* Date Selection Interface */}
+          {bookingStage === "date-selection" && (
+            <div className="ml-11">
+              <Card className="w-fit">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <div className="flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4" />
+                      Select Booking Dates
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={handleBackToChat}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Calendar
+                    mode="range"
+                    selected={selectedDates}
+                    onSelect={handleDateSelect}
+                    numberOfMonths={2}
+                    disabled={(date) => date < new Date()}
+                    className="rounded-md border"
+                  />
+                  {selectedDates.from && selectedDates.to && (
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <div className="text-sm text-muted-foreground">
+                        {selectedDates.from.toLocaleDateString()} - {selectedDates.to.toLocaleDateString()}
+                      </div>
+                      <Button onClick={handleConfirmDates} size="sm">
+                        Confirm Dates
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Time Selection Interface */}
+          {bookingStage === "time-selection" && (
+            <div className="ml-11">
+              <Card className="w-fit">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Select Arrival Time
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={handleBackToChat}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Select value={selectedTime} onValueChange={setSelectedTime}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Select arrival time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeSlots.map((slot) => (
+                        <SelectItem key={slot} value={slot}>
+                          {slot}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedTime && (
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <div className="text-sm text-muted-foreground">Arrival time: {selectedTime}</div>
+                      <Button onClick={handleTimeSelect} size="sm">
+                        Confirm Time
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
       <div className="p-4 border-t bg-background">
         <div className="max-w-4xl mx-auto">
+          {/* Show current selections */}
+          {(selectedDates.from && selectedDates.to) || selectedTime ? (
+            <div className="mb-3 p-2 bg-muted/50 rounded-lg text-sm">
+              <div className="flex items-center gap-4">
+                {selectedDates.from && selectedDates.to && (
+                  <span>
+                    📅 {selectedDates.from.toLocaleDateString()} - {selectedDates.to.toLocaleDateString()}
+                  </span>
+                )}
+                {selectedTime && <span>🕐 Arrival: {selectedTime}</span>}
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex gap-2">
             <div className="flex-1 relative">
               <Textarea
                 ref={textareaRef}
-                placeholder="Try: 'I need secure parking with CCTV in Kennington from June 23–July 1'"
+                placeholder={
+                  bookingStage === "date-selection"
+                    ? "Select dates above, or type 'back' to return to chat"
+                    : bookingStage === "time-selection"
+                      ? "Select time above, or type 'back' to return to chat"
+                      : "Try: 'I need parking in SE17' or type 'date' to set booking duration"
+                }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -461,6 +575,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
         }}
         onConfirm={handleConfirmBooking}
         selectedDates={selectedDates}
+        selectedTime={selectedTime}
       />
     </div>
   )
