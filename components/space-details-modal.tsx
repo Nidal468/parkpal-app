@@ -3,14 +3,13 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { MapPin, Star, Clock, Shield, Car, Wifi, Camera, Phone, Mail, User, Calendar } from "lucide-react"
+import { MapPin, Star, Clock, Shield, Car, Wifi, Camera, Phone, Mail, User, Calendar, X } from "lucide-react"
 
 interface Review {
   id: string
@@ -26,6 +25,7 @@ interface SpaceDetailsModalProps {
 }
 
 export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalProps) {
+  const [selectedDuration, setSelectedDuration] = useState<"daily" | "monthly">("daily")
   const [isBooking, setIsBooking] = useState(false)
   const [reviews, setReviews] = useState<Review[]>([])
   const [loadingReviews, setLoadingReviews] = useState(false)
@@ -98,6 +98,19 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
     return (sum / reviews.length).toFixed(1)
   }
 
+  const getPricing = () => {
+    switch (selectedDuration) {
+      case "daily":
+        return { price: space.price_per_day || 15, unit: "day" }
+      case "monthly":
+        return { price: space.price_per_month || 300, unit: "month" }
+      default:
+        return { price: space.price_per_day || 15, unit: "day" }
+    }
+  }
+
+  const pricing = getPricing()
+
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsBooking(true)
@@ -106,7 +119,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
       const startDate = new Date(bookingForm.startDate)
       const endDate = new Date(bookingForm.endDate)
       const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-      const totalPrice = days * (space.price_per_day || space.price || 15)
+      const totalPrice = selectedDuration === "monthly" ? pricing.price : days * pricing.price
 
       const bookingData = {
         spaceId: space.id,
@@ -117,6 +130,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
         startDate: bookingForm.startDate,
         endDate: bookingForm.endDate,
         totalPrice,
+        duration: selectedDuration,
       }
 
       const response = await fetch("/api/bookings", {
@@ -157,13 +171,28 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
   const availableSpaces = space.available_spaces || space.total_spaces - (space.booked_spaces || 0) || 1
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold">{space.title}</DialogTitle>
-        </DialogHeader>
+    <>
+      {/* Backdrop */}
+      {isOpen && <div className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300" onClick={onClose} />}
 
-        <div className="space-y-6">
+      {/* Slide-out Modal */}
+      <div
+        className={`
+        fixed top-0 right-0 h-full w-full max-w-2xl bg-white z-50 
+        transform transition-transform duration-300 ease-in-out
+        ${isOpen ? "translate-x-0" : "translate-x-full"}
+        shadow-2xl overflow-y-auto
+      `}
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
+          <h2 className="text-xl font-bold">{space.title}</h2>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="p-6 space-y-6">
           {/* Image */}
           {space.image_url && (
             <div className="w-full h-48 rounded-lg overflow-hidden">
@@ -187,17 +216,45 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
             </div>
           </div>
 
-          {/* Price and Rating */}
-          <div className="flex justify-between items-center">
-            <div>
-              <span className="text-2xl font-bold">£{space.price_per_day || space.price || 15}</span>
-              <span className="text-gray-500">/day</span>
-              {space.monthly_price && <div className="text-sm text-gray-600">£{space.monthly_price}/month</div>}
+          {/* Pricing Toggle */}
+          <div className="space-y-4">
+            <h3 className="font-semibold">Select Duration</h3>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setSelectedDuration("daily")}
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                  selectedDuration === "daily"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Daily
+              </button>
+              <button
+                onClick={() => setSelectedDuration("monthly")}
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                  selectedDuration === "monthly"
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Monthly
+              </button>
             </div>
-            <div className="flex items-center gap-2">
-              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-              <span className="font-medium">{calculateAverageRating()}</span>
-              <span className="text-gray-500">({reviews.length} reviews)</span>
+          </div>
+
+          {/* Price Display */}
+          <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
+            <div>
+              <div className="transition-all duration-300 ease-in-out">
+                <span className="text-2xl font-bold text-blue-600">£{pricing.price}</span>
+                <span className="text-gray-500 ml-1">/{pricing.unit}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                <span className="font-medium">{calculateAverageRating()}</span>
+                <span className="text-gray-500">({reviews.length} reviews)</span>
+              </div>
             </div>
           </div>
 
@@ -374,13 +431,13 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isBooking}>
-                  {isBooking ? "Booking..." : "Confirm Booking"}
+                  {isBooking ? "Processing..." : "Reserve Now"}
                 </Button>
               </div>
             </form>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </>
   )
 }
