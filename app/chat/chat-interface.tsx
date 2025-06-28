@@ -24,7 +24,6 @@ interface Message {
   timestamp: string
   parkingSpaces?: ParkingSpace[]
   showCalendar?: boolean
-  followUpMessage?: string
 }
 
 export default function ChatInterface() {
@@ -152,8 +151,8 @@ export default function ChatInterface() {
         return newMessages
       })
 
-      // Add follow-up message if provided
-      if (data.followUpMessage) {
+      // Add follow-up message if provided and there are parking spaces
+      if (data.followUpMessage && data.parkingSpaces && data.parkingSpaces.length > 0) {
         setTimeout(() => {
           const followUpMessage: Message = {
             role: "assistant",
