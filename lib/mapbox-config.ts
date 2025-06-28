@@ -1,4 +1,6 @@
-export async function getMapboxToken(): Promise<string> {
-  // Your environment variable is NEXT_PUBLIC_MAPBOX_TOKEN, not NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
-  return process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ""
+"use server"
+
+export async function getMapboxToken() {
+  // Using your specific Mapbox token
+  return "pk.eyJ1IjoicGFya3BhbDMzIiwiYSI6ImNtYzlvZ294MzFneDQyanNhYmI4YXU3eXIifQ.mefS2K8EuZDUCIG-eOVKnQ"
 }
