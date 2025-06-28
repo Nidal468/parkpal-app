@@ -42,10 +42,6 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: mockUserId,
         space_id: bookingData.spaceId,
-        user_email: bookingData.userEmail,
-        user_name: bookingData.userName,
-        user_phone: bookingData.userPhone,
-        vehicle_registration: bookingData.vehicleRegistration,
         start_date: bookingData.startDate,
         end_date: bookingData.endDate,
         total_price: bookingData.totalPrice,
@@ -53,9 +49,9 @@ export async function POST(request: NextRequest) {
         contact_phone: bookingData.contactPhone,
         special_requests: bookingData.specialRequests,
         status: "confirmed",
-        created_at: new Date().toISOString(),
       })
       .select()
+      .single()
 
     if (error) {
       console.error("❌ Booking creation error:", error)
@@ -63,12 +59,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Update the booked_spaces count
-    const { error: updateError } = await supabaseServer.rpc("increment_booked_spaces", {
-      space_id: bookingData.spaceId,
-    })
+    const { error: updateError } = await supabaseServer
+      .from("spaces")
+      .update({ booked_spaces: bookedSpaces + 1 })
+      .eq("id", bookingData.spaceId)
 
     if (updateError) {
-      console.error("⚠️ Warning: Failed to update booked spaces count:", updateError)
+      console.error("❌ Error updating booked spaces count:", updateError)
+      // Note: In production, you'd want to rollback the booking here
     }
 
     console.log("✅ Booking created successfully:", data)
@@ -79,12 +77,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      booking: data?.[0],
+      booking: data,
       message: "Booking confirmed successfully!",
+      remainingSpaces: availableSpaces - 1,
     })
   } catch (error) {
     console.error("💥 Booking API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to process booking" }, { status: 500 })
   }
 }
 
