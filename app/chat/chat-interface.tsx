@@ -77,7 +77,7 @@ export default function ChatInterface() {
 
   // Load initial message on component mount
   useEffect(() => {
-    console.log("🚀 ChatInterface mounted")
+    console.log("🚀 ChatInterface mounted - DEBUG VERSION")
     setMessages([
       {
         role: "assistant",
@@ -207,14 +207,12 @@ export default function ChatInterface() {
       }
 
       const data = await response.json()
-      console.log("📥 Full API Response received:")
+      console.log("📥 FULL API RESPONSE RECEIVED:")
       console.log("📥 - message:", data.message)
       console.log("📥 - parkingSpaces:", data.parkingSpaces)
       console.log("📥 - parkingSpaces length:", data.parkingSpaces?.length)
       console.log("📥 - parkingSpaces type:", typeof data.parkingSpaces)
-      console.log("📥 - followUpMessage:", data.followUpMessage)
-      console.log("📥 - searchParams:", data.searchParams)
-      console.log("📥 - totalFound:", data.totalFound)
+      console.log("📥 - parkingSpaces is array:", Array.isArray(data.parkingSpaces))
 
       if (data.error) {
         console.error("❌ API returned error:", data.error)
@@ -239,13 +237,13 @@ export default function ChatInterface() {
       })
 
       // Store parking spaces and add follow-up if found
-      console.log("🔍 Checking if we should add follow-up message...")
+      console.log("🔍 CHECKING IF WE SHOULD ADD FOLLOW-UP MESSAGE...")
       console.log("🔍 - data.parkingSpaces exists:", !!data.parkingSpaces)
       console.log("🔍 - data.parkingSpaces is array:", Array.isArray(data.parkingSpaces))
       console.log("🔍 - data.parkingSpaces length:", data.parkingSpaces?.length)
 
-      if (data.parkingSpaces && data.parkingSpaces.length > 0) {
-        console.log("✅ Parking spaces found! Setting latest spaces and adding follow-up")
+      if (data.parkingSpaces && Array.isArray(data.parkingSpaces) && data.parkingSpaces.length > 0) {
+        console.log("✅ PARKING SPACES FOUND! Setting latest spaces and adding follow-up")
         console.log(
           "✅ Spaces to store:",
           data.parkingSpaces.map((s) => ({ id: s.id, title: s.title })),
@@ -256,7 +254,7 @@ export default function ChatInterface() {
         // Add simple follow-up message
         console.log("⏰ Setting timeout for follow-up message (800ms)")
         setTimeout(() => {
-          console.log("📨 Adding follow-up message now")
+          console.log("📨 ADDING FOLLOW-UP MESSAGE NOW!")
           const followUpMessage: Message = {
             role: "assistant",
             content: "Type 'date' to set your booking duration, or click on any space to book directly.",
@@ -268,12 +266,18 @@ export default function ChatInterface() {
             console.log("📝 Adding follow-up to messages. Previous count:", prevMessages.length)
             const newMessages = [...prevMessages, followUpMessage]
             console.log("📝 New count after follow-up:", newMessages.length)
+            console.log(
+              "📝 All messages after follow-up:",
+              newMessages.map((m) => ({ role: m.role, content: m.content.substring(0, 50) + "..." })),
+            )
             return newMessages
           })
         }, 800)
       } else {
-        console.log("❌ No parking spaces found or empty array")
+        console.log("❌ NO PARKING SPACES FOUND OR INVALID FORMAT")
         console.log("❌ - data.parkingSpaces:", data.parkingSpaces)
+        console.log("❌ - typeof data.parkingSpaces:", typeof data.parkingSpaces)
+        console.log("❌ - Array.isArray(data.parkingSpaces):", Array.isArray(data.parkingSpaces))
       }
     } catch (error) {
       console.error("💥 Error in sendMessageWithText:", error)
