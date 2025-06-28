@@ -96,14 +96,15 @@ export default function ChatInterface() {
 
     setMessages((prev) => [...prev, newUserMessage])
 
-    // Add thinking message
-    const thinkingMessage: Message = {
-      role: "assistant",
-      content: "Searching for parking spaces...",
-      timestamp: new Date().toLocaleTimeString(),
+    // Add thinking message for non-date queries
+    if (messageText.toLowerCase().trim() !== "date") {
+      const thinkingMessage: Message = {
+        role: "assistant",
+        content: "Searching for parking spaces...",
+        timestamp: new Date().toLocaleTimeString(),
+      }
+      setMessages((prev) => [...prev, thinkingMessage])
     }
-
-    setMessages((prev) => [...prev, thinkingMessage])
 
     try {
       const response = await fetch("/api/chat", {
@@ -133,26 +134,39 @@ export default function ChatInterface() {
       }
 
       const data = await response.json()
+      console.log("📥 API Response:", data)
 
       if (data.error) {
         throw new Error(data.error)
       }
 
-      // Replace thinking message with actual response
+      // Handle date query response
+      if (messageText.toLowerCase().trim() === "date") {
+        const calendarMessage: Message = {
+          role: "assistant",
+          content: data.message || "Please select your booking dates using the calendar below:",
+          timestamp: new Date().toLocaleTimeString(),
+          showCalendar: true,
+        }
+        setMessages((prev) => [...prev, calendarMessage])
+        return
+      }
+
+      // Replace thinking message with actual response for parking queries
       setMessages((prev) => {
         const newMessages = [...prev]
         newMessages[newMessages.length - 1] = {
           role: "assistant",
           content: data.message || "Sorry, I couldn't process that request.",
-          timestamp: new Date().toISOString(),
+          timestamp: new Date().toLocaleTimeString(),
           parkingSpaces: data.parkingSpaces || undefined,
-          showCalendar: data.showCalendar || false,
         }
         return newMessages
       })
 
       // Add follow-up message if provided and there are parking spaces
       if (data.followUpMessage && data.parkingSpaces && data.parkingSpaces.length > 0) {
+        console.log("📝 Adding follow-up message:", data.followUpMessage)
         setTimeout(() => {
           const followUpMessage: Message = {
             role: "assistant",
@@ -162,11 +176,6 @@ export default function ChatInterface() {
           setMessages((prev) => [...prev, followUpMessage])
         }, 1000)
       }
-
-      // Show calendar if requested
-      if (data.showCalendar) {
-        setShowCalendar(true)
-      }
     } catch (error) {
       console.error("Error sending message:", error)
       setError(error instanceof Error ? error.message : "Failed to send message")
@@ -174,10 +183,19 @@ export default function ChatInterface() {
       // Replace thinking message with error message
       setMessages((prev) => {
         const newMessages = [...prev]
-        newMessages[newMessages.length - 1] = {
-          role: "assistant",
-          content: "Sorry, I'm having trouble connecting right now. Please try again.",
-          timestamp: new Date().toLocaleTimeString(),
+        if (newMessages[newMessages.length - 1]?.content === "Searching for parking spaces...") {
+          newMessages[newMessages.length - 1] = {
+            role: "assistant",
+            content: "Sorry, I'm having trouble connecting right now. Please try again.",
+            timestamp: new Date().toLocaleTimeString(),
+          }
+        } else {
+          // Add error message if no thinking message to replace
+          newMessages.push({
+            role: "assistant",
+            content: "Sorry, I'm having trouble connecting right now. Please try again.",
+            timestamp: new Date().toLocaleTimeString(),
+          })
         }
         return newMessages
       })
@@ -257,12 +275,11 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
         timestamp: new Date().toLocaleTimeString(),
       }
       setMessages((prev) => [...prev, confirmationMessage])
-      setShowCalendar(false)
+
+      // Update the message that has showCalendar to remove it
+      setMessages((prev) => prev.map((msg) => (msg.showCalendar ? { ...msg, showCalendar: false } : msg)))
     }
   }
-
-  // Get all parking spaces from messages for map view
-  const allParkingSpaces = messages.filter((msg) => msg.parkingSpaces?.length).flatMap((msg) => msg.parkingSpaces || [])
 
   return (
     <div className="flex-1 flex flex-col bg-background">
@@ -334,7 +351,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
                 </div>
               </div>
 
-              {/* Calendar Component */}
+              {/* Calendar Component - Show inline in chat */}
               {message.showCalendar && (
                 <div className="ml-11">
                   <Card className="w-fit">
@@ -344,7 +361,15 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
                           <CalendarIcon className="w-4 h-4" />
                           Select Booking Dates
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => setShowCalendar(false)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setMessages((prev) =>
+                              prev.map((msg) => (msg.showCalendar ? { ...msg, showCalendar: false } : msg)),
+                            )
+                          }}
+                        >
                           <X className="w-4 h-4" />
                         </Button>
                       </CardTitle>
@@ -416,43 +441,6 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
           ))}
         </div>
       </ScrollArea>
-
-      {/* Calendar Overlay */}
-      {showCalendar && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CalendarIcon className="w-5 h-5" />
-                  Select Your Booking Dates
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setShowCalendar(false)}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Calendar
-                mode="range"
-                selected={selectedDates}
-                onSelect={handleDateSelect}
-                numberOfMonths={2}
-                disabled={(date) => date < new Date()}
-                className="rounded-md border"
-              />
-              {selectedDates.from && selectedDates.to && (
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <div className="text-sm text-muted-foreground">
-                    Selected: {selectedDates.from.toLocaleDateString()} - {selectedDates.to.toLocaleDateString()}
-                  </div>
-                  <Button onClick={handleConfirmDates}>Confirm Dates</Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       <div className="p-4 border-t bg-background">
         <div className="max-w-4xl mx-auto">

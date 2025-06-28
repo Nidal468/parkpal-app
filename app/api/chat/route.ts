@@ -175,6 +175,7 @@ export async function POST(request: NextRequest) {
 
     // Check if user is asking for date selection
     if (message.toLowerCase().trim() === "date") {
+      console.log("📅 Date request detected, returning calendar response")
       return NextResponse.json({
         message: "Please select your booking dates using the calendar below:",
         timestamp: new Date().toISOString(),
@@ -328,6 +329,7 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
       hasSpaces: !!response.parkingSpaces,
       spacesCount: parkingSpaces.length,
       hasFollowUp: !!response.followUpMessage,
+      followUpText: response.followUpMessage,
     })
 
     return NextResponse.json(response)
