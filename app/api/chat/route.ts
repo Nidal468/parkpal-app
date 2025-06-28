@@ -173,6 +173,15 @@ export async function POST(request: NextRequest) {
     console.log("💬 Received message:", message)
     console.log("🔧 Supabase configured:", isSupabaseConfigured())
 
+    // Check if user is asking for date selection
+    if (message.toLowerCase().trim() === "date") {
+      return NextResponse.json({
+        message: "Please select your booking dates using the calendar below:",
+        timestamp: new Date().toISOString(),
+        showCalendar: true,
+      })
+    }
+
     // Extract search parameters from the user's message
     const searchParams = extractSearchParams(message)
 
@@ -301,6 +310,12 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
       console.log("⚠️ Supabase not configured - message not stored")
     }
 
+    // Add follow-up message for parking results
+    let followUpMessage = null
+    if (hasSearchResults && parkingSpaces.length > 0) {
+      followUpMessage = "Type 'date' to set your booking duration."
+    }
+
     // Return response with parking spaces data if available
     return NextResponse.json({
       message: botResponse,
@@ -308,6 +323,7 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
       parkingSpaces: hasSearchResults && parkingSpaces.length > 0 ? parkingSpaces : undefined,
       searchParams: hasSearchResults ? searchParams : undefined,
       totalFound: parkingSpaces.length,
+      followUpMessage,
     })
   } catch (error) {
     console.error("Chat API error:", error)

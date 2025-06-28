@@ -9,9 +9,13 @@ interface SpaceDetailsModalProps {
   space: ParkingSpace | null
   isOpen: boolean
   onClose: () => void
+  selectedDates?: {
+    from: Date | undefined
+    to: Date | undefined
+  }
 }
 
-export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalProps) {
+export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: SpaceDetailsModalProps) {
   const router = useRouter()
   const [isMonthly, setIsMonthly] = useState(false)
   const [reviews, setReviews] = useState<Review[]>([])
@@ -202,6 +206,12 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
       priceType,
       discountType,
     })
+
+    // Add selected dates if available
+    if (selectedDates?.from && selectedDates?.to) {
+      bookingParams.set("startDate", selectedDates.from.toISOString().split("T")[0])
+      bookingParams.set("endDate", selectedDates.to.toISOString().split("T")[0])
+    }
 
     // Navigate to booking page
     router.push(`/booking?${bookingParams.toString()}`)

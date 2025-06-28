@@ -7,9 +7,22 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { VehicleSelector } from "@/components/vehicle-selector"
 import { ArrowLeft, MapPin, Calendar, Clock, User, Mail, Phone, Car } from "lucide-react"
 import Image from "next/image"
+
+// Generate 30-minute time slots
+const generateTimeSlots = () => {
+  const slots = []
+  for (let hour = 0; hour < 24; hour++) {
+    for (let minute = 0; minute < 60; minute += 30) {
+      const timeString = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
+      slots.push(timeString)
+    }
+  }
+  return slots
+}
 
 export default function BookingPage() {
   const searchParams = useSearchParams()
@@ -22,6 +35,8 @@ export default function BookingPage() {
   const price = searchParams.get("price")
   const priceType = searchParams.get("priceType")
   const discountType = searchParams.get("discountType")
+  const preSelectedStartDate = searchParams.get("startDate")
+  const preSelectedEndDate = searchParams.get("endDate")
 
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null)
   const [bookingForm, setBookingForm] = useState({
@@ -36,7 +51,9 @@ export default function BookingPage() {
     endTime: "17:00",
   })
 
-  // Set default dates
+  const timeSlots = generateTimeSlots()
+
+  // Set default dates and pre-selected dates
   useEffect(() => {
     const today = new Date()
     const tomorrow = new Date(today)
@@ -44,10 +61,10 @@ export default function BookingPage() {
 
     setBookingForm((prev) => ({
       ...prev,
-      startDate: today.toISOString().split("T")[0],
-      endDate: tomorrow.toISOString().split("T")[0],
+      startDate: preSelectedStartDate || today.toISOString().split("T")[0],
+      endDate: preSelectedEndDate || tomorrow.toISOString().split("T")[0],
     }))
-  }, [])
+  }, [preSelectedStartDate, preSelectedEndDate])
 
   const handleInputChange = (field: string, value: string) => {
     setBookingForm((prev) => ({
@@ -227,27 +244,43 @@ export default function BookingPage() {
                   <div>
                     <Label htmlFor="startTime">Start Time</Label>
                     <div className="relative mt-1">
-                      <Clock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="startTime"
-                        type="time"
+                      <Clock className="absolute left-3 top-3 h-4 w-4 text-gray-400 z-10" />
+                      <Select
                         value={bookingForm.startTime}
-                        onChange={(e) => handleInputChange("startTime", e.target.value)}
-                        className="pl-10"
-                      />
+                        onValueChange={(value) => handleInputChange("startTime", value)}
+                      >
+                        <SelectTrigger className="pl-10">
+                          <SelectValue placeholder="Select start time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timeSlots.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div>
                     <Label htmlFor="endTime">End Time</Label>
                     <div className="relative mt-1">
-                      <Clock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="endTime"
-                        type="time"
+                      <Clock className="absolute left-3 top-3 h-4 w-4 text-gray-400 z-10" />
+                      <Select
                         value={bookingForm.endTime}
-                        onChange={(e) => handleInputChange("endTime", e.target.value)}
-                        className="pl-10"
-                      />
+                        onValueChange={(value) => handleInputChange("endTime", value)}
+                      >
+                        <SelectTrigger className="pl-10">
+                          <SelectValue placeholder="Select end time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timeSlots.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>

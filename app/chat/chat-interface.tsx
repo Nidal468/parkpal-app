@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle, Map, Grid } from "lucide-react"
+import { Calendar } from "@/components/ui/calendar"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle, Map, Grid, CalendarIcon, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ParkingSpaceCard } from "@/components/parking-space-card"
 import { ParkingMap } from "@/components/parking-map"
@@ -21,6 +23,8 @@ interface Message {
   content: string
   timestamp: string
   parkingSpaces?: ParkingSpace[]
+  showCalendar?: boolean
+  followUpMessage?: string
 }
 
 export default function ChatInterface() {
@@ -33,6 +37,14 @@ export default function ChatInterface() {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid")
   const [hasProcessedQuery, setHasProcessedQuery] = useState(false)
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [selectedDates, setSelectedDates] = useState<{
+    from: Date | undefined
+    to: Date | undefined
+  }>({
+    from: undefined,
+    to: undefined,
+  })
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -133,11 +145,29 @@ export default function ChatInterface() {
         newMessages[newMessages.length - 1] = {
           role: "assistant",
           content: data.message || "Sorry, I couldn't process that request.",
-          timestamp: new Date().toLocaleTimeString(),
+          timestamp: new Date().toISOString(),
           parkingSpaces: data.parkingSpaces || undefined,
+          showCalendar: data.showCalendar || false,
         }
         return newMessages
       })
+
+      // Add follow-up message if provided
+      if (data.followUpMessage) {
+        setTimeout(() => {
+          const followUpMessage: Message = {
+            role: "assistant",
+            content: data.followUpMessage,
+            timestamp: new Date().toLocaleTimeString(),
+          }
+          setMessages((prev) => [...prev, followUpMessage])
+        }, 1000)
+      }
+
+      // Show calendar if requested
+      if (data.showCalendar) {
+        setShowCalendar(true)
+      }
     } catch (error) {
       console.error("Error sending message:", error)
       setError(error instanceof Error ? error.message : "Failed to send message")
@@ -214,6 +244,24 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
     }
   }
 
+  const handleDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
+    if (range) {
+      setSelectedDates(range)
+    }
+  }
+
+  const handleConfirmDates = () => {
+    if (selectedDates.from && selectedDates.to) {
+      const confirmationMessage: Message = {
+        role: "assistant",
+        content: `Perfect! I've set your booking dates from ${selectedDates.from.toLocaleDateString()} to ${selectedDates.to.toLocaleDateString()}. These dates will be pre-filled when you reserve a space. You can click on any parking space above to proceed with booking.`,
+        timestamp: new Date().toLocaleTimeString(),
+      }
+      setMessages((prev) => [...prev, confirmationMessage])
+      setShowCalendar(false)
+    }
+  }
+
   // Get all parking spaces from messages for map view
   const allParkingSpaces = messages.filter((msg) => msg.parkingSpaces?.length).flatMap((msg) => msg.parkingSpaces || [])
 
@@ -287,6 +335,45 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
                 </div>
               </div>
 
+              {/* Calendar Component */}
+              {message.showCalendar && (
+                <div className="ml-11">
+                  <Card className="w-fit">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center justify-between text-base">
+                        <div className="flex items-center gap-2">
+                          <CalendarIcon className="w-4 h-4" />
+                          Select Booking Dates
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setShowCalendar(false)}>
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Calendar
+                        mode="range"
+                        selected={selectedDates}
+                        onSelect={handleDateSelect}
+                        numberOfMonths={2}
+                        disabled={(date) => date < new Date()}
+                        className="rounded-md border"
+                      />
+                      {selectedDates.from && selectedDates.to && (
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <div className="text-sm text-muted-foreground">
+                            {selectedDates.from.toLocaleDateString()} - {selectedDates.to.toLocaleDateString()}
+                          </div>
+                          <Button onClick={handleConfirmDates} size="sm">
+                            Confirm Dates
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
               {/* Parking Spaces Results */}
               {message.parkingSpaces && message.parkingSpaces.length > 0 && (
                 <div className="ml-11 space-y-3">
@@ -331,6 +418,43 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
         </div>
       </ScrollArea>
 
+      {/* Calendar Overlay */}
+      {showCalendar && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="w-5 h-5" />
+                  Select Your Booking Dates
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowCalendar(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Calendar
+                mode="range"
+                selected={selectedDates}
+                onSelect={handleDateSelect}
+                numberOfMonths={2}
+                disabled={(date) => date < new Date()}
+                className="rounded-md border"
+              />
+              {selectedDates.from && selectedDates.to && (
+                <div className="flex items-center justify-between pt-4 border-t">
+                  <div className="text-sm text-muted-foreground">
+                    Selected: {selectedDates.from.toLocaleDateString()} - {selectedDates.to.toLocaleDateString()}
+                  </div>
+                  <Button onClick={handleConfirmDates}>Confirm Dates</Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <div className="p-4 border-t bg-background">
         <div className="max-w-4xl mx-auto">
           <div className="flex gap-2">
@@ -364,6 +488,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
           setSelectedSpace(null)
         }}
         onConfirm={handleConfirmBooking}
+        selectedDates={selectedDates}
       />
     </div>
   )
