@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle, Map, Grid, CalendarIcon, X } from "lucide-react"
+import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle, Map, Grid, CalendarIcon, X } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { ParkingSpaceCard } from "@/components/parking-space-card"
 import { ParkingMap } from "@/components/parking-map"
@@ -76,6 +76,7 @@ export default function ChatInterface() {
 
   // Load initial message on component mount
   useEffect(() => {
+    console.log("🚀 ChatInterface mounted - SIMPLIFIED VERSION")
     setMessages([
       {
         role: "assistant",
@@ -108,6 +109,8 @@ export default function ChatInterface() {
   }, [messages])
 
   const sendMessageWithText = async (messageText: string) => {
+    console.log("📤 Sending message:", messageText)
+    
     if (!messageText.trim() || isLoading) return
 
     setError(null)
@@ -132,6 +135,7 @@ export default function ChatInterface() {
     setMessages((prev) => [...prev, thinkingMessage])
 
     try {
+      console.log("🌐 Making API call...")
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -155,6 +159,8 @@ export default function ChatInterface() {
       }
 
       const data = await response.json()
+      console.log("📥 API Response:", data)
+      console.log("📥 Parking spaces found:", data.parkingSpaces?.length || 0)
 
       if (data.error) {
         throw new Error(data.error)
@@ -169,15 +175,17 @@ export default function ChatInterface() {
           timestamp: new Date().toLocaleTimeString(),
           parkingSpaces: data.parkingSpaces || undefined,
         }
+        console.log("📝 Updated messages with parking spaces:", newMessages[newMessages.length - 1].parkingSpaces?.length || 0)
         return newMessages
       })
 
       // Store parking spaces for booking
       if (data.parkingSpaces && data.parkingSpaces.length > 0) {
+        console.log("✅ Storing parking spaces:", data.parkingSpaces.length)
         setLatestParkingSpaces(data.parkingSpaces)
       }
     } catch (error) {
-      console.error("Error sending message:", error)
+      console.error("❌ Error sending message:", error)
       setError(error instanceof Error ? error.message : "Failed to send message")
 
       // Replace thinking message with error message
@@ -269,6 +277,12 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
 
   // Check if any message has parking spaces
   const hasAnyParkingSpaces = messages.some((msg) => msg.parkingSpaces && msg.parkingSpaces.length > 0)
+
+  console.log("🔍 Checking for parking spaces:", {
+    hasAnyParkingSpaces,
+    messagesCount: messages.length,
+    latestSpacesCount: latestParkingSpaces.length
+  })
 
   return (
     <div className="flex-1 flex flex-col bg-background">
