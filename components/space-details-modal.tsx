@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { X, Star } from "lucide-react"
+import { useRouter } from "next/navigation"
 import type { ParkingSpace, Review } from "@/lib/supabase-types"
 
 interface SpaceDetailsModalProps {
@@ -11,6 +12,7 @@ interface SpaceDetailsModalProps {
 }
 
 export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalProps) {
+  const router = useRouter()
   const [isMonthly, setIsMonthly] = useState(false)
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(false)
@@ -182,6 +184,29 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
     }
   }
 
+  const handleReserve = (discountType: string) => {
+    if (!space) return
+
+    // Calculate prices
+    const dailyPrice = space.price_per_day ? Number.parseFloat(space.price_per_day.toString()) : 0
+    const monthlyPrice = space.price_per_month ? Number.parseFloat(space.price_per_month.toString()) : dailyPrice * 30
+    const currentPrice = isMonthly ? monthlyPrice : dailyPrice
+    const priceType = isMonthly ? "month" : "day"
+
+    // Create URL with booking details
+    const bookingParams = new URLSearchParams({
+      spaceId: space.id,
+      spaceTitle: space.title || "Parking Space",
+      spaceLocation: `${space.location || ""}, ${space.postcode}`.trim().replace(/^,\s*/, ""),
+      price: currentPrice.toString(),
+      priceType,
+      discountType,
+    })
+
+    // Navigate to booking page
+    router.push(`/booking?${bookingParams.toString()}`)
+  }
+
   const renderStars = (rating: number, size: "sm" | "md" = "md") => {
     const sizeClass = size === "sm" ? "w-4 h-4" : "w-5 h-5"
     return (
@@ -306,7 +331,10 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
                 </div>
                 <div className="text-sm text-gray-600">Standard rate</div>
               </div>
-              <button className="bg-black text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">
+              <button
+                onClick={() => handleReserve("standard")}
+                className="bg-black text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors"
+              >
                 Reserve
               </button>
             </div>
@@ -319,7 +347,10 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
                 </div>
                 <div className="text-sm text-gray-600">Weekly discount</div>
               </div>
-              <button className="bg-black text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">
+              <button
+                onClick={() => handleReserve("weekly")}
+                className="bg-black text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors"
+              >
                 Reserve
               </button>
             </div>
@@ -332,7 +363,10 @@ export function SpaceDetailsModal({ space, isOpen, onClose }: SpaceDetailsModalP
                 </div>
                 <div className="text-sm text-gray-600">Monthly discount</div>
               </div>
-              <button className="bg-black text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors">
+              <button
+                onClick={() => handleReserve("monthly")}
+                className="bg-black text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors"
+              >
                 Reserve
               </button>
             </div>
