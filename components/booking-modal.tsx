@@ -1,19 +1,18 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Calendar } from "@/components/ui/calendar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
+import { Calendar } from "@/components/ui/calendar"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, Clock, MapPin, Star, Shield, Wifi, Camera, Car } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { CalendarIcon, Clock, MapPin, Shield, Star, Car, CreditCard } from "lucide-react"
+import { format } from "date-fns"
 import type { ParkingSpace } from "@/lib/supabase-types"
 
 export interface BookingData {
@@ -25,8 +24,8 @@ export interface BookingData {
   vehicleType: string
   contactEmail: string
   contactPhone: string
-  specialRequests: string
   totalPrice: number
+  totalDays: number
 }
 
 interface BookingModalProps {
@@ -38,19 +37,39 @@ interface BookingModalProps {
     from: Date | undefined
     to: Date | undefined
   }
-  selectedTime?: string
 }
 
-export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates, selectedTime }: BookingModalProps) {
-  const [bookingData, setBookingData] = useState<Partial<BookingData>>({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
+export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates }: BookingModalProps) {
+  const searchParams = useSearchParams()
+
+  // Get dates from URL if not provided via props
+  const getSelectedDatesFromURL = () => {
+    const fromDate = searchParams.get("from")
+    const toDate = searchParams.get("to")
+    return {
+      from: fromDate ? new Date(fromDate) : undefined,
+      to: toDate ? new Date(toDate) : undefined,
+    }
+  }
+
+  const urlDates = getSelectedDatesFromURL()
+  const finalSelectedDates = selectedDates || urlDates
+
   const [dateRange, setDateRange] = useState<{
     from: Date | undefined
     to: Date | undefined
   }>({
-    from: undefined,
-    to: undefined,
+    from: finalSelectedDates?.from || undefined,
+    to: finalSelectedDates?.to || undefined,
   })
+
+  const [startTime, setStartTime] = useState("09:00")
+  const [endTime, setEndTime] = useState("17:00")
+  const [vehicleReg, setVehicleReg] = useState("")
+  const [vehicleType, setVehicleType] = useState("")
+  const [contactEmail, setContactEmail] = useState("")
+  const [contactPhone, setContactPhone] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Generate time slots (30-minute intervals)
   const timeSlots = Array.from({ length: 48 }, (_, i) => {
@@ -59,57 +78,55 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates,
     return `${hour.toString().padStart(2, "0")}:${min}`
   })
 
-  // Pre-fill dates and time from chat selections
+  // Update dates when selectedDates prop changes or URL changes
   useEffect(() => {
-    if (selectedDates?.from && selectedDates?.to) {
+    const dates = selectedDates || urlDates
+    if (dates?.from && dates?.to) {
       setDateRange({
-        from: selectedDates.from,
-        to: selectedDates.to,
+        from: dates.from,
+        to: dates.to,
       })
-      setBookingData((prev) => ({
-        ...prev,
-        startDate: selectedDates.from,
-        endDate: selectedDates.to,
-      }))
     }
+  }, [selectedDates, searchParams])
 
-    if (selectedTime) {
-      setBookingData((prev) => ({
-        ...prev,
-        startTime: selectedTime,
-      }))
-    }
-  }, [selectedDates, selectedTime])
+  // Calculate total days and price
+  const totalDays =
+    dateRange.from && dateRange.to
+      ? Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      : 1
 
-  // Calculate total price
-  const calculateTotalPrice = () => {
-    if (!dateRange.from || !dateRange.to || !space) return 0
+  const dailyRate = space?.hourly_rate || space?.daily_rate || space?.price_per_day || 10
+  const totalPrice = totalDays * dailyRate
 
-    const days = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))
-    return days * (space.price_per_day || space.price || 10)
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async () => {
     if (!space || !dateRange.from || !dateRange.to) return
 
     setIsSubmitting(true)
     try {
-      const finalBookingData: BookingData = {
+      const bookingData: BookingData = {
         startDate: dateRange.from,
         endDate: dateRange.to,
-        startTime: bookingData.startTime || "09:00",
-        endTime: bookingData.endTime || "17:00",
-        vehicleReg: bookingData.vehicleReg || "",
-        vehicleType: bookingData.vehicleType || "car",
-        contactEmail: bookingData.contactEmail || "",
-        contactPhone: bookingData.contactPhone || "",
-        specialRequests: bookingData.specialRequests || "",
-        totalPrice: calculateTotalPrice(),
+        startTime,
+        endTime,
+        vehicleReg,
+        vehicleType,
+        contactEmail,
+        contactPhone,
+        totalPrice,
+        totalDays,
       }
 
-      await onConfirm(finalBookingData)
+      await onConfirm(bookingData)
       onClose()
+
+      // Reset form
+      setDateRange({ from: undefined, to: undefined })
+      setStartTime("09:00")
+      setEndTime("17:00")
+      setVehicleReg("")
+      setVehicleType("")
+      setContactEmail("")
+      setContactPhone("")
     } catch (error) {
       console.error("Booking failed:", error)
     } finally {
@@ -117,16 +134,7 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates,
     }
   }
 
-  const handleDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
-    if (range) {
-      setDateRange(range)
-      setBookingData((prev) => ({
-        ...prev,
-        startDate: range.from,
-        endDate: range.to,
-      }))
-    }
-  }
+  const isFormValid = dateRange.from && dateRange.to && vehicleReg && vehicleType && contactEmail
 
   if (!space) return null
 
@@ -141,253 +149,250 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates,
         </DialogHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column - Space Details */}
-          <div className="space-y-4">
+          {/* Left Column - Booking Details */}
+          <div className="space-y-6">
+            {/* Date Selection */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Space Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h4 className="font-medium">{space.title}</h4>
-                  <p className="text-sm text-muted-foreground">{space.address}</p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span className="text-sm">4.8 (124 reviews)</span>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {space.features?.includes("CCTV") && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      <Camera className="w-3 h-3" />
-                      CCTV
-                    </Badge>
-                  )}
-                  {space.features?.includes("Secure") && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      <Shield className="w-3 h-3" />
-                      Secure
-                    </Badge>
-                  )}
-                  {space.features?.includes("WiFi") && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      <Wifi className="w-3 h-3" />
-                      WiFi
-                    </Badge>
-                  )}
-                  {space.features?.includes("EV Charging") && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      <Car className="w-3 h-3" />
-                      EV Charging
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="text-2xl font-bold">
-                  £{space.price_per_day || space.price || 10}
-                  <span className="text-sm font-normal text-muted-foreground">/day</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Calendar */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
                   <CalendarIcon className="w-4 h-4" />
-                  Select Dates
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+                  <Label className="text-sm font-medium">Select Dates</Label>
+                </div>
+
+                {/* Show pre-filled dates notification */}
+                {finalSelectedDates?.from && finalSelectedDates?.to && (
+                  <div className="mb-3 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <p className="text-sm text-green-700 dark:text-green-400">
+                      ✅ Dates pre-filled: {format(finalSelectedDates.from, "MMM dd")} -{" "}
+                      {format(finalSelectedDates.to, "MMM dd, yyyy")}
+                    </p>
+                  </div>
+                )}
+
                 <Calendar
                   mode="range"
                   selected={dateRange}
-                  onSelect={handleDateSelect}
+                  onSelect={setDateRange}
                   numberOfMonths={1}
                   disabled={(date) => date < new Date()}
                   className="rounded-md border"
                 />
                 {dateRange.from && dateRange.to && (
-                  <div className="mt-3 p-2 bg-muted rounded-lg text-sm">
-                    {dateRange.from.toLocaleDateString()} - {dateRange.to.toLocaleDateString()}
+                  <div className="mt-3 p-2 bg-muted rounded-md text-sm">
+                    {format(dateRange.from, "MMM dd, yyyy")} - {format(dateRange.to, "MMM dd, yyyy")}
+                    <span className="text-muted-foreground ml-2">({totalDays} days)</span>
                   </div>
                 )}
               </CardContent>
             </Card>
-          </div>
 
-          {/* Right Column - Booking Form */}
-          <div className="space-y-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Time Selection */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    Time Details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="startTime">Arrival Time</Label>
-                      <Select
-                        value={bookingData.startTime || selectedTime || ""}
-                        onValueChange={(value) => setBookingData((prev) => ({ ...prev, startTime: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {timeSlots.map((slot) => (
-                            <SelectItem key={slot} value={slot}>
-                              {slot}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="endTime">Departure Time</Label>
-                      <Select
-                        value={bookingData.endTime || ""}
-                        onValueChange={(value) => setBookingData((prev) => ({ ...prev, endTime: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {timeSlots.map((slot) => (
-                            <SelectItem key={slot} value={slot}>
-                              {slot}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Vehicle Details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Vehicle Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
+            {/* Time Selection */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-4 h-4" />
+                  <Label className="text-sm font-medium">Arrival & Departure Times</Label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="vehicleReg">Vehicle Registration</Label>
-                    <Input
-                      id="vehicleReg"
-                      placeholder="e.g. AB12 CDE"
-                      value={bookingData.vehicleReg || ""}
-                      onChange={(e) => setBookingData((prev) => ({ ...prev, vehicleReg: e.target.value }))}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="vehicleType">Vehicle Type</Label>
-                    <Select
-                      value={bookingData.vehicleType || "car"}
-                      onValueChange={(value) => setBookingData((prev) => ({ ...prev, vehicleType: value }))}
-                    >
+                    <Label htmlFor="start-time" className="text-xs text-muted-foreground">
+                      Arrival Time
+                    </Label>
+                    <Select value={startTime} onValueChange={setStartTime}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="car">Car</SelectItem>
-                        <SelectItem value="motorcycle">Motorcycle</SelectItem>
-                        <SelectItem value="van">Van</SelectItem>
-                        <SelectItem value="truck">Truck</SelectItem>
+                        {timeSlots.map((slot) => (
+                          <SelectItem key={slot} value={slot}>
+                            {slot}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Contact Details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Contact Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
                   <div>
-                    <Label htmlFor="contactEmail">Email</Label>
+                    <Label htmlFor="end-time" className="text-xs text-muted-foreground">
+                      Departure Time
+                    </Label>
+                    <Select value={endTime} onValueChange={setEndTime}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {timeSlots.map((slot) => (
+                          <SelectItem key={slot} value={slot}>
+                            {slot}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Vehicle Details */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Car className="w-4 h-4" />
+                  <Label className="text-sm font-medium">Vehicle Details</Label>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="vehicle-reg" className="text-xs text-muted-foreground">
+                      Registration Number *
+                    </Label>
                     <Input
-                      id="contactEmail"
+                      id="vehicle-reg"
+                      placeholder="e.g. AB12 CDE"
+                      value={vehicleReg}
+                      onChange={(e) => setVehicleReg(e.target.value.toUpperCase())}
+                      className="uppercase"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="vehicle-type" className="text-xs text-muted-foreground">
+                      Vehicle Type *
+                    </Label>
+                    <Select value={vehicleType} onValueChange={setVehicleType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select vehicle type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="car">Car</SelectItem>
+                        <SelectItem value="suv">SUV</SelectItem>
+                        <SelectItem value="van">Van</SelectItem>
+                        <SelectItem value="motorcycle">Motorcycle</SelectItem>
+                        <SelectItem value="electric">Electric Vehicle</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Contact Details */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <CreditCard className="w-4 h-4" />
+                  <Label className="text-sm font-medium">Contact Details</Label>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="email" className="text-xs text-muted-foreground">
+                      Email Address *
+                    </Label>
+                    <Input
+                      id="email"
                       type="email"
                       placeholder="your.email@example.com"
-                      value={bookingData.contactEmail || ""}
-                      onChange={(e) => setBookingData((prev) => ({ ...prev, contactEmail: e.target.value }))}
-                      required
+                      value={contactEmail}
+                      onChange={(e) => setContactEmail(e.target.value)}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="contactPhone">Phone Number</Label>
+                    <Label htmlFor="phone" className="text-xs text-muted-foreground">
+                      Phone Number
+                    </Label>
                     <Input
-                      id="contactPhone"
+                      id="phone"
                       type="tel"
-                      placeholder="+44 7123 456789"
-                      value={bookingData.contactPhone || ""}
-                      onChange={(e) => setBookingData((prev) => ({ ...prev, contactPhone: e.target.value }))}
+                      placeholder="+44 7XXX XXXXXX"
+                      value={contactPhone}
+                      onChange={(e) => setContactPhone(e.target.value)}
                     />
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column - Space Details & Summary */}
+          <div className="space-y-6">
+            {/* Space Details */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="space-y-4">
                   <div>
-                    <Label htmlFor="specialRequests">Special Requests (Optional)</Label>
-                    <Textarea
-                      id="specialRequests"
-                      placeholder="Any special requirements or notes..."
-                      value={bookingData.specialRequests || ""}
-                      onChange={(e) => setBookingData((prev) => ({ ...prev, specialRequests: e.target.value }))}
-                      rows={3}
-                    />
+                    <h3 className="font-semibold text-lg">{space.title}</h3>
+                    <p className="text-sm text-muted-foreground">{space.address}</p>
                   </div>
-                </CardContent>
-              </Card>
 
-              {/* Price Summary */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Booking Summary</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {dateRange.from && dateRange.to && (
-                      <>
-                        <div className="flex justify-between">
-                          <span>Duration:</span>
-                          <span>
-                            {Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))}{" "}
-                            day(s)
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Daily Rate:</span>
-                          <span>£{space.price_per_day || space.price || 10}</span>
-                        </div>
-                        <Separator />
-                        <div className="flex justify-between font-bold text-lg">
-                          <span>Total:</span>
-                          <span>£{calculateTotalPrice()}</span>
-                        </div>
-                      </>
-                    )}
+                  {space.image_url && (
+                    <div className="aspect-video rounded-lg overflow-hidden">
+                      <img
+                        src={space.image_url || "/placeholder.svg"}
+                        alt={space.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    <span className="text-sm font-medium">4.8</span>
+                    <span className="text-sm text-muted-foreground">(24 reviews)</span>
                   </div>
-                </CardContent>
-              </Card>
 
-              {/* Submit Button */}
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={onClose} className="flex-1 bg-transparent">
-                  Cancel
+                  {space.features && (
+                    <div className="flex flex-wrap gap-2">
+                      {space.features.map((feature, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          {feature}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  {space.description && <p className="text-sm text-muted-foreground">{space.description}</p>}
+
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <Shield className="w-4 h-4" />
+                    <span>Secure & Protected</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Booking Summary */}
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="font-semibold mb-4">Booking Summary</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span>Daily Rate</span>
+                    <span>£{dailyRate}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Duration</span>
+                    <span>
+                      {totalDays} day{totalDays !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between font-semibold">
+                    <span>Total</span>
+                    <span>£{totalPrice}</span>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!isFormValid || isSubmitting}
+                  className="w-full mt-4"
+                  size="lg"
+                >
+                  {isSubmitting ? "Processing..." : `Confirm Booking - £${totalPrice}`}
                 </Button>
-                <Button type="submit" disabled={!dateRange.from || !dateRange.to || isSubmitting} className="flex-1">
-                  {isSubmitting ? "Booking..." : `Book for £${calculateTotalPrice()}`}
-                </Button>
-              </div>
-            </form>
+
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  You'll receive a confirmation email with access instructions
+                </p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </DialogContent>
