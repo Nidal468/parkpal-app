@@ -310,21 +310,27 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
       console.log("⚠️ Supabase not configured - message not stored")
     }
 
-    // Add follow-up message for parking results
-    let followUpMessage = null
-    if (hasSearchResults && parkingSpaces.length > 0) {
-      followUpMessage = "Type 'date' to set your booking duration."
-    }
+    // Determine if we should add follow-up message
+    const shouldAddFollowUp = hasSearchResults && parkingSpaces.length > 0
+    console.log("🔄 Should add follow-up message:", shouldAddFollowUp, "Spaces found:", parkingSpaces.length)
 
     // Return response with parking spaces data if available
-    return NextResponse.json({
+    const response = {
       message: botResponse,
       timestamp: new Date().toISOString(),
       parkingSpaces: hasSearchResults && parkingSpaces.length > 0 ? parkingSpaces : undefined,
       searchParams: hasSearchResults ? searchParams : undefined,
       totalFound: parkingSpaces.length,
-      followUpMessage,
+      followUpMessage: shouldAddFollowUp ? "Type 'date' to set your booking duration." : undefined,
+    }
+
+    console.log("📤 API Response:", {
+      hasSpaces: !!response.parkingSpaces,
+      spacesCount: parkingSpaces.length,
+      hasFollowUp: !!response.followUpMessage,
     })
+
+    return NextResponse.json(response)
   } catch (error) {
     console.error("Chat API error:", error)
 

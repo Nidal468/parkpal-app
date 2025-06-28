@@ -10,11 +10,11 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { CalendarIcon, Clock, MapPin, Shield, Car, Wifi, Camera, Zap } from "lucide-react"
+import { CalendarIcon, MapPin, Shield } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { format, differenceInDays, addDays } from "date-fns"
+import { format } from "date-fns"
 import type { ParkingSpace } from "@/lib/supabase-types"
-import { VehicleSelector } from "./vehicle-selector"
+import { useRouter } from "next/navigation"
 
 export interface BookingData {
   spaceId: string
@@ -22,8 +22,8 @@ export interface BookingData {
   endDate: Date
   startTime: string
   endTime: string
-  vehicleType: string
   vehicleReg: string
+  vehicleType: string
   contactEmail: string
   contactPhone: string
   totalPrice: number
@@ -33,14 +33,14 @@ interface BookingModalProps {
   space: ParkingSpace | null
   isOpen: boolean
   onClose: () => void
-  onConfirm: (data: BookingData) => Promise<void>
+  onConfirm: (bookingData: BookingData) => Promise<void>
   selectedDates?: {
     from: Date | undefined
     to: Date | undefined
   }
 }
 
-// Generate time slots in 30-minute increments
+// Generate 30-minute time slots
 const generateTimeSlots = () => {
   const slots = []
   for (let hour = 0; hour < 24; hour++) {
@@ -55,112 +55,108 @@ const generateTimeSlots = () => {
 const timeSlots = generateTimeSlots()
 
 export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates }: BookingModalProps) {
+  const router = useRouter()
   const [startDate, setStartDate] = useState<Date>()
   const [endDate, setEndDate] = useState<Date>()
   const [startTime, setStartTime] = useState("09:00")
   const [endTime, setEndTime] = useState("17:00")
-  const [vehicleType, setVehicleType] = useState("")
   const [vehicleReg, setVehicleReg] = useState("")
+  const [vehicleType, setVehicleType] = useState("")
   const [contactEmail, setContactEmail] = useState("")
   const [contactPhone, setContactPhone] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Set dates from chat selection when modal opens
+  // Set dates from selectedDates prop when modal opens
   useEffect(() => {
     if (selectedDates?.from && selectedDates?.to) {
       setStartDate(selectedDates.from)
       setEndDate(selectedDates.to)
-    } else if (!startDate && !endDate) {
-      // Default to today and tomorrow if no dates selected
-      const today = new Date()
-      setStartDate(today)
-      setEndDate(addDays(today, 1))
     }
-  }, [selectedDates, startDate, endDate])
+  }, [selectedDates, isOpen])
 
   const calculateTotalPrice = () => {
     if (!startDate || !endDate || !space) return 0
 
-    const days = Math.max(1, differenceInDays(endDate, startDate))
-    const dailyRate = space.price_per_day || space.price || 0
-    return days * dailyRate
+    const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    return days * (space.price_per_day || 0)
   }
 
-  const handleSubmit = async () => {
-    if (!space || !startDate || !endDate || !vehicleType || !vehicleReg || !contactEmail) {
-      return
-    }
+  const handleReserve = () => {
+    if (!space) return
 
-    setIsSubmitting(true)
+    // Navigate to booking page with space and date data
+    const searchParams = new URLSearchParams({
+      spaceId: space.id,
+      ...(startDate && { startDate: startDate.toISOString() }),
+      ...(endDate && { endDate: endDate.toISOString() }),
+      startTime,
+      endTime,
+    })
+
+    router.push(`/booking?${searchParams.toString()}`)
+    onClose()
+  }
+
+  const handleQuickBook = async () => {
+    if (!space || !startDate || !endDate) return
+
+    setIsLoading(true)
     try {
-      await onConfirm({
+      const bookingData: BookingData = {
         spaceId: space.id,
         startDate,
         endDate,
         startTime,
         endTime,
-        vehicleType,
         vehicleReg,
+        vehicleType,
         contactEmail,
         contactPhone,
         totalPrice: calculateTotalPrice(),
-      })
+      }
+
+      await onConfirm(bookingData)
       onClose()
     } catch (error) {
       console.error("Booking failed:", error)
     } finally {
-      setIsSubmitting(false)
+      setIsLoading(false)
     }
-  }
-
-  const getFeatureIcon = (feature: string) => {
-    const lowerFeature = feature.toLowerCase()
-    if (lowerFeature.includes("security") || lowerFeature.includes("secure")) return Shield
-    if (lowerFeature.includes("cctv") || lowerFeature.includes("camera")) return Camera
-    if (lowerFeature.includes("electric") || lowerFeature.includes("ev")) return Zap
-    if (lowerFeature.includes("wifi")) return Wifi
-    return Car
   }
 
   if (!space) return null
 
+  const totalPrice = calculateTotalPrice()
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="w-5 h-5" />
-            Book {space.title}
+            {space.title}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Space Details */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <MapPin className="w-4 h-4" />
-              <span>{space.address}</span>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">{space.address}</p>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">£{space.price_per_day}/day</Badge>
+              {space.features && space.features.length > 0 && (
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Shield className="w-3 h-3" />
+                  {Array.isArray(space.features) ? space.features[0] : space.features.split(",")[0]}
+                </Badge>
+              )}
             </div>
-
-            {space.features && space.features.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {space.features.map((feature, index) => {
-                  const IconComponent = getFeatureIcon(feature)
-                  return (
-                    <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                      <IconComponent className="w-3 h-3" />
-                      {feature}
-                    </Badge>
-                  )
-                })}
-              </div>
-            )}
           </div>
 
           <Separator />
 
           {/* Date Selection */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Start Date</Label>
               <Popover>
@@ -170,10 +166,10 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates 
                     className={cn("w-full justify-start text-left font-normal", !startDate && "text-muted-foreground")}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "PPP") : "Pick a date"}
+                    {startDate ? format(startDate, "MMM dd") : "Select"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
                     selected={startDate}
@@ -194,15 +190,15 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates 
                     className={cn("w-full justify-start text-left font-normal", !endDate && "text-muted-foreground")}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "PPP") : "Pick a date"}
+                    {endDate ? format(endDate, "MMM dd") : "Select"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
                     selected={endDate}
                     onSelect={setEndDate}
-                    disabled={(date) => date < (startDate || new Date())}
+                    disabled={(date) => date < new Date() || (startDate && date < startDate)}
                     initialFocus
                   />
                 </PopoverContent>
@@ -211,12 +207,9 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates 
           </div>
 
           {/* Time Selection */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Start Time
-              </Label>
+              <Label>Start Time</Label>
               <Select value={startTime} onValueChange={setStartTime}>
                 <SelectTrigger>
                   <SelectValue />
@@ -232,10 +225,7 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates 
             </div>
 
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                End Time
-              </Label>
+              <Label>End Time</Label>
               <Select value={endTime} onValueChange={setEndTime}>
                 <SelectTrigger>
                   <SelectValue />
@@ -251,97 +241,56 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates 
             </div>
           </div>
 
-          <Separator />
-
-          {/* Vehicle Details */}
-          <div className="space-y-4">
-            <h3 className="font-medium">Vehicle Details</h3>
-
-            <VehicleSelector value={vehicleType} onValueChange={setVehicleType} />
-
+          {/* Quick Vehicle Details */}
+          <div className="space-y-3">
             <div className="space-y-2">
-              <Label htmlFor="vehicleReg">Vehicle Registration *</Label>
+              <Label htmlFor="vehicleReg">Vehicle Registration (Optional)</Label>
               <Input
                 id="vehicleReg"
                 placeholder="e.g., AB12 CDE"
                 value={vehicleReg}
                 onChange={(e) => setVehicleReg(e.target.value.toUpperCase())}
-                required
               />
             </div>
-          </div>
 
-          <Separator />
-
-          {/* Contact Details */}
-          <div className="space-y-4">
-            <h3 className="font-medium">Contact Details</h3>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+44 7XXX XXXXXX"
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Vehicle Type (Optional)</Label>
+              <Select value={vehicleType} onValueChange={setVehicleType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select vehicle type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="car">Car</SelectItem>
+                  <SelectItem value="suv">SUV</SelectItem>
+                  <SelectItem value="van">Van</SelectItem>
+                  <SelectItem value="motorcycle">Motorcycle</SelectItem>
+                  <SelectItem value="electric">Electric Vehicle</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          <Separator />
-
-          {/* Pricing Summary */}
-          <div className="space-y-3 bg-muted/50 p-4 rounded-lg">
-            <h3 className="font-medium">Booking Summary</h3>
-
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>Daily Rate:</span>
-                <span>£{space.price_per_day || space.price}/day</span>
+          {/* Total Price */}
+          {startDate && endDate && (
+            <div className="bg-muted/50 p-3 rounded-lg">
+              <div className="flex justify-between items-center">
+                <span className="font-medium">Total Cost:</span>
+                <span className="text-lg font-bold">£{totalPrice}</span>
               </div>
-
-              {startDate && endDate && (
-                <div className="flex justify-between">
-                  <span>Duration:</span>
-                  <span>{Math.max(1, differenceInDays(endDate, startDate))} day(s)</span>
-                </div>
-              )}
-
-              <Separator />
-
-              <div className="flex justify-between font-medium">
-                <span>Total:</span>
-                <span>£{calculateTotalPrice()}</span>
-              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))} day(s) × £
+                {space.price_per_day}/day
+              </p>
             </div>
-          </div>
+          )}
 
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-2 pt-2">
             <Button variant="outline" onClick={onClose} className="flex-1 bg-transparent">
               Cancel
             </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={!vehicleType || !vehicleReg || !contactEmail || isSubmitting}
-              className="flex-1"
-            >
-              {isSubmitting ? "Confirming..." : `Confirm Booking - £${calculateTotalPrice()}`}
+            <Button onClick={handleReserve} className="flex-1" disabled={!startDate || !endDate}>
+              Reserve
             </Button>
           </div>
         </div>
