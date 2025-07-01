@@ -1,18 +1,35 @@
 -- Update bookings table to support Commerce Layer integration
 ALTER TABLE bookings 
-ADD COLUMN IF NOT EXISTS commerce_layer_sku VARCHAR(50),
-ADD COLUMN IF NOT EXISTS duration_type VARCHAR(20),
-ADD COLUMN IF NOT EXISTS duration_quantity INTEGER DEFAULT 1,
-ADD COLUMN IF NOT EXISTS payment_confirmed BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS payment_intent_id TEXT,
+ADD COLUMN IF NOT EXISTS sku TEXT,
+ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'pending',
 ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP WITH TIME ZONE;
 
--- Add index for better performance
+-- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_bookings_payment_intent ON bookings(payment_intent_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_commerce_sku ON bookings(commerce_layer_sku);
+CREATE INDEX IF NOT EXISTS idx_bookings_sku ON bookings(sku);
+CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 
--- Update existing records to have default values
-UPDATE bookings 
-SET duration_type = 'day', 
-    duration_quantity = 1,
-    payment_confirmed = (status = 'confirmed')
-WHERE duration_type IS NULL;
+-- Add some sample data for testing if the table is empty
+INSERT INTO bookings (
+  parking_space_id, 
+  customer_name, 
+  customer_email, 
+  vehicle_registration, 
+  start_date, 
+  total_amount, 
+  status,
+  duration_type,
+  sku
+) 
+SELECT 
+  'test-space-1',
+  'Test User',
+  'test@example.com',
+  'TEST123',
+  CURRENT_DATE,
+  25.00,
+  'confirmed',
+  'day',
+  'parking-day'
+WHERE NOT EXISTS (SELECT 1 FROM bookings LIMIT 1);

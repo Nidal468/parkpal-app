@@ -2,60 +2,53 @@ import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { createClient } from "@supabase/supabase-js"
 
-// Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-12-18.acacia",
 })
 
-// Initialize Supabase
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sku, quantity, price, bookingDetails, spaceId } = body
+    const { sku, quantity, parkingSpaceId, bookingDetails, duration, price } = body
 
     // Validate required fields
-    if (!sku || !quantity || !price || !bookingDetails || !spaceId) {
+    if (!sku || !parkingSpaceId || !bookingDetails || !duration || !price) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Calculate total amount in pence for Stripe
-    const totalAmount = Math.round(price * quantity * 100)
-
-    // Create Stripe PaymentIntent
+    // Create a payment intent with Stripe
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalAmount,
-      currency: "gbp",
+      amount: Math.round(price * 100), // Convert to cents
+      currency: "usd",
       metadata: {
         sku,
-        quantity: quantity.toString(),
-        space_id: spaceId,
-        customer_name: bookingDetails.customerName,
-        customer_email: bookingDetails.customerEmail,
-        vehicle_reg: bookingDetails.vehicleReg,
+        parkingSpaceId,
+        duration,
+        customerName: bookingDetails.customerName,
+        vehicleReg: bookingDetails.vehicleReg,
       },
     })
 
-    // Create booking record in Supabase
+    // Store the booking in Supabase (pending payment)
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .insert({
-        space_id: spaceId,
+        parking_space_id: parkingSpaceId,
         customer_name: bookingDetails.customerName,
-        customer_email: bookingDetails.customerEmail,
-        customer_phone: bookingDetails.customerPhone,
+        customer_email: bookingDetails.email,
+        customer_phone: bookingDetails.phone,
         vehicle_registration: bookingDetails.vehicleReg,
         vehicle_type: bookingDetails.vehicleType,
         start_date: bookingDetails.startDate,
         start_time: bookingDetails.startTime,
-        duration_type: sku.replace("parking-", ""), // Extract duration from SKU
-        duration_quantity: quantity,
-        total_price: price * quantity,
+        duration_type: duration,
+        total_amount: price,
+        special_requests: bookingDetails.specialRequests,
         payment_intent_id: paymentIntent.id,
         status: "pending",
-        notes: bookingDetails.notes || null,
-        commerce_layer_sku: sku,
+        sku: sku,
       })
       .select()
       .single()
@@ -66,12 +59,12 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      clientSecret: paymentIntent.client_secret,
-      bookingId: booking.id,
+      orderId: booking.id,
       paymentIntentId: paymentIntent.id,
+      clientSecret: paymentIntent.client_secret,
     })
   } catch (error) {
     console.error("Create order error:", error)
-    return NextResponse.json({ error: "Failed to create order" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
