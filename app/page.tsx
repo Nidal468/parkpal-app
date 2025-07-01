@@ -1,302 +1,283 @@
+"use client"
+
+import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { MapPin, MessageCircle, Car, Star, Clock, Shield, Zap } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { MapPin, Search, Star, Clock, Shield, Zap, MessageCircle, CreditCard } from "lucide-react"
 import Image from "next/image"
 
+const features = [
+  {
+    icon: MapPin,
+    title: "Prime Locations",
+    description: "Find parking spaces in the most convenient locations across the city",
+  },
+  {
+    icon: Shield,
+    title: "Secure & Safe",
+    description: "All parking spaces are verified and monitored for your peace of mind",
+  },
+  {
+    icon: Zap,
+    title: "Instant Booking",
+    description: "Book your parking space in seconds with our streamlined process",
+  },
+  {
+    icon: Clock,
+    title: "24/7 Support",
+    description: "Round-the-clock customer support for all your parking needs",
+  },
+]
+
+const testimonials = [
+  {
+    name: "Sarah Johnson",
+    role: "Business Professional",
+    content: "ParkPal has made my daily commute so much easier. I can always find a spot near my office!",
+    rating: 5,
+    avatar: "/placeholder-user.jpg",
+  },
+  {
+    name: "Mike Chen",
+    role: "Frequent Traveler",
+    content: "Perfect for airport parking. Reliable, secure, and much cheaper than traditional lots.",
+    rating: 5,
+    avatar: "/placeholder-user.jpg",
+  },
+  {
+    name: "Emma Davis",
+    role: "City Resident",
+    content: "The app is intuitive and the booking process is seamless. Highly recommend!",
+    rating: 5,
+    avatar: "/placeholder-user.jpg",
+  },
+]
+
 export default function HomePage() {
+  const [searchLocation, setSearchLocation] = useState("")
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-white">
       {/* Navigation */}
-      <nav className="bg-white shadow-sm border-b">
+      <nav className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <Image src="/parkpal-logo-clean.png" alt="ParkPal" width={120} height={40} className="h-8 w-auto" />
             </div>
-            <div className="flex items-center space-x-4">
-              <Link href="/chat">
-                <Button variant="outline">
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Find Parking
-                </Button>
+            <div className="hidden md:flex items-center space-x-8">
+              <Link href="/chat" className="text-gray-600 hover:text-gray-900">
+                Find Parking
               </Link>
+              <Link href="#" className="text-gray-600 hover:text-gray-900">
+                How it Works
+              </Link>
+              <Link href="#" className="text-gray-600 hover:text-gray-900">
+                Pricing
+              </Link>
+              <Link href="#" className="text-gray-600 hover:text-gray-900">
+                Support
+              </Link>
+            </div>
+            <div className="flex items-center space-x-4">
               <Link href="/reserve">
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Car className="w-4 h-4 mr-2" />
+                <Button variant="outline" size="sm">
+                  <CreditCard className="h-4 w-4 mr-2" />
                   Test Reserve
                 </Button>
               </Link>
+              <Button size="sm">Sign In</Button>
             </div>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            Find Perfect Parking with
-            <span className="text-blue-600"> AI-Powered Search</span>
-          </h1>
-          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-            Skip the stress of finding parking. Our intelligent assistant helps you discover, compare, and book parking
-            spaces instantly - whether you need a spot for an hour, a day, or a month.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/chat">
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 px-8 py-4 text-lg">
-                <MessageCircle className="w-5 h-5 mr-2" />
-                Start Parking Search
-              </Button>
-            </Link>
-            <Link href="/reserve">
-              <Button size="lg" variant="outline" className="px-8 py-4 text-lg bg-transparent">
-                <Car className="w-5 h-5 mr-2" />
-                Test Commerce Layer
-              </Button>
-            </Link>
+      <section className="relative bg-gradient-to-br from-blue-50 to-indigo-100 py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+              Find Perfect Parking
+              <span className="text-blue-600 block">Anywhere, Anytime</span>
+            </h1>
+            <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+              Skip the stress of searching for parking. Book verified spaces in advance and arrive with confidence
+              knowing your spot is waiting.
+            </p>
+
+            {/* Search Bar */}
+            <div className="max-w-2xl mx-auto mb-8">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                  <Input
+                    type="text"
+                    placeholder="Enter location (e.g., Downtown, Airport, Mall)"
+                    value={searchLocation}
+                    onChange={(e) => setSearchLocation(e.target.value)}
+                    className="pl-10 h-12 text-lg"
+                  />
+                </div>
+                <Link href="/chat">
+                  <Button size="lg" className="h-12 px-8">
+                    <Search className="h-5 w-5 mr-2" />
+                    Find Parking
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <Link href="/chat">
+                <Button size="lg" className="w-full sm:w-auto">
+                  <MessageCircle className="h-5 w-5 mr-2" />
+                  Try AI Assistant
+                </Button>
+              </Link>
+              <Link href="/reserve">
+                <Button variant="outline" size="lg" className="w-full sm:w-auto bg-transparent">
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  Test Booking Flow
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="py-16 px-4 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Why Choose ParkPal?</h2>
-            <p className="text-lg text-gray-600">Experience the future of parking with our innovative features</p>
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Why Choose ParkPal?</h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              We make parking simple, secure, and stress-free with cutting-edge technology and a network of verified
+              parking spaces.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <Card className="text-center">
-              <CardHeader>
-                <MessageCircle className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-                <CardTitle>AI Chat Assistant</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">
-                  Simply tell us where you need parking and our AI will find the perfect spots for you.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="text-center">
-              <CardHeader>
-                <MapPin className="w-12 h-12 text-green-600 mx-auto mb-4" />
-                <CardTitle>Interactive Maps</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">
-                  View available spaces on detailed maps with real-time availability updates.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="text-center">
-              <CardHeader>
-                <Clock className="w-12 h-12 text-purple-600 mx-auto mb-4" />
-                <CardTitle>Flexible Duration</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">Book parking by the hour, day, or month. Perfect for any schedule.</p>
-              </CardContent>
-            </Card>
-
-            <Card className="text-center">
-              <CardHeader>
-                <Shield className="w-12 h-12 text-red-600 mx-auto mb-4" />
-                <CardTitle>Secure Payments</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">
-                  Safe and secure payments powered by Stripe and Commerce Layer integration.
-                </p>
-              </CardContent>
-            </Card>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((feature, index) => (
+              <Card key={index} className="text-center border-0 shadow-lg">
+                <CardHeader>
+                  <div className="mx-auto w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                    <feature.icon className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <CardTitle className="text-xl">{feature.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription className="text-gray-600">{feature.description}</CardDescription>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       </section>
 
       {/* How It Works */}
-      <section className="py-16 px-4 bg-gray-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">How It Works</h2>
-            <p className="text-lg text-gray-600">Get parked in three simple steps</p>
+      <section className="py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">How It Works</h2>
+            <p className="text-xl text-gray-600">Get parked in three simple steps</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="bg-blue-600 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mx-auto mb-4">
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-6">
                 1
               </div>
-              <h3 className="text-xl font-semibold mb-2">Search</h3>
-              <p className="text-gray-600">Tell our AI assistant where you need parking and when</p>
+              <h3 className="text-xl font-semibold mb-4">Search & Compare</h3>
+              <p className="text-gray-600">
+                Enter your destination and browse available parking spaces with real-time pricing and availability.
+              </p>
             </div>
-
             <div className="text-center">
-              <div className="bg-blue-600 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mx-auto mb-4">
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-6">
                 2
               </div>
-              <h3 className="text-xl font-semibold mb-2">Compare</h3>
-              <p className="text-gray-600">Browse available spaces with prices, ratings, and amenities</p>
+              <h3 className="text-xl font-semibold mb-4">Book & Pay</h3>
+              <p className="text-gray-600">
+                Select your preferred space, choose your duration, and complete your booking with secure payment.
+              </p>
             </div>
-
             <div className="text-center">
-              <div className="bg-blue-600 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl font-bold mx-auto mb-4">
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-6">
                 3
               </div>
-              <h3 className="text-xl font-semibold mb-2">Book</h3>
-              <p className="text-gray-600">Reserve your spot instantly with secure payment</p>
+              <h3 className="text-xl font-semibold mb-4">Park & Go</h3>
+              <p className="text-gray-600">
+                Arrive at your reserved space, park with confidence, and enjoy your destination worry-free.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Sample Parking Spaces */}
-      <section className="py-16 px-4 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Featured Parking Spaces</h2>
-            <p className="text-lg text-gray-600">Discover premium parking locations in your area</p>
+      {/* Testimonials */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">What Our Users Say</h2>
+            <p className="text-xl text-gray-600">Join thousands of satisfied parkers</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <Card>
-              <div className="relative">
-                <img
-                  src="/placeholder.svg?height=200&width=300&text=Downtown+Garage"
-                  alt="Downtown Parking"
-                  className="w-full h-48 object-cover rounded-t-lg"
-                />
-                <Badge className="absolute top-2 right-2 bg-green-600">Available</Badge>
-              </div>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  Downtown Premium
-                  <div className="flex items-center">
-                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                    <span className="ml-1 text-sm">4.8</span>
+          <div className="grid md:grid-cols-3 gap-8">
+            {testimonials.map((testimonial, index) => (
+              <Card key={index} className="border-0 shadow-lg">
+                <CardContent className="pt-6">
+                  <div className="flex items-center mb-4">
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                    ))}
                   </div>
-                </CardTitle>
-                <CardDescription className="flex items-center">
-                  <MapPin className="w-4 h-4 mr-1" />
-                  123 Main Street, Downtown
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-2xl font-bold text-blue-600">$8.50</span>
-                  <span className="text-gray-600">/hour</span>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary">Covered</Badge>
-                  <Badge variant="secondary">Security</Badge>
-                  <Badge variant="secondary">EV Charging</Badge>
-                </div>
-                <Button className="w-full">View Details</Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <div className="relative">
-                <img
-                  src="/placeholder.svg?height=200&width=300&text=Airport+Parking"
-                  alt="Airport Parking"
-                  className="w-full h-48 object-cover rounded-t-lg"
-                />
-                <Badge className="absolute top-2 right-2 bg-green-600">Available</Badge>
-              </div>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  Airport Long-term
+                  <p className="text-gray-600 mb-6">"{testimonial.content}"</p>
                   <div className="flex items-center">
-                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                    <span className="ml-1 text-sm">4.6</span>
+                    <Image
+                      src={testimonial.avatar || "/placeholder.svg"}
+                      alt={testimonial.name}
+                      width={48}
+                      height={48}
+                      className="w-12 h-12 rounded-full mr-4"
+                    />
+                    <div>
+                      <h4 className="font-semibold">{testimonial.name}</h4>
+                      <p className="text-sm text-gray-500">{testimonial.role}</p>
+                    </div>
                   </div>
-                </CardTitle>
-                <CardDescription className="flex items-center">
-                  <MapPin className="w-4 h-4 mr-1" />
-                  Airport Terminal 1
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-2xl font-bold text-blue-600">$12</span>
-                  <span className="text-gray-600">/day</span>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary">Shuttle</Badge>
-                  <Badge variant="secondary">24/7</Badge>
-                  <Badge variant="secondary">Valet</Badge>
-                </div>
-                <Button className="w-full">View Details</Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <div className="relative">
-                <img
-                  src="/placeholder.svg?height=200&width=300&text=Monthly+Parking"
-                  alt="Monthly Parking"
-                  className="w-full h-48 object-cover rounded-t-lg"
-                />
-                <Badge className="absolute top-2 right-2 bg-green-600">Available</Badge>
-              </div>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  Business District
-                  <div className="flex items-center">
-                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                    <span className="ml-1 text-sm">4.9</span>
-                  </div>
-                </CardTitle>
-                <CardDescription className="flex items-center">
-                  <MapPin className="w-4 h-4 mr-1" />
-                  456 Business Ave
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-2xl font-bold text-blue-600">$280</span>
-                  <span className="text-gray-600">/month</span>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary">Reserved</Badge>
-                  <Badge variant="secondary">Keycard</Badge>
-                  <Badge variant="secondary">Wash</Badge>
-                </div>
-                <Button className="w-full">View Details</Button>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 bg-blue-600 text-white">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold mb-6">Ready to Find Your Perfect Parking Spot?</h2>
-          <p className="text-xl mb-8 opacity-90">
-            Join thousands of drivers who have simplified their parking experience with ParkPal
+      <section className="py-20 bg-blue-600">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Ready to Never Circle for Parking Again?</h2>
+          <p className="text-xl text-blue-100 mb-8 max-w-3xl mx-auto">
+            Join ParkPal today and experience the future of parking. Book your first space and see why thousands trust
+            us daily.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/chat">
-              <Button size="lg" variant="secondary" className="px-8 py-4 text-lg">
-                <MessageCircle className="w-5 h-5 mr-2" />
-                Start Your Search
+              <Button size="lg" variant="secondary" className="w-full sm:w-auto">
+                <MessageCircle className="h-5 w-5 mr-2" />
+                Start Finding Parking
               </Button>
             </Link>
             <Link href="/reserve">
               <Button
                 size="lg"
                 variant="outline"
-                className="px-8 py-4 text-lg border-white text-white hover:bg-white hover:text-blue-600 bg-transparent"
+                className="w-full sm:w-auto text-white border-white hover:bg-white hover:text-blue-600 bg-transparent"
               >
-                <Zap className="w-5 h-5 mr-2" />
-                Test Integration
+                <CreditCard className="h-5 w-5 mr-2" />
+                Test Booking
               </Button>
             </Link>
           </div>
@@ -304,45 +285,95 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <footer className="bg-gray-900 text-white py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-4 gap-8">
             <div>
-              <Image src="/parkpal-logo-clean.png" alt="ParkPal" width={120} height={40} className="h-8 w-auto mb-4" />
-              <p className="text-gray-400">Making parking simple, smart, and stress-free with AI-powered solutions.</p>
+              <Image
+                src="/parkpal-logo-clean.png"
+                alt="ParkPal"
+                width={120}
+                height={40}
+                className="h-8 w-auto mb-4 brightness-0 invert"
+              />
+              <p className="text-gray-400">Making parking simple, secure, and stress-free for everyone.</p>
             </div>
-
             <div>
-              <h3 className="font-semibold mb-4">Features</h3>
+              <h3 className="font-semibold mb-4">Product</h3>
               <ul className="space-y-2 text-gray-400">
-                <li>AI Chat Assistant</li>
-                <li>Interactive Maps</li>
-                <li>Secure Payments</li>
-                <li>Real-time Availability</li>
+                <li>
+                  <Link href="/chat" className="hover:text-white">
+                    Find Parking
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    How it Works
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    Pricing
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/reserve" className="hover:text-white">
+                    Test Booking
+                  </Link>
+                </li>
               </ul>
             </div>
-
             <div>
               <h3 className="font-semibold mb-4">Support</h3>
               <ul className="space-y-2 text-gray-400">
-                <li>Help Center</li>
-                <li>Contact Us</li>
-                <li>Terms of Service</li>
-                <li>Privacy Policy</li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    Help Center
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    Contact Us
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    Safety
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    Terms
+                  </Link>
+                </li>
               </ul>
             </div>
-
             <div>
-              <h3 className="font-semibold mb-4">Connect</h3>
+              <h3 className="font-semibold mb-4">Company</h3>
               <ul className="space-y-2 text-gray-400">
-                <li>Twitter</li>
-                <li>LinkedIn</li>
-                <li>Facebook</li>
-                <li>Instagram</li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    About
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    Careers
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    Press
+                  </Link>
+                </li>
+                <li>
+                  <Link href="#" className="hover:text-white">
+                    Privacy
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>
-
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
             <p>&copy; 2024 ParkPal. All rights reserved.</p>
           </div>

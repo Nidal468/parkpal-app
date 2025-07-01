@@ -9,7 +9,6 @@
     "start": "next start"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^1.0.2",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
@@ -30,7 +29,6 @@
     "@radix-ui/react-scroll-area": "latest",
     "@radix-ui/react-select": "latest",
     "@radix-ui/react-separator": "latest",
-    "@radix-ui/react-sheet": "^1.1.0",
     "@radix-ui/react-slider": "latest",
     "@radix-ui/react-slot": "latest",
     "@radix-ui/react-switch": "latest",
@@ -43,6 +41,7 @@
     "@stripe/stripe-js": "latest",
     "@supabase/supabase-js": "latest",
     "ai": "latest",
+    "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
@@ -50,7 +49,7 @@
     "embla-carousel-react": "latest",
     "input-otp": "latest",
     "lucide-react": "^0.454.0",
-    "mapbox-gl": "^3.1.2",
+    "mapbox-gl": "latest",
     "next": "15.2.4",
     "next-themes": "latest",
     "openai": "latest",
@@ -63,19 +62,17 @@
     "sonner": "latest",
     "stripe": "latest",
     "tailwind-merge": "^2.5.5",
+    "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "latest",
     "ws": "latest",
-    "zod": "^3.23.8"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^8",
-    "eslint-config-next": "15.2.4",
     "postcss": "^8.5",
-    "tailwindcss": "^3.4.1",
     "typescript": "^5"
   }
 }
