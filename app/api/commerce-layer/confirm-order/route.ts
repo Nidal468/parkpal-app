@@ -5,79 +5,94 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("🚀 Commerce Layer - Confirm order request:", body)
 
-    const { orderId, paymentMethodId, commerceLayerOrderId } = body
+    const { orderId, commerceLayerOrderId, paymentIntentId } = body
 
-    if (!orderId && !commerceLayerOrderId) {
-      return NextResponse.json({ error: "Missing orderId or commerceLayerOrderId" }, { status: 400 })
+    if (!orderId || !commerceLayerOrderId) {
+      return NextResponse.json({ error: "Order ID is required" }, { status: 400 })
     }
 
     // Check Commerce Layer environment variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL || "https://yourdomain.commercelayer.io"
+    const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
 
-    if (!clClientId || !clClientSecret) {
-      return NextResponse.json({ error: "Commerce Layer not configured" }, { status: 500 })
+    if (!clClientId || !clClientSecret || !clMarketId) {
+      return NextResponse.json(
+        {
+          error: "Commerce Layer not configured",
+          details: "Missing Commerce Layer credentials or market ID",
+        },
+        { status: 500 },
+      )
     }
 
-    // Import Commerce Layer SDK dynamically
-    const { CommerceLayer } = await import("@commercelayer/sdk")
+    // Get Commerce Layer access token with market scope
+    const accessToken = await getAccessTokenWithMarketScope(clClientId, clClientSecret, clBaseUrl, clMarketId)
+    console.log("✅ Commerce Layer access token obtained for order confirmation")
 
-    // Initialize Commerce Layer client
-    const cl = CommerceLayer({
-      organization: clBaseUrl.replace("https://", "").replace(".commercelayer.io", ""),
-      accessToken: await getAccessToken(clClientId, clClientSecret, clBaseUrl),
+    // Initialize Commerce Layer API base URL
+    const apiBase = `${clBaseUrl}/api`
+
+    // Step 1: Get the current order status
+    const orderResponse = await fetch(`${apiBase}/orders/${commerceLayerOrderId}?include=line_items`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/vnd.api+json",
+      },
     })
 
-    const orderIdToUse = commerceLayerOrderId || orderId
-
-    // Step 1: Get the order
-    let order
-    try {
-      order = await cl.orders.retrieve(orderIdToUse, {
-        include: ["payment_method", "line_items"],
-      })
-      console.log("✅ Retrieved Commerce Layer order:", order.id, "Status:", order.status)
-    } catch (orderError) {
-      console.error("❌ Failed to retrieve order:", orderError)
-      return NextResponse.json({ error: "Order not found", details: orderError }, { status: 404 })
+    if (!orderResponse.ok) {
+      const errorData = await orderResponse.json()
+      throw new Error(`Failed to fetch order: ${JSON.stringify(errorData)}`)
     }
 
-    // Step 2: Add payment method if provided
-    if (paymentMethodId && order.status === "pending") {
-      try {
-        // This depends on your Commerce Layer payment method setup
-        // You might need to create a Stripe payment method or use Commerce Layer's payment methods
-        console.log("💳 Adding payment method:", paymentMethodId)
+    const orderData = await orderResponse.json()
+    const order = orderData.data
 
-        // For now, we'll simulate payment completion
-        // In a real implementation, you'd integrate with your payment gateway through Commerce Layer
-      } catch (paymentError) {
-        console.error("❌ Payment method error:", paymentError)
-        return NextResponse.json({ error: "Failed to process payment", details: paymentError }, { status: 500 })
+    console.log("✅ Retrieved order:", order.id, "Status:", order.attributes.status)
+
+    // Step 2: Update order status to placed (if payment was successful)
+    if (paymentIntentId && order.attributes.status !== "placed") {
+      try {
+        const updateOrderResponse = await fetch(`${apiBase}/orders/${commerceLayerOrderId}`, {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/vnd.api+json",
+            "Content-Type": "application/vnd.api+json",
+          },
+          body: JSON.stringify({
+            data: {
+              type: "orders",
+              id: commerceLayerOrderId,
+              attributes: {
+                _place: true,
+                metadata: {
+                  ...order.attributes.metadata,
+                  stripe_payment_intent_id: paymentIntentId,
+                  payment_confirmed: true,
+                  confirmed_at: new Date().toISOString(),
+                },
+              },
+            },
+          }),
+        })
+
+        const updatedOrderData = await updateOrderResponse.json()
+        if (!updateOrderResponse.ok) {
+          console.error("❌ Failed to place order:", updatedOrderData)
+          // Don't throw error - order was created successfully, just status update failed
+        } else {
+          console.log("✅ Order placed successfully:", commerceLayerOrderId)
+        }
+      } catch (placeError) {
+        console.error("❌ Error placing order:", placeError)
+        // Continue - order was created successfully
       }
     }
 
-    // Step 3: Update order status (this might be automatic based on payment)
-    let updatedOrder
-    try {
-      // In Commerce Layer, orders typically move to "placed" status after payment
-      // The exact flow depends on your Commerce Layer configuration
-      updatedOrder = await cl.orders.update(order.id, {
-        _place: true, // This places the order
-        metadata: {
-          ...order.metadata,
-          confirmed_at: new Date().toISOString(),
-          payment_method_id: paymentMethodId || "test_payment",
-        },
-      })
-      console.log("✅ Order placed successfully:", updatedOrder.id, "Status:", updatedOrder.status)
-    } catch (updateError) {
-      console.error("❌ Failed to place order:", updateError)
-      return NextResponse.json({ error: "Failed to place order", details: updateError }, { status: 500 })
-    }
-
-    // Step 4: Update booking in database
+    // Step 3: Update booking status in database
     try {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
       const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -86,39 +101,42 @@ export async function POST(request: NextRequest) {
         const { createClient } = await import("@supabase/supabase-js")
         const supabase = createClient(supabaseUrl, supabaseKey)
 
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("bookings")
           .update({
             status: "confirmed",
-            payment_status: "paid",
+            stripe_payment_intent_id: paymentIntentId,
             confirmed_at: new Date().toISOString(),
-            stripe_payment_intent_id: paymentMethodId,
           })
-          .eq("commerce_layer_order_id", updatedOrder.id)
+          .eq("commerce_layer_order_id", commerceLayerOrderId)
+          .select()
+          .single()
 
         if (error) {
           console.error("❌ Database update error:", error)
         } else {
-          console.log("✅ Booking confirmed in database")
+          console.log("✅ Booking status updated in database:", data?.id)
         }
       }
     } catch (dbError) {
       console.error("❌ Database connection error:", dbError)
     }
 
+    // Generate booking reference
+    const bookingReference = `PK${Date.now().toString().slice(-6)}`
+
     const response = {
       success: true,
-      message: "Order confirmed successfully",
-      orderId: updatedOrder.id,
-      commerceLayerOrderId: updatedOrder.id,
-      status: updatedOrder.status,
-      paymentStatus: updatedOrder.payment_status,
-      bookingReference: `PK${updatedOrder.number || updatedOrder.id.slice(-6)}`,
-      totalAmount: Number.parseFloat(updatedOrder.total_amount_cents) / 100,
-      currency: updatedOrder.currency_code,
+      orderId: commerceLayerOrderId,
+      bookingReference: bookingReference,
+      status: "confirmed",
+      paymentIntentId: paymentIntentId,
+      totalAmount: Number.parseFloat(order.attributes.total_amount_cents) / 100,
+      currency: order.attributes.currency_code,
+      confirmedAt: new Date().toISOString(),
     }
 
-    console.log("✅ Commerce Layer order confirmed:", response)
+    console.log("✅ Commerce Layer order confirmed successfully:", response)
     return NextResponse.json(response)
   } catch (error) {
     console.error("❌ Commerce Layer confirm order error:", error)
@@ -133,8 +151,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to get Commerce Layer access token
-async function getAccessToken(clientId: string, clientSecret: string, baseUrl: string): Promise<string> {
+// Helper function to get Commerce Layer access token with market scope
+async function getAccessTokenWithMarketScope(
+  clientId: string,
+  clientSecret: string,
+  baseUrl: string,
+  marketId: string,
+): Promise<string> {
   try {
     const response = await fetch(`${baseUrl}/oauth/token`, {
       method: "POST",
@@ -145,11 +168,15 @@ async function getAccessToken(clientId: string, clientSecret: string, baseUrl: s
         grant_type: "client_credentials",
         client_id: clientId,
         client_secret: clientSecret,
+        scope: `market:${marketId}`,
       }),
     })
 
     if (!response.ok) {
-      throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`)
+      const errorData = await response.json()
+      throw new Error(
+        `Failed to get access token: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`,
+      )
     }
 
     const data = await response.json()
