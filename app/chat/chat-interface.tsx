@@ -3,21 +3,34 @@
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle, Map, Grid, CalendarIcon, X } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Copy,
+  ThumbsUp,
+  ThumbsDown,
+  Mic,
+  Send,
+  Loader2,
+  AlertCircle,
+  Map,
+  Grid,
+  CalendarIcon,
+  X,
+  Clock,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ParkingSpaceCard } from "@/components/parking-space-card"
 import { ParkingMap } from "@/components/parking-map"
 import { BookingModal, type BookingData } from "@/components/booking-modal"
 import type { ParkingSpace } from "@/lib/supabase-types"
 import Image from "next/image"
-import { format } from "date-fns"
 
 interface Message {
   role: "assistant" | "user"
@@ -26,9 +39,11 @@ interface Message {
   parkingSpaces?: ParkingSpace[]
 }
 
+// Simple booking flow stages
+type BookingStage = "chat" | "date-selection" | "time-selection" | "complete"
+
 export default function ChatInterface() {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const [input, setInput] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -37,46 +52,32 @@ export default function ChatInterface() {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid")
   const [hasProcessedQuery, setHasProcessedQuery] = useState(false)
-  const [showDatePicker, setShowDatePicker] = useState(false)
+
+  // Simple booking flow state
+  const [bookingStage, setBookingStage] = useState<BookingStage>("chat")
+  const [selectedDates, setSelectedDates] = useState<{
+    from: Date | undefined
+    to: Date | undefined
+  }>({
+    from: undefined,
+    to: undefined,
+  })
+  const [selectedTime, setSelectedTime] = useState("")
   const [latestParkingSpaces, setLatestParkingSpaces] = useState<ParkingSpace[]>([])
 
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Get dates from URL parameters
-  const getSelectedDates = () => {
-    const fromDate = searchParams.get("from")
-    const toDate = searchParams.get("to")
-    return {
-      from: fromDate ? new Date(fromDate) : undefined,
-      to: toDate ? new Date(toDate) : undefined,
-    }
-  }
-
-  const selectedDates = getSelectedDates()
-
-  // Update URL with selected dates
-  const updateDatesInURL = (dates: { from: Date | undefined; to: Date | undefined }) => {
-    const params = new URLSearchParams(searchParams.toString())
-
-    if (dates.from) {
-      params.set("from", dates.from.toISOString().split("T")[0])
-    } else {
-      params.delete("from")
-    }
-
-    if (dates.to) {
-      params.set("to", dates.to.toISOString().split("T")[0])
-    } else {
-      params.delete("to")
-    }
-
-    router.replace(`/chat?${params.toString()}`, { scroll: false })
-  }
+  // Generate 30-minute time slots
+  const timeSlots = Array.from({ length: 48 }, (_, i) => {
+    const hour = Math.floor(i / 2)
+    const min = i % 2 === 0 ? "00" : "30"
+    return `${hour.toString().padStart(2, "0")}:${min}`
+  })
 
   // Load initial message on component mount
   useEffect(() => {
-    console.log("🚀 ChatInterface mounted - SIMPLIFIED VERSION")
+    console.log("🚀 ChatInterface mounted - DEBUG VERSION")
     setMessages([
       {
         role: "assistant",
@@ -90,7 +91,9 @@ export default function ChatInterface() {
   // Handle URL query parameter
   useEffect(() => {
     const query = searchParams.get("q")
+    console.log("🔗 URL query parameter:", query)
     if (query && !hasProcessedQuery) {
+      console.log("📝 Processing URL query:", query)
       setHasProcessedQuery(true)
       setTimeout(() => {
         sendMessageWithText(query)
@@ -100,34 +103,22 @@ export default function ChatInterface() {
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
+    console.log("📜 Messages updated, count:", messages.length)
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector("[data-radix-scroll-area-viewport]")
       if (scrollContainer) {
         scrollContainer.scrollTop = scrollContainer.scrollHeight
       }
     }
-  }, [messages])
-
-  // Debug effect to track parking spaces
-  useEffect(() => {
-    const hasAnyParkingSpaces = messages.some((msg) => msg.parkingSpaces && msg.parkingSpaces.length > 0)
-    console.log("🔍 PARKING SPACES DEBUG:", {
-      messagesCount: messages.length,
-      hasAnyParkingSpaces,
-      latestSpacesCount: latestParkingSpaces.length,
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: m.content.substring(0, 50) + "...",
-        hasParkingSpaces: !!m.parkingSpaces,
-        spacesCount: m.parkingSpaces?.length || 0,
-      })),
-    })
-  }, [messages, latestParkingSpaces])
+  }, [messages, bookingStage])
 
   const sendMessageWithText = async (messageText: string) => {
-    console.log("📤 Sending message:", messageText)
+    console.log("📤 sendMessageWithText called with:", messageText)
 
-    if (!messageText.trim() || isLoading) return
+    if (!messageText.trim() || isLoading) {
+      console.log("❌ Message rejected - empty or loading")
+      return
+    }
 
     setError(null)
     setIsLoading(true)
@@ -139,7 +130,40 @@ export default function ChatInterface() {
       timestamp: new Date().toLocaleTimeString(),
     }
 
-    setMessages((prev) => [...prev, newUserMessage])
+    console.log("👤 Adding user message:", newUserMessage)
+    setMessages((prev) => {
+      console.log("📝 Previous messages count:", prev.length)
+      const newMessages = [...prev, newUserMessage]
+      console.log("📝 New messages count:", newMessages.length)
+      return newMessages
+    })
+
+    // Handle simple commands
+    if (messageText.toLowerCase().trim() === "date") {
+      console.log("📅 Date command detected")
+      setBookingStage("date-selection")
+      const dateMessage: Message = {
+        role: "assistant",
+        content: "Perfect! Please select your booking dates below:",
+        timestamp: new Date().toLocaleTimeString(),
+      }
+      setMessages((prev) => [...prev, dateMessage])
+      setIsLoading(false)
+      return
+    }
+
+    if (messageText.toLowerCase().trim() === "time") {
+      console.log("🕐 Time command detected")
+      setBookingStage("time-selection")
+      const timeMessage: Message = {
+        role: "assistant",
+        content: "Great! Now select your preferred arrival time:",
+        timestamp: new Date().toLocaleTimeString(),
+      }
+      setMessages((prev) => [...prev, timeMessage])
+      setIsLoading(false)
+      return
+    }
 
     // Add thinking message for parking searches
     const thinkingMessage: Message = {
@@ -148,10 +172,11 @@ export default function ChatInterface() {
       timestamp: new Date().toLocaleTimeString(),
     }
 
+    console.log("🤔 Adding thinking message")
     setMessages((prev) => [...prev, thinkingMessage])
 
     try {
-      console.log("🌐 Making API call...")
+      console.log("🌐 Making API call to /api/chat")
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -163,52 +188,99 @@ export default function ChatInterface() {
         }),
       })
 
+      console.log("📡 API Response status:", response.status)
+      console.log("📡 API Response ok:", response.ok)
+
       if (!response.ok) {
         const errorText = await response.text()
+        console.error("❌ API Error:", errorText)
         throw new Error(`Server error: ${response.status}`)
       }
 
       const contentType = response.headers.get("content-type")
+      console.log("📄 Content-Type:", contentType)
+
       if (!contentType || !contentType.includes("application/json")) {
         const errorText = await response.text()
+        console.error("❌ Non-JSON response:", errorText)
         throw new Error("Server returned invalid response format")
       }
 
       const data = await response.json()
-      console.log("📥 API Response:", data)
-      console.log("📥 Parking spaces found:", data.parkingSpaces?.length || 0)
+      console.log("📥 FULL API RESPONSE RECEIVED:")
+      console.log("📥 - message:", data.message)
+      console.log("📥 - parkingSpaces:", data.parkingSpaces)
+      console.log("📥 - parkingSpaces length:", data.parkingSpaces?.length)
+      console.log("📥 - parkingSpaces type:", typeof data.parkingSpaces)
+      console.log("📥 - parkingSpaces is array:", Array.isArray(data.parkingSpaces))
 
       if (data.error) {
+        console.error("❌ API returned error:", data.error)
         throw new Error(data.error)
       }
 
       // Replace thinking message with actual response
+      console.log("🔄 Replacing thinking message with API response")
       setMessages((prev) => {
+        console.log("📝 Before replacing thinking message, count:", prev.length)
         const newMessages = [...prev]
-        const responseMessage = {
-          role: "assistant" as const,
+        newMessages[newMessages.length - 1] = {
+          role: "assistant",
           content: data.message || "Sorry, I couldn't process that request.",
           timestamp: new Date().toLocaleTimeString(),
           parkingSpaces: data.parkingSpaces || undefined,
         }
-        newMessages[newMessages.length - 1] = responseMessage
-
-        console.log("📝 Updated messages with parking spaces:", {
-          messageHasSpaces: !!responseMessage.parkingSpaces,
-          spacesCount: responseMessage.parkingSpaces?.length || 0,
-          totalMessages: newMessages.length,
-        })
-
+        console.log("📝 After replacing thinking message, count:", newMessages.length)
+        console.log("📝 Last message now has parkingSpaces:", !!newMessages[newMessages.length - 1].parkingSpaces)
+        console.log("📝 Last message parkingSpaces count:", newMessages[newMessages.length - 1].parkingSpaces?.length)
         return newMessages
       })
 
-      // Store parking spaces for booking
-      if (data.parkingSpaces && data.parkingSpaces.length > 0) {
-        console.log("✅ Storing parking spaces:", data.parkingSpaces.length)
+      // Store parking spaces and add follow-up if found
+      console.log("🔍 CHECKING IF WE SHOULD ADD FOLLOW-UP MESSAGE...")
+      console.log("🔍 - data.parkingSpaces exists:", !!data.parkingSpaces)
+      console.log("🔍 - data.parkingSpaces is array:", Array.isArray(data.parkingSpaces))
+      console.log("🔍 - data.parkingSpaces length:", data.parkingSpaces?.length)
+
+      if (data.parkingSpaces && Array.isArray(data.parkingSpaces) && data.parkingSpaces.length > 0) {
+        console.log("✅ PARKING SPACES FOUND! Setting latest spaces and adding follow-up")
+        console.log(
+          "✅ Spaces to store:",
+          data.parkingSpaces.map((s) => ({ id: s.id, title: s.title })),
+        )
+
         setLatestParkingSpaces(data.parkingSpaces)
+
+        // Add simple follow-up message
+        console.log("⏰ Setting timeout for follow-up message (800ms)")
+        setTimeout(() => {
+          console.log("📨 ADDING FOLLOW-UP MESSAGE NOW!")
+          const followUpMessage: Message = {
+            role: "assistant",
+            content: "Type 'date' to set your booking duration, or click on any space to book directly.",
+            timestamp: new Date().toLocaleTimeString(),
+          }
+          console.log("📨 Follow-up message created:", followUpMessage)
+
+          setMessages((prevMessages) => {
+            console.log("📝 Adding follow-up to messages. Previous count:", prevMessages.length)
+            const newMessages = [...prevMessages, followUpMessage]
+            console.log("📝 New count after follow-up:", newMessages.length)
+            console.log(
+              "📝 All messages after follow-up:",
+              newMessages.map((m) => ({ role: m.role, content: m.content.substring(0, 50) + "..." })),
+            )
+            return newMessages
+          })
+        }, 800)
+      } else {
+        console.log("❌ NO PARKING SPACES FOUND OR INVALID FORMAT")
+        console.log("❌ - data.parkingSpaces:", data.parkingSpaces)
+        console.log("❌ - typeof data.parkingSpaces:", typeof data.parkingSpaces)
+        console.log("❌ - Array.isArray(data.parkingSpaces):", Array.isArray(data.parkingSpaces))
       }
     } catch (error) {
-      console.error("❌ Error sending message:", error)
+      console.error("💥 Error in sendMessageWithText:", error)
       setError(error instanceof Error ? error.message : "Failed to send message")
 
       // Replace thinking message with error message
@@ -224,12 +296,14 @@ export default function ChatInterface() {
         return newMessages
       })
     } finally {
+      console.log("🏁 sendMessageWithText completed, setting loading to false")
       setIsLoading(false)
     }
   }
 
   const sendMessage = async () => {
     const messageText = input.trim()
+    console.log("📤 sendMessage called, clearing input and calling sendMessageWithText")
     setInput("")
     await sendMessageWithText(messageText)
   }
@@ -242,6 +316,7 @@ export default function ChatInterface() {
   }
 
   const handleBookSpace = (spaceId: string) => {
+    console.log("🎯 handleBookSpace called for space:", spaceId)
     // Find the space from latest parking spaces or current message
     const space =
       latestParkingSpaces.find((s) => s.id === spaceId) ||
@@ -250,6 +325,8 @@ export default function ChatInterface() {
         .find((msg) => msg.parkingSpaces?.length)
         ?.parkingSpaces?.find((s) => s.id === spaceId)
 
+    console.log("🎯 Found space:", space ? { id: space.id, title: space.title } : "not found")
+
     if (space) {
       setSelectedSpace(space)
       setIsBookingModalOpen(true)
@@ -257,12 +334,14 @@ export default function ChatInterface() {
   }
 
   const handleSelectSpaceFromMap = (space: ParkingSpace) => {
+    console.log("🗺️ handleSelectSpaceFromMap called for space:", space.id)
     setSelectedSpace(space)
     setIsBookingModalOpen(true)
   }
 
   const handleConfirmBooking = async (bookingData: BookingData) => {
     try {
+      console.log("📋 Creating booking:", bookingData)
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
       const confirmationMessage: Message = {
@@ -278,35 +357,50 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
 
       setMessages((prev) => [...prev, confirmationMessage])
       setSelectedSpace(null)
+      setBookingStage("chat") // Reset to chat mode
     } catch (error) {
-      console.error("Booking error:", error)
+      console.error("💥 Booking error:", error)
       throw error
     }
   }
 
   const handleDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
     if (range) {
-      updateDatesInURL(range)
+      console.log("📅 Date range selected:", range)
+      setSelectedDates(range)
     }
   }
 
   const handleConfirmDates = () => {
-    setShowDatePicker(false)
+    if (selectedDates.from && selectedDates.to) {
+      console.log("✅ Confirming dates:", selectedDates)
+      const confirmationMessage: Message = {
+        role: "assistant",
+        content: `Perfect! I've set your booking dates from ${selectedDates.from.toLocaleDateString()} to ${selectedDates.to.toLocaleDateString()}. Now type 'time' to select your arrival time, or click on any parking space to proceed with booking.`,
+        timestamp: new Date().toLocaleTimeString(),
+      }
+      setMessages((prev) => [...prev, confirmationMessage])
+      setBookingStage("chat")
+    }
   }
 
-  const clearDates = () => {
-    updateDatesInURL({ from: undefined, to: undefined })
+  const handleTimeSelect = () => {
+    if (selectedTime) {
+      console.log("🕐 Time selected:", selectedTime)
+      const timeMessage: Message = {
+        role: "assistant",
+        content: `Excellent! Your arrival time is set to ${selectedTime}. You can now click on any parking space above to complete your booking with these pre-filled details.`,
+        timestamp: new Date().toLocaleTimeString(),
+      }
+      setMessages((prev) => [...prev, timeMessage])
+      setBookingStage("chat")
+    }
   }
 
-  // Check if any message has parking spaces
-  const hasAnyParkingSpaces = messages.some((msg) => msg.parkingSpaces && msg.parkingSpaces.length > 0)
-
-  console.log("🔍 RENDER CHECK:", {
-    hasAnyParkingSpaces,
-    messagesCount: messages.length,
-    latestSpacesCount: latestParkingSpaces.length,
-    shouldShowDatePicker: hasAnyParkingSpaces,
-  })
+  const handleBackToChat = () => {
+    console.log("🔙 Returning to chat mode")
+    setBookingStage("chat")
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-background">
@@ -420,76 +514,38 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
             </div>
           ))}
 
-          {/* Date Picker - Shows when parking spaces are available */}
-          {hasAnyParkingSpaces && (
+          {/* Date Selection Interface */}
+          {bookingStage === "date-selection" && (
             <div className="ml-11">
-              <Card className="w-fit border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20">
+              <Card className="w-fit">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center justify-between text-base">
                     <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4" />🎯 Select Booking Dates (DEBUG: VISIBLE!)
+                      <CalendarIcon className="w-4 h-4" />
+                      Select Booking Dates
                     </div>
-                    <div className="flex items-center gap-2">
-                      {selectedDates.from && selectedDates.to && (
-                        <Button variant="ghost" size="sm" onClick={clearDates}>
-                          Clear
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="sm" onClick={() => setShowDatePicker(!showDatePicker)}>
-                        {showDatePicker ? <X className="w-4 h-4" /> : <CalendarIcon className="w-4 h-4" />}
-                      </Button>
-                    </div>
+                    <Button variant="ghost" size="sm" onClick={handleBackToChat}>
+                      <X className="w-4 h-4" />
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Current Selection Display */}
-                  {selectedDates.from && selectedDates.to ? (
-                    <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-green-700 dark:text-green-400">Dates Selected</p>
-                          <p className="text-sm text-green-600 dark:text-green-300">
-                            {format(selectedDates.from, "MMM dd, yyyy")} - {format(selectedDates.to, "MMM dd, yyyy")}
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowDatePicker(!showDatePicker)}
-                          className="text-green-700 dark:text-green-400"
-                        >
-                          {showDatePicker ? "Hide" : "Change"}
-                        </Button>
+                  <Calendar
+                    mode="range"
+                    selected={selectedDates}
+                    onSelect={handleDateSelect}
+                    numberOfMonths={2}
+                    disabled={(date) => date < new Date()}
+                    className="rounded-md border"
+                  />
+                  {selectedDates.from && selectedDates.to && (
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <div className="text-sm text-muted-foreground">
+                        {selectedDates.from.toLocaleDateString()} - {selectedDates.to.toLocaleDateString()}
                       </div>
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-muted/50 rounded-lg">
-                      <p className="text-sm text-muted-foreground">
-                        Select your booking dates to see pricing and availability
-                      </p>
-                      <Button variant="outline" size="sm" onClick={() => setShowDatePicker(true)} className="mt-2">
-                        <CalendarIcon className="w-4 h-4 mr-2" />
-                        Select Dates
+                      <Button onClick={handleConfirmDates} size="sm">
+                        Confirm Dates
                       </Button>
-                    </div>
-                  )}
-
-                  {/* Calendar */}
-                  {showDatePicker && (
-                    <div className="space-y-3">
-                      <Calendar
-                        mode="range"
-                        selected={selectedDates}
-                        onSelect={handleDateSelect}
-                        numberOfMonths={2}
-                        disabled={(date) => date < new Date()}
-                        className="rounded-md border"
-                      />
-                      {selectedDates.from && selectedDates.to && (
-                        <Button onClick={handleConfirmDates} size="sm" className="w-full">
-                          Confirm Dates
-                        </Button>
-                      )}
                     </div>
                   )}
                 </CardContent>
@@ -497,43 +553,76 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
             </div>
           )}
 
-          {/* DEBUG: Always show this to test */}
-          <div className="ml-11 p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-300 rounded-lg">
-            <h4 className="font-medium text-yellow-800 dark:text-yellow-200">DEBUG INFO:</h4>
-            <p className="text-sm text-yellow-700 dark:text-yellow-300">
-              hasAnyParkingSpaces: {hasAnyParkingSpaces.toString()}
-            </p>
-            <p className="text-sm text-yellow-700 dark:text-yellow-300">
-              Messages with spaces: {messages.filter((m) => m.parkingSpaces?.length).length}
-            </p>
-            <p className="text-sm text-yellow-700 dark:text-yellow-300">
-              Latest spaces count: {latestParkingSpaces.length}
-            </p>
-          </div>
+          {/* Time Selection Interface */}
+          {bookingStage === "time-selection" && (
+            <div className="ml-11">
+              <Card className="w-fit">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Select Arrival Time
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={handleBackToChat}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Select value={selectedTime} onValueChange={setSelectedTime}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Select arrival time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeSlots.map((slot) => (
+                        <SelectItem key={slot} value={slot}>
+                          {slot}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedTime && (
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <div className="text-sm text-muted-foreground">Arrival time: {selectedTime}</div>
+                      <Button onClick={handleTimeSelect} size="sm">
+                        Confirm Time
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
       <div className="p-4 border-t bg-background">
         <div className="max-w-4xl mx-auto">
           {/* Show current selections */}
-          {selectedDates.from && selectedDates.to && (
+          {(selectedDates.from && selectedDates.to) || selectedTime ? (
             <div className="mb-3 p-2 bg-muted/50 rounded-lg text-sm">
-              <div className="flex items-center justify-between">
-                <span>
-                  📅 {format(selectedDates.from, "MMM dd")} - {format(selectedDates.to, "MMM dd, yyyy")}
-                </span>
-                <Button variant="ghost" size="sm" onClick={clearDates}>
-                  <X className="w-3 h-3" />
-                </Button>
+              <div className="flex items-center gap-4">
+                {selectedDates.from && selectedDates.to && (
+                  <span>
+                    📅 {selectedDates.from.toLocaleDateString()} - {selectedDates.to.toLocaleDateString()}
+                  </span>
+                )}
+                {selectedTime && <span>🕐 Arrival: {selectedTime}</span>}
               </div>
             </div>
-          )}
+          ) : null}
 
           <div className="flex gap-2">
             <div className="flex-1 relative">
               <Textarea
                 ref={textareaRef}
-                placeholder="Try: 'I need parking in SE17' or 'Find secure parking near London Bridge'"
+                placeholder={
+                  bookingStage === "date-selection"
+                    ? "Select dates above, or type 'back' to return to chat"
+                    : bookingStage === "time-selection"
+                      ? "Select time above, or type 'back' to return to chat"
+                      : "Try: 'I need parking in SE17' or type 'date' to set booking duration"
+                }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -561,6 +650,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
         }}
         onConfirm={handleConfirmBooking}
         selectedDates={selectedDates}
+        selectedTime={selectedTime}
       />
     </div>
   )

@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +11,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { CalendarIcon, Clock, MapPin, Shield, Star, Car, CreditCard } from "lucide-react"
-import { format } from "date-fns"
 import type { ParkingSpace } from "@/lib/supabase-types"
 
 export interface BookingData {
@@ -37,33 +35,19 @@ interface BookingModalProps {
     from: Date | undefined
     to: Date | undefined
   }
+  selectedTime?: string
 }
 
-export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates }: BookingModalProps) {
-  const searchParams = useSearchParams()
-
-  // Get dates from URL if not provided via props
-  const getSelectedDatesFromURL = () => {
-    const fromDate = searchParams.get("from")
-    const toDate = searchParams.get("to")
-    return {
-      from: fromDate ? new Date(fromDate) : undefined,
-      to: toDate ? new Date(toDate) : undefined,
-    }
-  }
-
-  const urlDates = getSelectedDatesFromURL()
-  const finalSelectedDates = selectedDates || urlDates
-
+export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates, selectedTime }: BookingModalProps) {
   const [dateRange, setDateRange] = useState<{
     from: Date | undefined
     to: Date | undefined
   }>({
-    from: finalSelectedDates?.from || undefined,
-    to: finalSelectedDates?.to || undefined,
+    from: selectedDates?.from || undefined,
+    to: selectedDates?.to || undefined,
   })
 
-  const [startTime, setStartTime] = useState("09:00")
+  const [startTime, setStartTime] = useState(selectedTime || "09:00")
   const [endTime, setEndTime] = useState("17:00")
   const [vehicleReg, setVehicleReg] = useState("")
   const [vehicleType, setVehicleType] = useState("")
@@ -78,16 +62,22 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates 
     return `${hour.toString().padStart(2, "0")}:${min}`
   })
 
-  // Update dates when selectedDates prop changes or URL changes
+  // Update dates when selectedDates prop changes
   useEffect(() => {
-    const dates = selectedDates || urlDates
-    if (dates?.from && dates?.to) {
+    if (selectedDates?.from && selectedDates?.to) {
       setDateRange({
-        from: dates.from,
-        to: dates.to,
+        from: selectedDates.from,
+        to: selectedDates.to,
       })
     }
-  }, [selectedDates, searchParams])
+  }, [selectedDates])
+
+  // Update time when selectedTime prop changes
+  useEffect(() => {
+    if (selectedTime) {
+      setStartTime(selectedTime)
+    }
+  }, [selectedTime])
 
   // Calculate total days and price
   const totalDays =
@@ -95,7 +85,7 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates 
       ? Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24)) + 1
       : 1
 
-  const dailyRate = space?.hourly_rate || space?.daily_rate || space?.price_per_day || 10
+  const dailyRate = space?.hourly_rate || space?.daily_rate || 10
   const totalPrice = totalDays * dailyRate
 
   const handleSubmit = async () => {
@@ -158,17 +148,6 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates 
                   <CalendarIcon className="w-4 h-4" />
                   <Label className="text-sm font-medium">Select Dates</Label>
                 </div>
-
-                {/* Show pre-filled dates notification */}
-                {finalSelectedDates?.from && finalSelectedDates?.to && (
-                  <div className="mb-3 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                    <p className="text-sm text-green-700 dark:text-green-400">
-                      ✅ Dates pre-filled: {format(finalSelectedDates.from, "MMM dd")} -{" "}
-                      {format(finalSelectedDates.to, "MMM dd, yyyy")}
-                    </p>
-                  </div>
-                )}
-
                 <Calendar
                   mode="range"
                   selected={dateRange}
@@ -179,7 +158,7 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates 
                 />
                 {dateRange.from && dateRange.to && (
                   <div className="mt-3 p-2 bg-muted rounded-md text-sm">
-                    {format(dateRange.from, "MMM dd, yyyy")} - {format(dateRange.to, "MMM dd, yyyy")}
+                    {dateRange.from.toLocaleDateString()} - {dateRange.to.toLocaleDateString()}
                     <span className="text-muted-foreground ml-2">({totalDays} days)</span>
                   </div>
                 )}
