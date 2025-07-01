@@ -1,204 +1,268 @@
-"use client"
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { CheckCircle, AlertCircle, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ExternalLink, AlertCircle } from "lucide-react"
 
 export default function CommerceLayerSetupPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Commerce Layer Setup Guide</h1>
-          <p className="text-gray-600">How to connect your real Commerce Layer backend</p>
+          <h1 className="text-3xl font-bold mb-2">🏪 Commerce Layer Setup Guide</h1>
+          <p className="text-gray-600">Complete integration guide for your Commerce Layer backend</p>
         </div>
 
         <div className="space-y-6">
-          {/* Current Status */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-yellow-500" />
-                Current Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">Mock SKUs</Badge>
-                  <span className="text-sm">
-                    Currently using test SKUs: parking_hour_test, parking_day_test, parking_month_test
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">Stripe Only</Badge>
-                  <span className="text-sm">Payment processing through Stripe directly (not Commerce Layer)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">No Inventory</Badge>
-                  <span className="text-sm">No real product catalog or inventory management</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Step 1: Commerce Layer Setup */}
+          {/* Step 1: Environment Variables */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
                   1
                 </span>
-                Set Up Commerce Layer Account
+                Environment Variables
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">Required Steps:</h4>
-                <ul className="space-y-1 text-sm">
-                  <li>
-                    • Create Commerce Layer account at{" "}
-                    <a
-                      href="https://commercelayer.io"
-                      className="text-blue-600 hover:underline"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      commercelayer.io
-                    </a>
-                  </li>
-                  <li>• Set up your organization and market</li>
-                  <li>• Configure Stripe as payment gateway</li>
-                  <li>• Get your API credentials (Client ID, Client Secret, Base Endpoint)</li>
-                </ul>
+              <p className="text-gray-600">Add these environment variables to your Vercel deployment:</p>
+
+              <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm">
+                <div className="space-y-1">
+                  <div>COMMERCE_LAYER_CLIENT_ID=your_client_id_here</div>
+                  <div>COMMERCE_LAYER_CLIENT_SECRET=your_client_secret_here</div>
+                  <div>COMMERCE_LAYER_BASE_URL=https://yourdomain.commercelayer.io</div>
+                </div>
               </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">Environment Variables Needed:</h4>
-                <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
-                  {`COMMERCE_LAYER_CLIENT_ID=your_client_id
-COMMERCE_LAYER_CLIENT_SECRET=your_client_secret  
-COMMERCE_LAYER_BASE_ENDPOINT=https://your-org.commercelayer.io
-COMMERCE_LAYER_MARKET_ID=your_market_id`}
-                </pre>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Step 2: Create Products */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
-                  2
-                </span>
-                Create Products in Commerce Layer
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">Create These SKUs in your Commerce Layer dashboard:</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between items-center p-2 bg-white rounded">
-                    <span>
-                      <strong>parking-hour-premium</strong> - Hourly Premium Parking
-                    </span>
-                    <Badge>£8.00</Badge>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-white rounded">
-                    <span>
-                      <strong>parking-day-premium</strong> - Daily Premium Parking
-                    </span>
-                    <Badge>£45.00</Badge>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-white rounded">
-                    <span>
-                      <strong>parking-month-premium</strong> - Monthly Premium Parking
-                    </span>
-                    <Badge>£280.00</Badge>
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-yellow-800">Where to find these:</p>
+                    <ul className="text-sm text-yellow-700 mt-1 space-y-1">
+                      <li>• Log into your Commerce Layer dashboard</li>
+                      <li>• Go to Settings → Applications</li>
+                      <li>• Create or select an application</li>
+                      <li>• Copy the Client ID and Client Secret</li>
+                    </ul>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Step 3: Update Code */}
+          {/* Step 2: SKU Setup */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
+                  2
+                </span>
+                Create SKUs in Commerce Layer
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-gray-600">Create these SKUs in your Commerce Layer catalog:</p>
+
+              <div className="grid gap-4">
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium">Hourly Parking</h3>
+                    <Badge variant="outline">Required</Badge>
+                  </div>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <p>
+                      <strong>SKU Code:</strong> PARKING_HOUR_DOWNTOWN
+                    </p>
+                    <p>
+                      <strong>Name:</strong> Hourly Parking - Downtown
+                    </p>
+                    <p>
+                      <strong>Description:</strong> Perfect for short visits
+                    </p>
+                    <p>
+                      <strong>Price:</strong> Set your desired hourly rate
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium">Daily Parking</h3>
+                    <Badge variant="outline">Required</Badge>
+                  </div>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <p>
+                      <strong>SKU Code:</strong> PARKING_DAY_DOWNTOWN
+                    </p>
+                    <p>
+                      <strong>Name:</strong> Daily Parking - Downtown
+                    </p>
+                    <p>
+                      <strong>Description:</strong> All-day parking solution
+                    </p>
+                    <p>
+                      <strong>Price:</strong> Set your desired daily rate
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium">Monthly Parking</h3>
+                    <Badge variant="outline">Required</Badge>
+                  </div>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <p>
+                      <strong>SKU Code:</strong> PARKING_MONTH_DOWNTOWN
+                    </p>
+                    <p>
+                      <strong>Name:</strong> Monthly Parking - Downtown
+                    </p>
+                    <p>
+                      <strong>Description:</strong> Long-term parking option
+                    </p>
+                    <p>
+                      <strong>Price:</strong> Set your desired monthly rate
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-blue-800">SKU Creation Steps:</p>
+                    <ol className="text-sm text-blue-700 mt-1 space-y-1 list-decimal list-inside">
+                      <li>Go to Catalog → SKUs in your Commerce Layer dashboard</li>
+                      <li>Click "New SKU" for each parking option</li>
+                      <li>Enter the exact SKU codes shown above</li>
+                      <li>Set prices in your preferred currency (GBP recommended)</li>
+                      <li>Make sure SKUs are active and available</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Step 3: Payment Gateway */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
                   3
                 </span>
-                Update API Integration
+                Payment Gateway Setup
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-yellow-50 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">Code Changes Required:</h4>
-                <ul className="space-y-1 text-sm">
-                  <li>
-                    • Install Commerce Layer SDK:{" "}
-                    <code className="bg-white px-1 rounded">npm install @commercelayer/sdk</code>
-                  </li>
-                  <li>• Replace mock SKUs with real Commerce Layer SKUs</li>
-                  <li>• Update API routes to use Commerce Layer API instead of direct Stripe</li>
-                  <li>• Add proper inventory management</li>
-                  <li>• Implement webhook handling for order updates</li>
-                </ul>
-              </div>
+              <p className="text-gray-600">Configure your payment processing in Commerce Layer:</p>
 
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">Updated SKU Mapping:</h4>
-                <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
-                  {`// Replace in create-order/route.ts
-const skuPrices: Record<string, number> = {
-  // Remove these test SKUs:
-  // "parking_hour_test": 8,
-  // "parking_day_test": 45, 
-  // "parking_month_test": 280,
-  
-  // Add your real Commerce Layer SKUs:
-  "parking-hour-premium": 8,
-  "parking-day-premium": 45,
-  "parking-month-premium": 280,
-}`}
-                </pre>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 border rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <div>
+                    <p className="font-medium">Stripe Integration</p>
+                    <p className="text-sm text-gray-600">Connect your Stripe account in Commerce Layer settings</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 border rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <div>
+                    <p className="font-medium">Payment Methods</p>
+                    <p className="text-sm text-gray-600">Enable credit cards, digital wallets, etc.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 border rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <div>
+                    <p className="font-medium">Webhooks</p>
+                    <p className="text-sm text-gray-600">Set up webhooks for order status updates</p>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Step 4: Test */}
+          {/* Step 4: Testing */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
                   4
                 </span>
-                Test Integration
+                Test Your Integration
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex gap-4">
-                <Button asChild>
-                  <a href="/test-reserve">Test Current Setup</a>
+              <p className="text-gray-600">Once everything is set up, test your integration:</p>
+
+              <div className="grid gap-3">
+                <Button variant="outline" className="justify-start bg-transparent" asChild>
+                  <a href="/test-reserve">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Test Commerce Layer Integration
+                  </a>
                 </Button>
-                <Button variant="outline" asChild>
-                  <a href="https://docs.commercelayer.io" target="_blank" rel="noopener noreferrer">
-                    Commerce Layer Docs <ExternalLink className="w-4 h-4 ml-1" />
+
+                <Button variant="outline" className="justify-start bg-transparent" asChild>
+                  <a href="/api/commerce-layer/create-order" target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Test API Endpoint
                   </a>
                 </Button>
               </div>
 
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">Testing Checklist:</h4>
-                <ul className="space-y-1 text-sm">
-                  <li>• ✅ API endpoints respond correctly</li>
-                  <li>• ❌ Real Commerce Layer SKUs configured</li>
-                  <li>• ❌ Inventory management working</li>
-                  <li>• ❌ Order webhooks implemented</li>
-                  <li>• ❌ Production payment processing</li>
-                </ul>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-green-800">What to expect:</p>
+                    <ul className="text-sm text-green-700 mt-1 space-y-1">
+                      <li>✅ Customer creation in Commerce Layer</li>
+                      <li>✅ Order creation with line items</li>
+                      <li>✅ SKU validation and pricing</li>
+                      <li>✅ Payment processing through your gateway</li>
+                      <li>✅ Order confirmation and status updates</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Troubleshooting */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-orange-600" />
+                Troubleshooting
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="border-l-4 border-red-500 pl-4">
+                  <p className="font-medium text-red-800">SKU not found error</p>
+                  <p className="text-sm text-red-600">
+                    Make sure the SKU codes match exactly and are active in Commerce Layer
+                  </p>
+                </div>
+
+                <div className="border-l-4 border-yellow-500 pl-4">
+                  <p className="font-medium text-yellow-800">Authentication failed</p>
+                  <p className="text-sm text-yellow-600">Check your Client ID and Client Secret are correct</p>
+                </div>
+
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <p className="font-medium text-blue-800">Payment processing issues</p>
+                  <p className="text-sm text-blue-600">
+                    Verify your payment gateway is properly configured in Commerce Layer
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log("📝 Create order request:", body)
+    console.log("🚀 Commerce Layer - Create order request:", body)
 
     const { sku, quantity = 1, customerDetails, bookingDetails } = body
 
@@ -13,77 +13,117 @@ export async function POST(request: NextRequest) {
     }
 
     if (!customerDetails?.name || !customerDetails?.email) {
+      return NextResponse.json({ error: "Customer name and email are required" }, { status: 400 })
+    }
+
+    // Check Commerce Layer environment variables
+    const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
+    const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
+    const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL || "https://yourdomain.commercelayer.io"
+
+    if (!clClientId || !clClientSecret) {
       return NextResponse.json(
         {
-          error: "Customer name and email are required",
+          error: "Commerce Layer not configured",
+          details: "Missing COMMERCE_LAYER_CLIENT_ID or COMMERCE_LAYER_CLIENT_SECRET",
         },
-        { status: 400 },
+        { status: 500 },
       )
     }
 
-    // SKU to price mapping - these should match your Commerce Layer products
-    const skuPrices: Record<string, number> = {
-      parking_hour_test: 8,
-      parking_day_test: 45,
-      parking_month_test: 280,
-      // Add your real Commerce Layer SKUs here
-      "parking-hour": 8,
-      "parking-day": 45,
-      "parking-month": 280,
-    }
+    // Import Commerce Layer SDK dynamically
+    const { CommerceLayer, Order, LineItem, Customer } = await import("@commercelayer/sdk")
 
-    const price = skuPrices[sku]
-    if (!price) {
-      return NextResponse.json(
-        {
-          error: `Unknown SKU: ${sku}. Available SKUs: ${Object.keys(skuPrices).join(", ")}`,
-        },
-        { status: 400 },
-      )
-    }
+    // Initialize Commerce Layer client
+    const cl = CommerceLayer({
+      organization: clBaseUrl.replace("https://", "").replace(".commercelayer.io", ""),
+      accessToken: await getAccessToken(clClientId, clClientSecret, clBaseUrl),
+    })
 
-    const totalAmount = price * quantity
+    console.log("✅ Commerce Layer client initialized")
 
-    // Check if Stripe is configured
-    if (!process.env.STRIPE_SECRET_KEY) {
-      console.warn("⚠️ Stripe not configured - simulating order creation")
-
-      // Simulate successful order creation for testing
-      const mockOrderId = `test_order_${Date.now()}`
-      const mockPaymentIntentId = `pi_test_${Date.now()}`
-
-      return NextResponse.json({
-        success: true,
-        orderId: mockOrderId,
-        paymentIntentId: mockPaymentIntentId,
-        clientSecret: `${mockPaymentIntentId}_secret_test`,
-        amount: totalAmount,
-        currency: "gbp",
-        sku,
-        message: "Test mode - Stripe not configured",
+    // Step 1: Create or get customer
+    let customer
+    try {
+      // Try to find existing customer by email
+      const existingCustomers = await cl.customers.list({
+        filters: { email_eq: customerDetails.email },
       })
+
+      if (existingCustomers.length > 0) {
+        customer = existingCustomers[0]
+        console.log("✅ Found existing customer:", customer.id)
+      } else {
+        // Create new customer
+        customer = await cl.customers.create({
+          email: customerDetails.email,
+          first_name: customerDetails.name.split(" ")[0] || customerDetails.name,
+          last_name: customerDetails.name.split(" ").slice(1).join(" ") || "",
+          metadata: {
+            vehicle_registration: bookingDetails?.vehicleReg || "",
+            source: "parkpal_booking",
+          },
+        })
+        console.log("✅ Created new customer:", customer.id)
+      }
+    } catch (customerError) {
+      console.error("❌ Customer creation error:", customerError)
+      return NextResponse.json({ error: "Failed to create/find customer", details: customerError }, { status: 500 })
     }
 
-    // Initialize Stripe dynamically
-    const Stripe = (await import("stripe")).default
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2024-12-18.acacia",
+    // Step 2: Create order
+    let order
+    try {
+      order = await cl.orders.create({
+        customer: cl.customers.relationship(customer.id),
+        currency_code: "GBP",
+        language_code: "en",
+        metadata: {
+          booking_type: "parking",
+          vehicle_registration: bookingDetails?.vehicleReg || "",
+          start_date: bookingDetails?.startDate || new Date().toISOString().split("T")[0],
+          start_time: bookingDetails?.startTime || "09:00",
+          customer_name: customerDetails.name,
+          source: "parkpal_test",
+        },
+      })
+      console.log("✅ Created order:", order.id)
+    } catch (orderError) {
+      console.error("❌ Order creation error:", orderError)
+      return NextResponse.json({ error: "Failed to create order", details: orderError }, { status: 500 })
+    }
+
+    // Step 3: Add line item (SKU) to order
+    try {
+      const lineItem = await cl.line_items.create({
+        order: cl.orders.relationship(order.id),
+        sku_code: sku,
+        quantity: quantity,
+        metadata: {
+          vehicle_registration: bookingDetails?.vehicleReg || "",
+          booking_duration: sku.includes("hour") ? "1 hour" : sku.includes("day") ? "1 day" : "1 month",
+        },
+      })
+      console.log("✅ Added line item:", lineItem.id, "SKU:", sku)
+    } catch (lineItemError) {
+      console.error("❌ Line item creation error:", lineItemError)
+      return NextResponse.json(
+        {
+          error: "Failed to add SKU to order",
+          details: lineItemError,
+          sku: sku,
+          message: "Make sure this SKU exists in your Commerce Layer catalog",
+        },
+        { status: 500 },
+      )
+    }
+
+    // Step 4: Get updated order with totals
+    const updatedOrder = await cl.orders.retrieve(order.id, {
+      include: ["line_items", "line_items.item"],
     })
 
-    // Create Stripe Payment Intent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalAmount * 100, // Convert to pence
-      currency: "gbp",
-      metadata: {
-        sku,
-        quantity: quantity.toString(),
-        customerName: customerDetails.name,
-        customerEmail: customerDetails.email,
-        vehicleReg: bookingDetails?.vehicleReg || "",
-      },
-    })
-
-    // Try to store in database if configured
+    // Step 5: Store booking in database
     let bookingId = null
     try {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -96,16 +136,16 @@ export async function POST(request: NextRequest) {
         const { data, error } = await supabase
           .from("bookings")
           .insert({
-            user_id: "test-user",
+            user_id: customer.id,
             space_id: "test-space-1",
             customer_name: customerDetails.name,
             customer_email: customerDetails.email,
             customer_phone: customerDetails.phone || null,
             vehicle_registration: bookingDetails?.vehicleReg || null,
             vehicle_type: bookingDetails?.vehicleType || "car",
-            total_price: totalAmount,
+            total_price: Number.parseFloat(updatedOrder.total_amount_cents) / 100,
             status: "pending",
-            payment_intent_id: paymentIntent.id,
+            commerce_layer_order_id: order.id,
             sku: sku,
             duration_type: sku.includes("hour") ? "hour" : sku.includes("day") ? "day" : "month",
             start_time: new Date().toISOString(),
@@ -128,25 +168,58 @@ export async function POST(request: NextRequest) {
 
     const response = {
       success: true,
-      orderId: bookingId || `order_${Date.now()}`,
-      paymentIntentId: paymentIntent.id,
-      clientSecret: paymentIntent.client_secret,
-      amount: totalAmount,
-      currency: "gbp",
-      sku,
+      orderId: order.id,
+      bookingId: bookingId,
+      commerceLayerOrderId: order.id,
+      customerId: customer.id,
+      amount: Number.parseFloat(updatedOrder.total_amount_cents) / 100,
+      currency: updatedOrder.currency_code,
+      sku: sku,
+      status: updatedOrder.status,
+      paymentRequired: updatedOrder.total_amount_cents > 0,
+      // For Stripe integration, we'll need to create payment intent in next step
+      clientSecret: null, // Will be set when payment method is added
     }
 
-    console.log("✅ Create order response:", response)
+    console.log("✅ Commerce Layer order created successfully:", response)
     return NextResponse.json(response)
   } catch (error) {
-    console.error("❌ Create order error:", error)
+    console.error("❌ Commerce Layer create order error:", error)
     return NextResponse.json(
       {
-        error: "Failed to create order",
+        error: "Failed to create Commerce Layer order",
         details: error instanceof Error ? error.message : "Unknown error",
         success: false,
       },
       { status: 500 },
     )
+  }
+}
+
+// Helper function to get Commerce Layer access token
+async function getAccessToken(clientId: string, clientSecret: string, baseUrl: string): Promise<string> {
+  try {
+    const response = await fetch(`${baseUrl}/oauth/token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    console.log("✅ Commerce Layer access token obtained")
+    return data.access_token
+  } catch (error) {
+    console.error("❌ Failed to get Commerce Layer access token:", error)
+    throw error
   }
 }
