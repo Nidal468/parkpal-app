@@ -2,106 +2,77 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
-    // Check for required environment variables at runtime
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (!stripeSecretKey) {
-      return NextResponse.json({ error: "Payment processing not configured" }, { status: 500 })
-    }
-
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
-    }
-
-    // Dynamic imports to avoid build-time initialization
-    const Stripe = (await import("stripe")).default
-    const { createClient } = await import("@supabase/supabase-js")
-
-    // Initialize clients at runtime
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: "2024-12-18.acacia",
-    })
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
     const body = await request.json()
-    const { sku, quantity, parkingSpace, bookingDetails, duration, rate } = body
+    const { sku, quantity, customerDetails, bookingDetails, spaceId } = body
 
-    // Validate required fields
-    if (!sku || !parkingSpace || !bookingDetails || !rate) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    // Mock Commerce Layer order creation
+    // In a real implementation, you would:
+    // 1. Authenticate with Commerce Layer
+    // 2. Create a customer if needed
+    // 3. Add items to cart
+    // 4. Create an order
+    // 5. Get payment intent from Stripe via Commerce Layer
+
+    console.log("Creating Commerce Layer order:", {
+      sku,
+      quantity,
+      customerDetails,
+      bookingDetails,
+      spaceId,
+    })
+
+    // Mock successful response with client secret
+    // In reality, this would come from Commerce Layer/Stripe integration
+    const mockOrder = {
+      success: true,
+      orderId: `cl_order_${Date.now()}`,
+      clientSecret: `pi_mock_${Date.now()}_secret_mock`,
+      amount: getAmountForSKU(sku) * quantity,
+      currency: "gbp",
     }
 
-    // Create Stripe payment intent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(rate * 100), // Convert to cents
-      currency: "usd",
-      metadata: {
-        sku,
-        parkingSpaceId: parkingSpace.id,
-        duration,
-        customerName: bookingDetails.customerName,
-        vehicleReg: bookingDetails.vehicleReg,
+    // Store booking details in database
+    await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/bookings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: process.env.SUPABASE_ANON_KEY!,
+        Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY!}`,
       },
+      body: JSON.stringify({
+        space_id: spaceId,
+        customer_name: customerDetails.name,
+        customer_email: customerDetails.email,
+        customer_phone: customerDetails.phone,
+        vehicle_registration: bookingDetails.vehicleReg,
+        vehicle_type: bookingDetails.vehicleType,
+        start_date: bookingDetails.startDate,
+        start_time: bookingDetails.startTime,
+        duration_type: sku.replace("parking-", ""),
+        quantity: quantity,
+        total_amount: mockOrder.amount,
+        status: "pending",
+        special_requests: bookingDetails.specialRequests,
+        commerce_layer_order_id: mockOrder.orderId,
+      }),
     })
 
-    // Calculate end time
-    const startDateTime = new Date(`${bookingDetails.startDate}T${bookingDetails.startTime}:00`)
-    const endDateTime = new Date(startDateTime)
-
-    switch (duration) {
-      case "hour":
-        endDateTime.setHours(endDateTime.getHours() + 1)
-        break
-      case "day":
-        endDateTime.setDate(endDateTime.getDate() + 1)
-        break
-      case "month":
-        endDateTime.setMonth(endDateTime.getMonth() + 1)
-        break
-      default:
-        endDateTime.setHours(endDateTime.getHours() + 1)
-    }
-
-    // Store preliminary booking data
-    const bookingData = {
-      user_id: "temp-user", // In real app, get from auth
-      space_id: parkingSpace.id,
-      start_time: startDateTime.toISOString(),
-      end_time: endDateTime.toISOString(),
-      total_price: rate,
-      status: "pending",
-      customer_name: bookingDetails.customerName,
-      customer_email: bookingDetails.email,
-      customer_phone: bookingDetails.phone || null,
-      vehicle_registration: bookingDetails.vehicleReg,
-      vehicle_type: bookingDetails.vehicleType || null,
-      special_requests: bookingDetails.specialRequests || null,
-      payment_intent_id: paymentIntent.id,
-      sku: sku,
-      duration_type: duration,
-      created_at: new Date().toISOString(),
-    }
-
-    const { data: booking, error: bookingError } = await supabase.from("bookings").insert(bookingData).select().single()
-
-    if (bookingError) {
-      console.error("Booking creation error:", bookingError)
-      return NextResponse.json({ error: "Failed to create booking record" }, { status: 500 })
-    }
-
-    return NextResponse.json({
-      orderId: booking.id,
-      paymentIntentId: paymentIntent.id,
-      clientSecret: paymentIntent.client_secret,
-    })
+    return NextResponse.json(mockOrder)
   } catch (error) {
-    console.error("Create order error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error creating Commerce Layer order:", error)
+    return NextResponse.json({ success: false, error: "Failed to create order" }, { status: 500 })
+  }
+}
+
+function getAmountForSKU(sku: string): number {
+  switch (sku) {
+    case "parking-hour":
+      return 300 // £3.00 in pence
+    case "parking-day":
+      return 1500 // £15.00 in pence
+    case "parking-month":
+      return 30000 // £300.00 in pence
+    default:
+      return 1500
   }
 }

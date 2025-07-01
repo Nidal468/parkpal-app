@@ -3,87 +3,84 @@
 import type React from "react"
 
 import { useState } from "react"
-import { loadStripe } from "@stripe/stripe-js"
-import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, CreditCard, CheckCircle, MapPin, Car } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { ArrowLeft, CreditCard, Shield, MapPin } from "lucide-react"
+import { loadStripe } from "@stripe/stripe-js"
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js"
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "pk_test_51234567890")
-
-interface ParkingSpace {
-  id: string
-  name: string
-  address: string
-  description: string
-  hourlyRate: number
-  dailyRate: number
-  monthlyRate: number
-  rating: number
-  reviews: number
-  features: string[]
-  coordinates: { lat: number; lng: number }
-}
+// Initialize Stripe
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
 interface CommerceLayerCheckoutProps {
-  parkingSpace: ParkingSpace
-  duration: "hour" | "day" | "month"
-  rate: number
+  space: any
   sku: string
+  duration: "hour" | "day" | "month"
+  price: number
   onBack: () => void
 }
 
-type CheckoutStep = "details" | "payment" | "confirmation"
-
 interface BookingDetails {
   customerName: string
-  email: string
-  phone: string
+  customerEmail: string
+  customerPhone: string
   vehicleReg: string
   vehicleType: string
   specialRequests: string
+  quantity: number
   startDate: string
   startTime: string
 }
 
-function CheckoutForm({
-  parkingSpace,
-  duration,
-  rate,
-  sku,
-  bookingDetails,
-  onSuccess,
-  onError,
-}: {
-  parkingSpace: ParkingSpace
-  duration: string
-  rate: number
-  sku: string
-  bookingDetails: BookingDetails
-  onSuccess: (bookingId: string) => void
-  onError: (error: string) => void
-}) {
+export function CommerceLayerCheckout({ space, sku, duration, price, onBack }: CommerceLayerCheckoutProps) {
+  return (
+    <Elements stripe={stripePromise}>
+      <CheckoutForm space={space} sku={sku} duration={duration} price={price} onBack={onBack} />
+    </Elements>
+  )
+}
+
+function CheckoutForm({ space, sku, duration, price, onBack }: CommerceLayerCheckoutProps) {
   const stripe = useStripe()
   const elements = useElements()
-  const [processing, setProcessing] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [step, setStep] = useState<"details" | "payment" | "confirmation">("details")
+  const [bookingDetails, setBookingDetails] = useState<BookingDetails>({
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    vehicleReg: "",
+    vehicleType: "car",
+    specialRequests: "",
+    quantity: 1,
+    startDate: new Date().toISOString().split("T")[0],
+    startTime: "09:00",
+  })
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault()
+  const totalPrice = price * bookingDetails.quantity
+
+  const handleDetailsSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setStep("payment")
+  }
+
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
 
     if (!stripe || !elements) {
       return
     }
 
-    setProcessing(true)
+    setIsProcessing(true)
 
     try {
-      // Create order
+      // Create Commerce Layer order
       const orderResponse = await fetch("/api/commerce-layer/create-order", {
         method: "POST",
         headers: {
@@ -91,327 +88,327 @@ function CheckoutForm({
         },
         body: JSON.stringify({
           sku,
-          quantity: 1,
-          parkingSpace,
-          bookingDetails,
-          duration,
-          rate,
+          quantity: bookingDetails.quantity,
+          customerDetails: {
+            name: bookingDetails.customerName,
+            email: bookingDetails.customerEmail,
+            phone: bookingDetails.customerPhone,
+          },
+          bookingDetails: {
+            vehicleReg: bookingDetails.vehicleReg,
+            vehicleType: bookingDetails.vehicleType,
+            startDate: bookingDetails.startDate,
+            startTime: bookingDetails.startTime,
+            specialRequests: bookingDetails.specialRequests,
+          },
+          spaceId: space.id,
         }),
       })
 
-      const orderData = await orderResponse.json()
+      const order = await orderResponse.json()
 
-      if (!orderResponse.ok) {
-        throw new Error(orderData.error || "Failed to create order")
+      if (!order.success) {
+        throw new Error(order.error || "Failed to create order")
       }
 
-      // Process payment
+      // Process payment with Stripe
       const cardElement = elements.getElement(CardElement)
+
       if (!cardElement) {
         throw new Error("Card element not found")
       }
 
-      const { error, paymentMethod } = await stripe.createPaymentMethod({
-        type: "card",
-        card: cardElement,
-        billing_details: {
-          name: bookingDetails.customerName,
-          email: bookingDetails.email,
-          phone: bookingDetails.phone,
+      const { error, paymentIntent } = await stripe.confirmCardPayment(order.clientSecret, {
+        payment_method: {
+          card: cardElement,
+          billing_details: {
+            name: bookingDetails.customerName,
+            email: bookingDetails.customerEmail,
+            phone: bookingDetails.customerPhone,
+          },
         },
       })
 
       if (error) {
-        throw new Error(error.message)
+        throw error
       }
 
-      // Confirm payment
-      const confirmResponse = await fetch("/api/commerce-layer/confirm-order", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          orderId: orderData.orderId,
-          paymentMethodId: paymentMethod.id,
-        }),
-      })
+      if (paymentIntent?.status === "succeeded") {
+        // Confirm the order in Commerce Layer
+        await fetch("/api/commerce-layer/confirm-order", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            orderId: order.orderId,
+            paymentIntentId: paymentIntent.id,
+          }),
+        })
 
-      const confirmData = await confirmResponse.json()
-
-      if (!confirmResponse.ok) {
-        throw new Error(confirmData.error || "Payment failed")
+        setStep("confirmation")
       }
-
-      onSuccess(confirmData.bookingId)
     } catch (error) {
-      onError(error instanceof Error ? error.message : "An error occurred")
+      console.error("Payment failed:", error)
+      alert("Payment failed. Please try again.")
     } finally {
-      setProcessing(false)
+      setIsProcessing(false)
     }
   }
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h3 className="font-medium mb-2">Payment Details</h3>
-        <div className="bg-white p-3 rounded border">
-          <CardElement
-            options={{
-              style: {
-                base: {
-                  fontSize: "16px",
-                  color: "#424770",
-                  "::placeholder": {
-                    color: "#aab7c4",
-                  },
-                },
-              },
-            }}
-          />
+  const cardElementOptions = {
+    style: {
+      base: {
+        fontSize: "16px",
+        color: "#424770",
+        "::placeholder": {
+          color: "#aab7c4",
+        },
+      },
+    },
+  }
+
+  if (step === "confirmation") {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="container mx-auto px-4 max-w-2xl">
+          <Card className="text-center">
+            <CardContent className="pt-8 pb-8">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-8 h-8 text-green-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-green-600 mb-2">Booking Confirmed!</h2>
+              <p className="text-gray-600 mb-6">
+                Your parking space has been successfully reserved. You'll receive a confirmation email shortly.
+              </p>
+              <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+                <h3 className="font-semibold mb-2">Booking Details</h3>
+                <div className="space-y-1 text-sm">
+                  <p>
+                    <strong>Space:</strong> {space.title}
+                  </p>
+                  <p>
+                    <strong>Duration:</strong> {bookingDetails.quantity} {duration}(s)
+                  </p>
+                  <p>
+                    <strong>Vehicle:</strong> {bookingDetails.vehicleReg} ({bookingDetails.vehicleType})
+                  </p>
+                  <p>
+                    <strong>Start:</strong> {bookingDetails.startDate} at {bookingDetails.startTime}
+                  </p>
+                  <p>
+                    <strong>Total Paid:</strong> £{totalPrice}
+                  </p>
+                </div>
+              </div>
+              <Button onClick={() => (window.location.href = "/")} className="w-full">
+                Return to Home
+              </Button>
+            </CardContent>
+          </Card>
         </div>
-        <p className="text-xs text-gray-500 mt-2">Test card: 4242 4242 4242 4242 (any future date, any CVC)</p>
       </div>
-
-      <Button type="submit" disabled={!stripe || processing} className="w-full" size="lg">
-        {processing ? "Processing..." : `Pay $${rate}`}
-      </Button>
-    </form>
-  )
-}
-
-export function CommerceLayerCheckout({ parkingSpace, duration, rate, sku, onBack }: CommerceLayerCheckoutProps) {
-  const [step, setStep] = useState<CheckoutStep>("details")
-  const [bookingDetails, setBookingDetails] = useState<BookingDetails>({
-    customerName: "",
-    email: "",
-    phone: "",
-    vehicleReg: "",
-    vehicleType: "car",
-    specialRequests: "",
-    startDate: new Date().toISOString().split("T")[0],
-    startTime: "09:00",
-  })
-  const [bookingId, setBookingId] = useState<string>("")
-  const { toast } = useToast()
-
-  const handleDetailsSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!bookingDetails.customerName || !bookingDetails.email || !bookingDetails.vehicleReg) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      })
-      return
-    }
-    setStep("payment")
-  }
-
-  const handlePaymentSuccess = (id: string) => {
-    setBookingId(id)
-    setStep("confirmation")
-    toast({
-      title: "Payment Successful!",
-      description: "Your parking space has been reserved",
-    })
-  }
-
-  const handlePaymentError = (error: string) => {
-    toast({
-      title: "Payment Failed",
-      description: error,
-      variant: "destructive",
-    })
+    )
   }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="container mx-auto px-4 max-w-4xl">
         {/* Header */}
-        <div className="mb-8">
-          <Button variant="ghost" onClick={onBack} className="mb-4">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Space Details
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="ghost" onClick={onBack} className="flex items-center gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Back
           </Button>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Complete Your Booking</h1>
-          <div className="flex items-center space-x-4">
-            <Badge
-              variant={
-                step === "details" ? "default" : step === "payment" || step === "confirmation" ? "secondary" : "outline"
-              }
-            >
-              1. Details
-            </Badge>
-            <Badge variant={step === "payment" ? "default" : step === "confirmation" ? "secondary" : "outline"}>
-              2. Payment
-            </Badge>
-            <Badge variant={step === "confirmation" ? "default" : "outline"}>3. Confirmation</Badge>
-          </div>
+          <h1 className="text-2xl font-bold">Complete Your Booking</h1>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {/* Booking Summary */}
-          <div className="md:col-span-1">
-            <Card>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Booking Summary */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-4">
               <CardHeader>
-                <CardTitle className="text-lg">Booking Summary</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5" />
+                  Booking Summary
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <h4 className="font-medium">{parkingSpace.name}</h4>
-                  <p className="text-sm text-gray-600 flex items-center">
-                    <MapPin className="h-3 w-3 mr-1" />
-                    {parkingSpace.address}
-                  </p>
+                  <h4 className="font-medium">{space.title}</h4>
+                  <p className="text-sm text-gray-600">{space.address}</p>
                 </div>
 
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm">Duration:</span>
-                    <Badge>{duration}ly</Badge>
+                <Separator />
+
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Duration:</span>
+                    <span>{duration}ly</span>
                   </div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm">Rate:</span>
-                    <span className="font-medium">${rate}</span>
+                  <div className="flex justify-between">
+                    <span>Quantity:</span>
+                    <span>
+                      {bookingDetails.quantity} {duration}(s)
+                    </span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">SKU:</span>
-                    <span className="text-xs text-gray-500">{sku}</span>
+                  <div className="flex justify-between">
+                    <span>Rate:</span>
+                    <span>
+                      £{price}/{duration}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>SKU:</span>
+                    <Badge variant="outline">{sku}</Badge>
                   </div>
                 </div>
 
-                {step !== "details" && bookingDetails.customerName && (
-                  <div className="border-t pt-4">
-                    <h5 className="font-medium mb-2">Customer Details</h5>
-                    <div className="text-sm space-y-1">
-                      <p>{bookingDetails.customerName}</p>
-                      <p>{bookingDetails.email}</p>
-                      <p>{bookingDetails.phone}</p>
-                      <div className="flex items-center">
-                        <Car className="h-3 w-3 mr-1" />
-                        {bookingDetails.vehicleReg}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <Separator />
 
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center font-bold">
-                    <span>Total:</span>
-                    <span className="text-lg">${rate}</span>
-                  </div>
+                <div className="flex justify-between font-bold text-lg">
+                  <span>Total:</span>
+                  <span>£{totalPrice}</span>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Main Content */}
-          <div className="md:col-span-2">
+          {/* Right Column - Forms */}
+          <div className="lg:col-span-2">
             {step === "details" && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Car className="h-5 w-5 mr-2" />
-                    Booking Details
-                  </CardTitle>
-                  <CardDescription>Please provide your details and vehicle information</CardDescription>
+                  <CardTitle>Booking Details</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleDetailsSubmit} className="space-y-6">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="customerName">Full Name *</Label>
-                        <Input
-                          id="customerName"
-                          value={bookingDetails.customerName}
-                          onChange={(e) => setBookingDetails({ ...bookingDetails, customerName: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="email">Email Address *</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={bookingDetails.email}
-                          onChange={(e) => setBookingDetails({ ...bookingDetails, email: e.target.value })}
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="phone">Phone Number</Label>
-                        <Input
-                          id="phone"
-                          type="tel"
-                          value={bookingDetails.phone}
-                          onChange={(e) => setBookingDetails({ ...bookingDetails, phone: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="vehicleReg">Vehicle Registration *</Label>
-                        <Input
-                          id="vehicleReg"
-                          value={bookingDetails.vehicleReg}
-                          onChange={(e) => setBookingDetails({ ...bookingDetails, vehicleReg: e.target.value })}
-                          placeholder="ABC123"
-                          required
-                        />
+                    {/* Customer Details */}
+                    <div className="space-y-4">
+                      <h3 className="font-semibold">Customer Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="customerName">Full Name *</Label>
+                          <Input
+                            id="customerName"
+                            value={bookingDetails.customerName}
+                            onChange={(e) => setBookingDetails((prev) => ({ ...prev, customerName: e.target.value }))}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="customerEmail">Email *</Label>
+                          <Input
+                            id="customerEmail"
+                            type="email"
+                            value={bookingDetails.customerEmail}
+                            onChange={(e) => setBookingDetails((prev) => ({ ...prev, customerEmail: e.target.value }))}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="customerPhone">Phone Number</Label>
+                          <Input
+                            id="customerPhone"
+                            type="tel"
+                            value={bookingDetails.customerPhone}
+                            onChange={(e) => setBookingDetails((prev) => ({ ...prev, customerPhone: e.target.value }))}
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="vehicleType">Vehicle Type</Label>
-                        <Select
-                          value={bookingDetails.vehicleType}
-                          onValueChange={(value) => setBookingDetails({ ...bookingDetails, vehicleType: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="car">Car</SelectItem>
-                            <SelectItem value="suv">SUV</SelectItem>
-                            <SelectItem value="truck">Truck</SelectItem>
-                            <SelectItem value="motorcycle">Motorcycle</SelectItem>
-                            <SelectItem value="van">Van</SelectItem>
-                          </SelectContent>
-                        </Select>
+                    <Separator />
+
+                    {/* Vehicle Details */}
+                    <div className="space-y-4">
+                      <h3 className="font-semibold">Vehicle Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="vehicleReg">Vehicle Registration *</Label>
+                          <Input
+                            id="vehicleReg"
+                            placeholder="e.g. AB12 CDE"
+                            value={bookingDetails.vehicleReg}
+                            onChange={(e) => setBookingDetails((prev) => ({ ...prev, vehicleReg: e.target.value }))}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="vehicleType">Vehicle Type</Label>
+                          <Select
+                            value={bookingDetails.vehicleType}
+                            onValueChange={(value) => setBookingDetails((prev) => ({ ...prev, vehicleType: value }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="car">Car</SelectItem>
+                              <SelectItem value="motorcycle">Motorcycle</SelectItem>
+                              <SelectItem value="van">Van</SelectItem>
+                              <SelectItem value="truck">Truck</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="startDate">Start Date</Label>
-                        <Input
-                          id="startDate"
-                          type="date"
-                          value={bookingDetails.startDate}
-                          onChange={(e) => setBookingDetails({ ...bookingDetails, startDate: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="startTime">Start Time</Label>
-                        <Input
-                          id="startTime"
-                          type="time"
-                          value={bookingDetails.startTime}
-                          onChange={(e) => setBookingDetails({ ...bookingDetails, startTime: e.target.value })}
-                        />
+                    <Separator />
+
+                    {/* Booking Details */}
+                    <div className="space-y-4">
+                      <h3 className="font-semibold">Booking Schedule</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <Label htmlFor="quantity">Quantity</Label>
+                          <Select
+                            value={bookingDetails.quantity.toString()}
+                            onValueChange={(value) =>
+                              setBookingDetails((prev) => ({ ...prev, quantity: Number.parseInt(value) }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                                <SelectItem key={num} value={num.toString()}>
+                                  {num}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="startDate">Start Date</Label>
+                          <Input
+                            id="startDate"
+                            type="date"
+                            value={bookingDetails.startDate}
+                            onChange={(e) => setBookingDetails((prev) => ({ ...prev, startDate: e.target.value }))}
+                            min={new Date().toISOString().split("T")[0]}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="startTime">Start Time</Label>
+                          <Input
+                            id="startTime"
+                            type="time"
+                            value={bookingDetails.startTime}
+                            onChange={(e) => setBookingDetails((prev) => ({ ...prev, startTime: e.target.value }))}
+                          />
+                        </div>
                       </div>
                     </div>
 
                     <div>
-                      <Label htmlFor="specialRequests">Special Requests</Label>
+                      <Label htmlFor="specialRequests">Special Requests (Optional)</Label>
                       <Textarea
                         id="specialRequests"
+                        placeholder="Any special requirements..."
                         value={bookingDetails.specialRequests}
-                        onChange={(e) => setBookingDetails({ ...bookingDetails, specialRequests: e.target.value })}
-                        placeholder="Any special requirements or notes..."
+                        onChange={(e) => setBookingDetails((prev) => ({ ...prev, specialRequests: e.target.value }))}
                         rows={3}
                       />
                     </div>
@@ -427,89 +424,32 @@ export function CommerceLayerCheckout({ parkingSpace, duration, rate, sku, onBac
             {step === "payment" && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <CreditCard className="h-5 w-5 mr-2" />
-                    Payment Information
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="w-5 h-5" />
+                    Payment Details
                   </CardTitle>
-                  <CardDescription>Complete your booking with secure payment</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Elements stripe={stripePromise}>
-                    <CheckoutForm
-                      parkingSpace={parkingSpace}
-                      duration={duration}
-                      rate={rate}
-                      sku={sku}
-                      bookingDetails={bookingDetails}
-                      onSuccess={handlePaymentSuccess}
-                      onError={handlePaymentError}
-                    />
-                  </Elements>
-                </CardContent>
-              </Card>
-            )}
-
-            {step === "confirmation" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center text-green-600">
-                    <CheckCircle className="h-5 w-5 mr-2" />
-                    Booking Confirmed!
-                  </CardTitle>
-                  <CardDescription>Your parking space has been successfully reserved</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <h3 className="font-medium text-green-900 mb-2">Booking Reference</h3>
-                    <p className="text-green-700 font-mono text-lg">{bookingId}</p>
-                  </div>
-
-                  <div className="space-y-4">
+                  <form onSubmit={handlePaymentSubmit} className="space-y-6">
                     <div>
-                      <h4 className="font-medium mb-2">Booking Details</h4>
-                      <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                        <div className="flex justify-between">
-                          <span>Location:</span>
-                          <span className="font-medium">{parkingSpace.name}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Duration:</span>
-                          <span className="font-medium">{duration}ly</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Start:</span>
-                          <span className="font-medium">
-                            {bookingDetails.startDate} at {bookingDetails.startTime}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Vehicle:</span>
-                          <span className="font-medium">{bookingDetails.vehicleReg}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Total Paid:</span>
-                          <span className="font-bold text-lg">${rate}</span>
-                        </div>
+                      <Label>Card Details</Label>
+                      <div className="mt-2 p-3 border rounded-md">
+                        <CardElement options={cardElementOptions} />
                       </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Test card: 4242 4242 4242 4242 | Any future date | Any 3 digits
+                      </p>
                     </div>
 
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <h4 className="font-medium text-blue-900 mb-2">What's Next?</h4>
-                      <ul className="text-blue-700 text-sm space-y-1">
-                        <li>• A confirmation email has been sent to {bookingDetails.email}</li>
-                        <li>• Save your booking reference: {bookingId}</li>
-                        <li>• Arrive at the specified time and location</li>
-                        <li>• Contact support if you need to make changes</li>
-                      </ul>
+                    <div className="flex gap-4">
+                      <Button type="button" variant="outline" onClick={() => setStep("details")} className="flex-1">
+                        Back to Details
+                      </Button>
+                      <Button type="submit" disabled={!stripe || isProcessing} className="flex-1">
+                        {isProcessing ? "Processing..." : `Pay £${totalPrice}`}
+                      </Button>
                     </div>
-                  </div>
-
-                  <div className="flex gap-4">
-                    <Button onClick={onBack} variant="outline" className="flex-1 bg-transparent">
-                      Book Another Space
-                    </Button>
-                    <Button className="flex-1">View My Bookings</Button>
-                  </div>
+                  </form>
                 </CardContent>
               </Card>
             )}

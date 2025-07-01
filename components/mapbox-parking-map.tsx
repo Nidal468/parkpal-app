@@ -14,10 +14,11 @@ interface MapboxParkingMapProps {
 function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxParkingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<any>(null)
+  const [mapboxgl, setMapboxgl] = useState<any>(null)
+  const [mapboxToken, setMapboxToken] = useState<string>("")
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [mapboxToken, setMapboxToken] = useState<string>("")
   const markersRef = useRef<any[]>([])
 
   // Debug: Log spaces data
@@ -39,81 +40,66 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
     loadToken()
   }, [])
 
-  // Initialize map once token is loaded
+  // Load Mapbox GL JS
   useEffect(() => {
-    if (!mapboxToken || !mapContainer.current || map.current) {
+    const loadMapbox = async () => {
+      if (typeof window !== "undefined") {
+        try {
+          const mapboxgl = await import("mapbox-gl")
+          console.log("🗺️ Mapbox GL loaded:", "✅")
+          setMapboxgl(mapboxgl.default)
+        } catch (error) {
+          console.error("🗺️ Failed to load Mapbox GL:", error)
+        }
+      }
+    }
+    loadMapbox()
+  }, [])
+
+  // Initialize map once
+  useEffect(() => {
+    if (!mapboxgl || !mapContainer.current || map.current || !mapboxToken) {
       console.log("🗺️ Map initialization blocked:", {
-        token: !!mapboxToken,
+        mapboxgl: !!mapboxgl,
         container: !!mapContainer.current,
         existingMap: !!map.current,
+        token: !!mapboxToken,
       })
       return
     }
 
     console.log("🗺️ Initializing map...")
 
-    // Load Mapbox GL dynamically
-    const loadMapbox = async () => {
-      try {
-        // Use CDN version to avoid module loading issues
-        if (!window.mapboxgl) {
-          const script = document.createElement("script")
-          script.src = "https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"
-          script.onload = () => {
-            const link = document.createElement("link")
-            link.href = "https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css"
-            link.rel = "stylesheet"
-            document.head.appendChild(link)
-            initializeMap()
-          }
-          document.head.appendChild(script)
-        } else {
-          initializeMap()
-        }
-      } catch (error) {
-        console.error("🗺️ Failed to load Mapbox GL:", error)
-      }
+    // Set Mapbox access token
+    mapboxgl.accessToken = mapboxToken
+
+    // Default center (London SE17 area)
+    const center = [-0.0877, 51.4948] // SE17 coordinates
+
+    try {
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: "mapbox://styles/parkpal33/cmcca0287043d01s53esbas0y",
+        center: center,
+        zoom: 14,
+      })
+
+      map.current.on("load", () => {
+        console.log("🗺️ Map loaded successfully")
+        setMapLoaded(true)
+      })
+
+      map.current.on("styledata", () => {
+        console.log("🗺️ Map style loaded")
+        setMapLoaded(true)
+      })
+
+      map.current.on("error", (e: any) => {
+        console.error("🗺️ Map error:", e)
+      })
+    } catch (error) {
+      console.error("🗺️ Failed to create map:", error)
     }
-
-    const initializeMap = () => {
-      if (!window.mapboxgl) {
-        console.error("🗺️ Mapbox GL not loaded")
-        return
-      }
-
-      // Set Mapbox access token
-      window.mapboxgl.accessToken = mapboxToken
-
-      // Default center (London SE17 area)
-      const center = [-0.0877, 51.4948] // SE17 coordinates
-
-      try {
-        map.current = new window.mapboxgl.Map({
-          container: mapContainer.current,
-          style: "mapbox://styles/parkpal33/cmcca0287043d01s53esbas0y",
-          center: center,
-          zoom: 14,
-        })
-
-        map.current.on("load", () => {
-          console.log("🗺️ Map loaded successfully")
-          setMapLoaded(true)
-        })
-
-        map.current.on("styledata", () => {
-          console.log("🗺️ Map style loaded")
-          setMapLoaded(true)
-        })
-
-        map.current.on("error", (e: any) => {
-          console.error("🗺️ Map error:", e)
-        })
-      } catch (error) {
-        console.error("🗺️ Failed to create map:", error)
-      }
-    }
-
-    loadMapbox()
 
     return () => {
       if (map.current) {
@@ -122,7 +108,7 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
         setMapLoaded(false)
       }
     }
-  }, [mapboxToken])
+  }, [mapboxgl, mapboxToken])
 
   // Clear existing markers
   const clearMarkers = () => {
@@ -134,12 +120,11 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
 
   // Add parking spaces when map is loaded and spaces are available
   useEffect(() => {
-    if (!map.current || !mapLoaded || !spaces.length || !window.mapboxgl) {
+    if (!map.current || !mapLoaded || !spaces.length) {
       console.log("🗺️ Cannot add spaces:", {
         map: !!map.current,
         mapLoaded,
         spacesCount: spaces.length,
-        mapboxgl: !!window.mapboxgl,
       })
       return
     }
@@ -191,7 +176,7 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
       })
 
       // Create marker
-      const marker = new window.mapboxgl.Marker(markerElement)
+      const marker = new mapboxgl.Marker(markerElement)
         .setLngLat([space.longitude!, space.latitude!])
         .addTo(map.current)
 
@@ -206,7 +191,7 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
       try {
         const bounds = coordinates.reduce((bounds, coord) => {
           return bounds.extend(coord)
-        }, new window.mapboxgl.LngLatBounds(coordinates[0], coordinates[0]))
+        }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]))
 
         map.current.fitBounds(bounds, {
           padding: 50,
@@ -256,13 +241,6 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
       <SpaceDetailsModal space={selectedSpace} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </>
   )
-}
-
-// Add global type declaration
-declare global {
-  interface Window {
-    mapboxgl: any
-  }
 }
 
 export default MapboxParkingMap
