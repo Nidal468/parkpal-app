@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { ThemeToggle } from "@/components/theme-toggle"
 import Image from "next/image"
+import Link from "next/link"
 
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -28,6 +29,11 @@ export default function HomePage() {
           <Image src="/parkpal-logo-clean.png" alt="Parkpal" width={120} height={40} />
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/reserve">
+            <Button variant="outline" size="sm" className="text-sm px-4 bg-transparent">
+              Test Reserve
+            </Button>
+          </Link>
           <ThemeToggle />
           <Button
             variant="outline"

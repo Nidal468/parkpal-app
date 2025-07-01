@@ -37,6 +37,8 @@
     "@radix-ui/react-toggle": "latest",
     "@radix-ui/react-toggle-group": "latest",
     "@radix-ui/react-tooltip": "latest",
+    "@stripe/react-stripe-js": "latest",
+    "@stripe/stripe-js": "latest",
     "@supabase/supabase-js": "latest",
     "ai": "latest",
     "autoprefixer": "^10.4.20",

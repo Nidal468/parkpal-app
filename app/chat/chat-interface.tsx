@@ -511,6 +511,41 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
                   </Tabs>
                 </div>
               )}
+
+              {/* Date Picker - Shows automatically after parking spaces are displayed */}
+              {message.parkingSpaces && message.parkingSpaces.length > 0 && (
+                <div className="ml-11 mt-4">
+                  <Card className="w-fit">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <CalendarIcon className="w-4 h-4" />
+                        Select Your Booking Dates
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="text-sm text-muted-foreground mb-3">
+                        Choose your parking dates to see pricing and availability
+                      </div>
+                      <Calendar
+                        mode="range"
+                        selected={selectedDates}
+                        onSelect={handleDateSelect}
+                        numberOfMonths={2}
+                        disabled={(date) => date < new Date()}
+                        className="rounded-md border"
+                      />
+                      {selectedDates.from && selectedDates.to && (
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <div className="text-sm text-muted-foreground">
+                            {selectedDates.from.toLocaleDateString()} - {selectedDates.to.toLocaleDateString()}
+                          </div>
+                          <div className="text-xs text-green-600">✓ Dates selected</div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
           ))}
 
