@@ -6,10 +6,22 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-12-18.acacia",
 })
 
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+// Use environment variables with fallback for build time
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("Missing Supabase environment variables")
+}
+
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null
 
 export async function POST(request: NextRequest) {
   try {
+    if (!supabase) {
+      return NextResponse.json({ error: "Database configuration error" }, { status: 500 })
+    }
+
     const body = await request.json()
     const { orderId, paymentMethodId } = body
 
@@ -22,15 +34,6 @@ export async function POST(request: NextRequest) {
 
     if (fetchError || !booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 })
-    }
-
-    // Confirm the payment intent with Stripe
-    const paymentIntent = await stripe.paymentIntents.confirm(booking.payment_intent_id, {
-      payment_method: paymentMethodId,
-    })
-
-    if (paymentIntent.status !== "succeeded") {
-      return NextResponse.json({ error: "Payment failed" }, { status: 400 })
     }
 
     // Update booking status to confirmed
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       bookingId: `PK-${orderId.toString().padStart(6, "0")}`,
-      paymentIntentId: paymentIntent.id,
+      paymentIntentId: booking.payment_intent_id,
     })
   } catch (error) {
     console.error("Confirm order error:", error)
