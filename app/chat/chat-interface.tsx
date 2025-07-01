@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle, Map, Grid, CalendarIcon, X } from 'lucide-react'
+import { Copy, ThumbsUp, ThumbsDown, Mic, Send, Loader2, AlertCircle, Map, Grid, CalendarIcon, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ParkingSpaceCard } from "@/components/parking-space-card"
 import { ParkingMap } from "@/components/parking-map"
@@ -108,9 +108,25 @@ export default function ChatInterface() {
     }
   }, [messages])
 
+  // Debug effect to track parking spaces
+  useEffect(() => {
+    const hasAnyParkingSpaces = messages.some((msg) => msg.parkingSpaces && msg.parkingSpaces.length > 0)
+    console.log("🔍 PARKING SPACES DEBUG:", {
+      messagesCount: messages.length,
+      hasAnyParkingSpaces,
+      latestSpacesCount: latestParkingSpaces.length,
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content.substring(0, 50) + "...",
+        hasParkingSpaces: !!m.parkingSpaces,
+        spacesCount: m.parkingSpaces?.length || 0,
+      })),
+    })
+  }, [messages, latestParkingSpaces])
+
   const sendMessageWithText = async (messageText: string) => {
     console.log("📤 Sending message:", messageText)
-    
+
     if (!messageText.trim() || isLoading) return
 
     setError(null)
@@ -169,13 +185,20 @@ export default function ChatInterface() {
       // Replace thinking message with actual response
       setMessages((prev) => {
         const newMessages = [...prev]
-        newMessages[newMessages.length - 1] = {
-          role: "assistant",
+        const responseMessage = {
+          role: "assistant" as const,
           content: data.message || "Sorry, I couldn't process that request.",
           timestamp: new Date().toLocaleTimeString(),
           parkingSpaces: data.parkingSpaces || undefined,
         }
-        console.log("📝 Updated messages with parking spaces:", newMessages[newMessages.length - 1].parkingSpaces?.length || 0)
+        newMessages[newMessages.length - 1] = responseMessage
+
+        console.log("📝 Updated messages with parking spaces:", {
+          messageHasSpaces: !!responseMessage.parkingSpaces,
+          spacesCount: responseMessage.parkingSpaces?.length || 0,
+          totalMessages: newMessages.length,
+        })
+
         return newMessages
       })
 
@@ -278,10 +301,11 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
   // Check if any message has parking spaces
   const hasAnyParkingSpaces = messages.some((msg) => msg.parkingSpaces && msg.parkingSpaces.length > 0)
 
-  console.log("🔍 Checking for parking spaces:", {
+  console.log("🔍 RENDER CHECK:", {
     hasAnyParkingSpaces,
     messagesCount: messages.length,
-    latestSpacesCount: latestParkingSpaces.length
+    latestSpacesCount: latestParkingSpaces.length,
+    shouldShowDatePicker: hasAnyParkingSpaces,
   })
 
   return (
@@ -399,12 +423,11 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
           {/* Date Picker - Shows when parking spaces are available */}
           {hasAnyParkingSpaces && (
             <div className="ml-11">
-              <Card className="w-fit">
+              <Card className="w-fit border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center justify-between text-base">
                     <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4" />
-                      Select Booking Dates
+                      <CalendarIcon className="w-4 h-4" />🎯 Select Booking Dates (DEBUG: VISIBLE!)
                     </div>
                     <div className="flex items-center gap-2">
                       {selectedDates.from && selectedDates.to && (
@@ -473,6 +496,20 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
               </Card>
             </div>
           )}
+
+          {/* DEBUG: Always show this to test */}
+          <div className="ml-11 p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-300 rounded-lg">
+            <h4 className="font-medium text-yellow-800 dark:text-yellow-200">DEBUG INFO:</h4>
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              hasAnyParkingSpaces: {hasAnyParkingSpaces.toString()}
+            </p>
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              Messages with spaces: {messages.filter((m) => m.parkingSpaces?.length).length}
+            </p>
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              Latest spaces count: {latestParkingSpaces.length}
+            </p>
+          </div>
         </div>
       </ScrollArea>
 
