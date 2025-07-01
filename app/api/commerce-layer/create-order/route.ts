@@ -1,20 +1,39 @@
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
-import { createClient } from "@supabase/supabase-js"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2024-12-18.acacia",
-})
-
-const supabase = createClient(process.env.SUPABASE_URL || "", process.env.SUPABASE_SERVICE_ROLE_KEY || "")
 
 export async function POST(request: NextRequest) {
   try {
+    // Check for required environment variables at runtime
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!stripeSecretKey) {
+      return NextResponse.json({ error: "Payment processing not configured" }, { status: 500 })
+    }
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+    }
+
+    // Dynamic imports to avoid build-time initialization
+    const Stripe = (await import("stripe")).default
+    const { createClient } = await import("@supabase/supabase-js")
+
+    // Initialize clients at runtime
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: "2024-12-18.acacia",
+    })
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
     const body = await request.json()
     const { sku, quantity, parkingSpace, bookingDetails, duration, rate } = body
 
     // Validate required fields
-    if (!sku || !parkingSpace || !bookingDetails) {
+    if (!sku || !parkingSpace || !bookingDetails || !rate) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
@@ -31,28 +50,45 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Calculate end time
+    const startDateTime = new Date(`${bookingDetails.startDate}T${bookingDetails.startTime}:00`)
+    const endDateTime = new Date(startDateTime)
+
+    switch (duration) {
+      case "hour":
+        endDateTime.setHours(endDateTime.getHours() + 1)
+        break
+      case "day":
+        endDateTime.setDate(endDateTime.getDate() + 1)
+        break
+      case "month":
+        endDateTime.setMonth(endDateTime.getMonth() + 1)
+        break
+      default:
+        endDateTime.setHours(endDateTime.getHours() + 1)
+    }
+
     // Store preliminary booking data
-    const { data: booking, error: bookingError } = await supabase
-      .from("bookings")
-      .insert({
-        user_id: "temp-user", // In real app, get from auth
-        space_id: parkingSpace.id,
-        start_time: `${bookingDetails.startDate}T${bookingDetails.startTime}:00`,
-        end_time: calculateEndTime(bookingDetails.startDate, bookingDetails.startTime, duration),
-        total_price: rate,
-        status: "pending",
-        customer_name: bookingDetails.customerName,
-        customer_email: bookingDetails.email,
-        customer_phone: bookingDetails.phone,
-        vehicle_registration: bookingDetails.vehicleReg,
-        vehicle_type: bookingDetails.vehicleType,
-        special_requests: bookingDetails.specialRequests,
-        payment_intent_id: paymentIntent.id,
-        sku: sku,
-        duration_type: duration,
-      })
-      .select()
-      .single()
+    const bookingData = {
+      user_id: "temp-user", // In real app, get from auth
+      space_id: parkingSpace.id,
+      start_time: startDateTime.toISOString(),
+      end_time: endDateTime.toISOString(),
+      total_price: rate,
+      status: "pending",
+      customer_name: bookingDetails.customerName,
+      customer_email: bookingDetails.email,
+      customer_phone: bookingDetails.phone || null,
+      vehicle_registration: bookingDetails.vehicleReg,
+      vehicle_type: bookingDetails.vehicleType || null,
+      special_requests: bookingDetails.specialRequests || null,
+      payment_intent_id: paymentIntent.id,
+      sku: sku,
+      duration_type: duration,
+      created_at: new Date().toISOString(),
+    }
+
+    const { data: booking, error: bookingError } = await supabase.from("bookings").insert(bookingData).select().single()
 
     if (bookingError) {
       console.error("Booking creation error:", bookingError)
@@ -68,24 +104,4 @@ export async function POST(request: NextRequest) {
     console.error("Create order error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
-
-function calculateEndTime(startDate: string, startTime: string, duration: string): string {
-  const start = new Date(`${startDate}T${startTime}:00`)
-
-  switch (duration) {
-    case "hour":
-      start.setHours(start.getHours() + 1)
-      break
-    case "day":
-      start.setDate(start.getDate() + 1)
-      break
-    case "month":
-      start.setMonth(start.getMonth() + 1)
-      break
-    default:
-      start.setHours(start.getHours() + 1)
-  }
-
-  return start.toISOString()
 }
