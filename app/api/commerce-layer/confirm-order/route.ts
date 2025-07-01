@@ -7,17 +7,17 @@ export async function POST(request: NextRequest) {
 
     const { orderId, commerceLayerOrderId, paymentIntentId } = body
 
-    if (!orderId || !commerceLayerOrderId) {
+    if (!orderId && !commerceLayerOrderId) {
       return NextResponse.json({ error: "Order ID is required" }, { status: 400 })
     }
 
     // Check Commerce Layer environment variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
-    const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL || "https://yourdomain.commercelayer.io"
+    const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
 
-    if (!clClientId || !clClientSecret || !clMarketId) {
+    if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
       return NextResponse.json(
         {
           error: "Commerce Layer not configured",
@@ -33,9 +33,11 @@ export async function POST(request: NextRequest) {
 
     // Initialize Commerce Layer API base URL
     const apiBase = `${clBaseUrl}/api`
+    const orderIdToUse = commerceLayerOrderId || orderId
 
     // Step 1: Get the current order status
-    const orderResponse = await fetch(`${apiBase}/orders/${commerceLayerOrderId}?include=line_items`, {
+    console.log("📦 Fetching order:", orderIdToUse)
+    const orderResponse = await fetch(`${apiBase}/orders/${orderIdToUse}?include=line_items`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/vnd.api+json",
@@ -44,6 +46,7 @@ export async function POST(request: NextRequest) {
 
     if (!orderResponse.ok) {
       const errorData = await orderResponse.json()
+      console.error("❌ Failed to fetch order:", errorData)
       throw new Error(`Failed to fetch order: ${JSON.stringify(errorData)}`)
     }
 
@@ -55,7 +58,8 @@ export async function POST(request: NextRequest) {
     // Step 2: Update order status to placed (if payment was successful)
     if (paymentIntentId && order.attributes.status !== "placed") {
       try {
-        const updateOrderResponse = await fetch(`${apiBase}/orders/${commerceLayerOrderId}`, {
+        console.log("📦 Placing order...")
+        const updateOrderResponse = await fetch(`${apiBase}/orders/${orderIdToUse}`, {
           method: "PATCH",
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -65,7 +69,7 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({
             data: {
               type: "orders",
-              id: commerceLayerOrderId,
+              id: orderIdToUse,
               attributes: {
                 _place: true,
                 metadata: {
@@ -80,11 +84,13 @@ export async function POST(request: NextRequest) {
         })
 
         const updatedOrderData = await updateOrderResponse.json()
+        console.log("📦 Order update response:", updatedOrderData)
+
         if (!updateOrderResponse.ok) {
           console.error("❌ Failed to place order:", updatedOrderData)
           // Don't throw error - order was created successfully, just status update failed
         } else {
-          console.log("✅ Order placed successfully:", commerceLayerOrderId)
+          console.log("✅ Order placed successfully:", orderIdToUse)
         }
       } catch (placeError) {
         console.error("❌ Error placing order:", placeError)
@@ -94,6 +100,7 @@ export async function POST(request: NextRequest) {
 
     // Step 3: Update booking status in database
     try {
+      console.log("💾 Updating booking status in database...")
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
       const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -108,7 +115,7 @@ export async function POST(request: NextRequest) {
             stripe_payment_intent_id: paymentIntentId,
             confirmed_at: new Date().toISOString(),
           })
-          .eq("commerce_layer_order_id", commerceLayerOrderId)
+          .eq("commerce_layer_order_id", orderIdToUse)
           .select()
           .single()
 
@@ -127,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     const response = {
       success: true,
-      orderId: commerceLayerOrderId,
+      orderId: orderIdToUse,
       bookingReference: bookingReference,
       status: "confirmed",
       paymentIntentId: paymentIntentId,
