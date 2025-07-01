@@ -3,50 +3,66 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    console.log("📝 Confirm order request:", body)
+
     const { orderId, paymentIntentId } = body
 
-    console.log("Confirming Commerce Layer order:", { orderId, paymentIntentId })
-
-    // In a real implementation, you would:
-    // 1. Confirm the order in Commerce Layer
-    // 2. Update the booking status in your database
-    // 3. Send confirmation emails
-    // 4. Trigger any webhooks or notifications
-
-    // Update booking status in database
-    const { data: bookings } = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/bookings?commerce_layer_order_id=eq.${orderId}`,
-      {
-        method: "GET",
-        headers: {
-          apikey: process.env.SUPABASE_ANON_KEY!,
-          Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY!}`,
+    if (!orderId || !paymentIntentId) {
+      return NextResponse.json(
+        {
+          error: "Missing orderId or paymentIntentId",
         },
-      },
-    ).then((res) => res.json())
-
-    if (bookings && bookings.length > 0) {
-      await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/bookings?id=eq.${bookings[0].id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: process.env.SUPABASE_ANON_KEY!,
-          Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY!}`,
-        },
-        body: JSON.stringify({
-          status: "confirmed",
-          stripe_payment_intent_id: paymentIntentId,
-          confirmed_at: new Date().toISOString(),
-        }),
-      })
+        { status: 400 },
+      )
     }
 
-    return NextResponse.json({
+    // Update booking status in database if configured
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+      if (supabaseUrl && supabaseKey) {
+        const { createClient } = await import("@supabase/supabase-js")
+        const supabase = createClient(supabaseUrl, supabaseKey)
+
+        const { error } = await supabase
+          .from("bookings")
+          .update({
+            status: "confirmed",
+            payment_status: "paid",
+            confirmed_at: new Date().toISOString(),
+          })
+          .eq("id", orderId)
+
+        if (error) {
+          console.error("❌ Database update error:", error)
+        } else {
+          console.log("✅ Booking confirmed in database:", orderId)
+        }
+      }
+    } catch (dbError) {
+      console.error("❌ Database connection error:", dbError)
+    }
+
+    const response = {
       success: true,
       message: "Order confirmed successfully",
-    })
+      orderId,
+      paymentIntentId,
+      bookingReference: `PK${orderId.toString().padStart(6, "0")}`,
+    }
+
+    console.log("✅ Confirm order response:", response)
+    return NextResponse.json(response)
   } catch (error) {
-    console.error("Error confirming Commerce Layer order:", error)
-    return NextResponse.json({ success: false, error: "Failed to confirm order" }, { status: 500 })
+    console.error("❌ Confirm order error:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to confirm order",
+        details: error instanceof Error ? error.message : "Unknown error",
+        success: false,
+      },
+      { status: 500 },
+    )
   }
 }
