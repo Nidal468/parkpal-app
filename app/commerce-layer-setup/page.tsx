@@ -1,259 +1,307 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, AlertCircle, ExternalLink, Globe, CreditCard, Database } from "lucide-react"
+import { CheckCircle, AlertCircle, Copy, ExternalLink } from "lucide-react"
+import { useState } from "react"
 
-export default function CommerceLayerSetupPage() {
+export default function CommerceLayerSetup() {
+  const [copied, setCopied] = useState("")
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(label)
+    setTimeout(() => setCopied(""), 2000)
+  }
+
   const envVars = [
     {
       name: "COMMERCE_LAYER_CLIENT_ID",
-      description: "Your sales channel client ID",
+      description: "Your Commerce Layer Sales Channel Client ID",
       required: true,
-      example: "your_sales_channel_client_id",
+      example: "your_sales_channel_client_id_here",
+      serverOnly: true,
     },
     {
       name: "COMMERCE_LAYER_CLIENT_SECRET",
-      description: "Your sales channel client secret",
+      description: "Your Commerce Layer Sales Channel Client Secret",
       required: true,
-      example: "your_sales_channel_client_secret",
+      example: "your_sales_channel_client_secret_here",
+      serverOnly: true,
     },
     {
       name: "COMMERCE_LAYER_BASE_URL",
-      description: "Your Commerce Layer domain",
+      description: "Your Commerce Layer domain (e.g., https://yourdomain.commercelayer.io)",
       required: true,
       example: "https://yourdomain.commercelayer.io",
+      serverOnly: true,
     },
     {
       name: "COMMERCE_LAYER_MARKET_ID",
-      description: "Your market ID (Parkpal UK)",
+      description: "Your Parkpal UK Market ID",
       required: true,
       example: "vjkaZhNPnl",
+      serverOnly: true,
     },
     {
       name: "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
-      description: "Stripe publishable key (TEST/SANDBOX)",
+      description: "Stripe Publishable Key (should start with pk_test_)",
       required: true,
       example: "pk_test_...",
+      serverOnly: false,
     },
     {
       name: "STRIPE_SECRET_KEY",
-      description: "Stripe secret key (TEST/SANDBOX)",
+      description: "Stripe Secret Key (should start with sk_test_)",
       required: true,
       example: "sk_test_...",
+      serverOnly: true,
+    },
+  ]
+
+  const skus = [
+    {
+      name: "parking-hour",
+      id: "nOpOSOOmjP",
+      description: "Hourly parking rate",
+    },
+    {
+      name: "parking-day",
+      id: "nzPQSQQljQ",
+      description: "Daily parking rate",
+    },
+    {
+      name: "parking-month",
+      id: "ZrxeSjjmvm",
+      description: "Monthly parking rate",
     },
   ]
 
   const setupSteps = [
-    {
-      title: "1. Commerce Layer Configuration",
-      items: [
-        "Create a sales channel in Commerce Layer",
-        "Configure Parkpal UK market (vjkaZhNPnl)",
-        "Set up stock location: Parkpal HQ (okJbPuNbjk)",
-        "Create SKUs: parking-hour, parking-day, parking-month",
-        "Set pricing for each SKU in GBP",
-      ],
-    },
-    {
-      title: "2. Stripe Integration",
-      items: [
-        "Use SANDBOX/TEST Stripe credentials (not live)",
-        "Configure Stripe as payment gateway in Commerce Layer",
-        "Set up webhooks for payment confirmation",
-        "Test with card: 4242 4242 4242 4242",
-      ],
-    },
-    {
-      title: "3. Environment Variables",
-      items: [
-        "Set all required environment variables in Vercel",
-        "Ensure STRIPE keys are TEST keys (pk_test_, sk_test_)",
-        "Verify Commerce Layer credentials are correct",
-        "Double-check market ID matches your setup",
-      ],
-    },
-    {
-      title: "4. Database Setup",
-      items: [
-        "Run the SQL script to add Commerce Layer fields",
-        "Verify Supabase connection is working",
-        "Test database writes with booking records",
-      ],
-    },
+    "Set all environment variables in Vercel (server-side only)",
+    "Run the SQL script to add Commerce Layer fields to your database",
+    "Ensure your SKUs exist in the Parkpal UK market with proper pricing",
+    "Configure Stripe as payment gateway in Commerce Layer",
+    "Use TEST Stripe credentials (pk_test_, sk_test_)",
+    "Test the integration at /test-reserve",
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">🏪 Commerce Layer Setup Guide</h1>
-          <p className="text-gray-600">Complete integration setup for Parkpal parking bookings</p>
-        </div>
-
-        {/* Critical Warning */}
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-              <div>
-                <h3 className="font-medium text-red-800 mb-1">⚠️ Important: Use TEST Stripe Credentials</h3>
-                <p className="text-sm text-red-700">
-                  Make sure you're using Stripe SANDBOX/TEST keys (pk_test_, sk_test_) not live credentials. Using live
-                  Stripe with test Commerce Layer data can cause payment failures.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Environment Variables */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="h-5 w-5" />
-              Required Environment Variables
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {envVars.map((envVar) => (
-                <div key={envVar.name} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium">{envVar.name}</h4>
-                    {envVar.required && <Badge variant="destructive">Required</Badge>}
-                  </div>
-                  <p className="text-sm text-gray-600 mb-2">{envVar.description}</p>
-                  <code className="text-xs bg-gray-100 px-2 py-1 rounded">{envVar.example}</code>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Setup Steps */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {setupSteps.map((step, index) => (
-            <Card key={index}>
-              <CardHeader>
-                <CardTitle className="text-lg">{step.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  {step.items.map((item, itemIndex) => (
-                    <li key={itemIndex} className="flex items-start gap-2 text-sm">
-                      <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Parkpal Specific Configuration */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5" />
-              Parkpal Commerce Layer Configuration
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-medium mb-3">Market Setup</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Market Name:</span>
-                    <span className="font-mono">Parkpal UK</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Market ID:</span>
-                    <span className="font-mono">vjkaZhNPnl</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Currency:</span>
-                    <span className="font-mono">GBP</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Stock Location:</span>
-                    <span className="font-mono">Parkpal HQ</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Location ID:</span>
-                    <span className="font-mono">okJbPuNbjk</span>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h4 className="font-medium mb-3">SKU Configuration</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Hourly:</span>
-                    <span className="font-mono">parking-hour (nOpOSOOmjP)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Daily:</span>
-                    <span className="font-mono">parking-day (nzPQSQQljQ)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Monthly:</span>
-                    <span className="font-mono">parking-month (ZrxeSjjmvm)</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Test Integration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Test Integration
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Once you've completed the setup above, test the integration with the test reservation page.
-              </p>
-              <div className="flex gap-4">
-                <Button asChild>
-                  <a href="/test-reserve" className="flex items-center gap-2">
-                    Test Reservation Flow
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </Button>
-                <Button variant="outline" asChild>
-                  <a
-                    href="https://dashboard.stripe.com/test/payments"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2"
-                  >
-                    Stripe Test Dashboard
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </Button>
-              </div>
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium text-blue-800 mb-2">Test Card Details</h4>
-                <div className="text-sm text-blue-700 space-y-1">
-                  <p>Card Number: 4242 4242 4242 4242</p>
-                  <p>Expiry: Any future date</p>
-                  <p>CVC: Any 3 digits</p>
-                  <p>ZIP: Any 5 digits</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="container mx-auto py-8 space-y-8">
+      <div className="text-center space-y-4">
+        <h1 className="text-4xl font-bold">Commerce Layer Setup</h1>
+        <p className="text-muted-foreground">Configuration guide for Parkpal Commerce Layer integration</p>
       </div>
+
+      {/* Important Notice */}
+      <Card className="border-orange-200 bg-orange-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-orange-800">
+            <AlertCircle className="h-5 w-5" />
+            Important: Server-Side Environment Variables
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-orange-700 text-sm">
+            Commerce Layer credentials should be server-side only (no NEXT_PUBLIC_ prefix). Only the Stripe publishable
+            key should be client-side accessible.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Environment Variables */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            Environment Variables
+          </CardTitle>
+          <CardDescription>Required environment variables for Commerce Layer integration</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {envVars.map((envVar) => (
+            <div key={envVar.name} className="border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{envVar.name}</code>
+                  {envVar.required && (
+                    <Badge variant="destructive" className="text-xs">
+                      Required
+                    </Badge>
+                  )}
+                  {envVar.serverOnly && (
+                    <Badge variant="secondary" className="text-xs">
+                      Server Only
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => copyToClipboard(`${envVar.name}=${envVar.example}`, envVar.name)}
+                >
+                  {copied === envVar.name ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground mb-2">{envVar.description}</p>
+              <code className="text-xs bg-gray-100 px-2 py-1 rounded block">
+                {envVar.name}={envVar.example}
+              </code>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* SKU Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Parkpal SKUs</CardTitle>
+          <CardDescription>Available SKUs in your Commerce Layer catalog</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {skus.map((sku) => (
+            <div key={sku.name} className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{sku.name}</code>
+                  <Badge variant="outline" className="text-xs">
+                    {sku.id}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">{sku.description}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => copyToClipboard(sku.name, `sku-${sku.name}`)}>
+                {copied === `sku-${sku.name}` ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Market Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Market Configuration</CardTitle>
+          <CardDescription>Your Commerce Layer market and stock location details</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 border rounded-lg bg-blue-50">
+              <h3 className="font-semibold mb-2">Market</h3>
+              <p className="text-sm">Name: Parkpal UK</p>
+              <p className="text-sm font-mono">ID: vjkaZhNPnl</p>
+              <p className="text-sm">Currency: GBP</p>
+            </div>
+            <div className="p-4 border rounded-lg bg-green-50">
+              <h3 className="font-semibold mb-2">Stock Location</h3>
+              <p className="text-sm">Name: Parkpal HQ</p>
+              <p className="text-sm font-mono">ID: okJbPuNbjk</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Setup Instructions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Setup Instructions</CardTitle>
+          <CardDescription>Step-by-step guide to configure Commerce Layer</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ol className="list-decimal list-inside space-y-2 text-sm">
+            {setupSteps.map((step, index) => (
+              <li key={index} className="flex items-start gap-2">
+                <span className="font-medium">{index + 1}.</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
+
+      {/* Database Setup */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Database Setup</CardTitle>
+          <CardDescription>SQL script to add Commerce Layer fields</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Run this SQL script in your database to add the required Commerce Layer fields:
+          </p>
+          <div className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
+            <pre className="text-sm">
+              <code>{`-- Add Commerce Layer fields to bookings table
+ALTER TABLE bookings 
+ADD COLUMN IF NOT EXISTS commerce_layer_order_id TEXT,
+ADD COLUMN IF NOT EXISTS commerce_layer_customer_id TEXT,
+ADD COLUMN IF NOT EXISTS commerce_layer_market_id TEXT,
+ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT,
+ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'pending',
+ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP;
+
+-- Add indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_bookings_cl_order_id ON bookings(commerce_layer_order_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_cl_customer_id ON bookings(commerce_layer_customer_id);`}</code>
+            </pre>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() =>
+              copyToClipboard(
+                `-- Add Commerce Layer fields to bookings table
+ALTER TABLE bookings 
+ADD COLUMN IF NOT EXISTS commerce_layer_order_id TEXT,
+ADD COLUMN IF NOT EXISTS commerce_layer_customer_id TEXT,
+ADD COLUMN IF NOT EXISTS commerce_layer_market_id TEXT,
+ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT,
+ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'pending',
+ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP;
+
+-- Add indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_bookings_cl_order_id ON bookings(commerce_layer_order_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_cl_customer_id ON bookings(commerce_layer_customer_id);`,
+                "sql",
+              )
+            }
+          >
+            {copied === "sql" ? <CheckCircle className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+            Copy SQL Script
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Test Integration */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Test Integration</CardTitle>
+          <CardDescription>Test your Commerce Layer setup</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-4">
+            <Button asChild>
+              <a href="/test-reserve" className="flex items-center gap-2">
+                <ExternalLink className="h-4 w-4" />
+                Test Reserve Page
+              </a>
+            </Button>
+            <Button variant="outline" asChild>
+              <a href="/reserve" className="flex items-center gap-2">
+                <ExternalLink className="h-4 w-4" />
+                Production Reserve Page
+              </a>
+            </Button>
+          </div>
+          <div className="p-4 bg-blue-50 rounded-lg">
+            <h4 className="font-medium mb-2">Test Card Details</h4>
+            <p className="text-sm">Card Number: 4242 4242 4242 4242</p>
+            <p className="text-sm">Expiry: Any future date</p>
+            <p className="text-sm">CVC: Any 3 digits</p>
+            <p className="text-sm">ZIP: Any 5 digits</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

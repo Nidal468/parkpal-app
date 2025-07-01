@@ -3,16 +3,29 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+
+    // Add debugging as suggested by ChatGPT
+    console.log("✅ Incoming request body:", body)
+    console.log("✅ Environment check:", {
+      clClientId: process.env.COMMERCE_LAYER_CLIENT_ID ? "set" : "missing",
+      clClientSecret: process.env.COMMERCE_LAYER_CLIENT_SECRET ? "set" : "missing",
+      clBaseUrl: process.env.COMMERCE_LAYER_BASE_URL,
+      clMarketId: process.env.COMMERCE_LAYER_MARKET_ID,
+      stripeKey: process.env.STRIPE_SECRET_KEY ? "set" : "missing",
+    })
+
     console.log("🚀 Commerce Layer - Create order request:", body)
 
     const { sku, quantity = 1, customerDetails, bookingDetails } = body
 
     // Validate required fields
     if (!sku) {
+      console.error("❌ Missing SKU in request")
       return NextResponse.json({ error: "SKU is required" }, { status: 400 })
     }
 
     if (!customerDetails?.name || !customerDetails?.email) {
+      console.error("❌ Missing customer details")
       return NextResponse.json({ error: "Customer name and email are required" }, { status: 400 })
     }
 
@@ -30,6 +43,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!clClientId || !clClientSecret) {
+      console.error("❌ Missing Commerce Layer credentials")
       return NextResponse.json(
         {
           error: "Commerce Layer not configured",
@@ -40,6 +54,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!clBaseUrl) {
+      console.error("❌ Missing Commerce Layer base URL")
       return NextResponse.json(
         {
           error: "Commerce Layer base URL not configured",
@@ -50,6 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!clMarketId) {
+      console.error("❌ Missing Commerce Layer market ID")
       return NextResponse.json(
         {
           error: "Commerce Layer market not configured",
@@ -64,7 +80,7 @@ export async function POST(request: NextRequest) {
     const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
     if (stripeSecretKey && !stripeSecretKey.startsWith("sk_test_")) {
-      console.warn("⚠️ WARNING: Using live Stripe secret key with test Commerce Layer!")
+      console.error("❌ Using live Stripe secret key with test Commerce Layer!")
       return NextResponse.json(
         {
           error: "Invalid Stripe configuration",
@@ -75,7 +91,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (stripePublishableKey && !stripePublishableKey.startsWith("pk_test_")) {
-      console.warn("⚠️ WARNING: Using live Stripe publishable key with test Commerce Layer!")
+      console.error("❌ Using live Stripe publishable key with test Commerce Layer!")
       return NextResponse.json(
         {
           error: "Invalid Stripe configuration",
@@ -87,14 +103,26 @@ export async function POST(request: NextRequest) {
 
     // Get Commerce Layer access token with market scope
     console.log("🔑 Getting access token...")
-    const accessToken = await getAccessTokenWithMarketScope(clClientId, clClientSecret, clBaseUrl, clMarketId)
-    console.log("✅ Commerce Layer access token obtained")
+    let accessToken: string
+    try {
+      accessToken = await getAccessTokenWithMarketScope(clClientId, clClientSecret, clBaseUrl, clMarketId)
+      console.log("✅ Commerce Layer access token obtained")
+    } catch (tokenError) {
+      console.error("❌ Failed to get access token:", tokenError)
+      return NextResponse.json(
+        {
+          error: "Failed to authenticate with Commerce Layer",
+          details: tokenError instanceof Error ? tokenError.message : "Unknown authentication error",
+        },
+        { status: 500 },
+      )
+    }
 
     // Initialize Commerce Layer API base URL
     const apiBase = `${clBaseUrl}/api`
 
     // Step 1: Create or get customer
-    let customer
+    let customer: any
     try {
       console.log("👤 Creating/finding customer...")
 
@@ -109,6 +137,12 @@ export async function POST(request: NextRequest) {
           },
         },
       )
+
+      if (!customersResponse.ok) {
+        const errorText = await customersResponse.text()
+        console.error("❌ Customer search failed:", customersResponse.status, errorText)
+        throw new Error(`Customer search failed: ${customersResponse.status} ${errorText}`)
+      }
 
       const customersData = await customersResponse.json()
       console.log("👤 Customer search response:", customersData)
@@ -146,12 +180,15 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify(customerPayload),
         })
 
+        if (!createCustomerResponse.ok) {
+          const errorText = await createCustomerResponse.text()
+          console.error("❌ Customer creation failed:", createCustomerResponse.status, errorText)
+          throw new Error(`Customer creation failed: ${createCustomerResponse.status} ${errorText}`)
+        }
+
         const customerData = await createCustomerResponse.json()
         console.log("👤 Customer creation response:", customerData)
 
-        if (!createCustomerResponse.ok) {
-          throw new Error(`Customer creation failed: ${JSON.stringify(customerData)}`)
-        }
         customer = customerData.data
         console.log("✅ Created new customer:", customer.id)
       }
@@ -160,14 +197,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Failed to create/find customer",
-          details: customerError instanceof Error ? customerError.message : customerError,
+          details: customerError instanceof Error ? customerError.message : "Unknown customer error",
         },
         { status: 500 },
       )
     }
 
     // Step 2: Create order with market association
-    let order
+    let order: any
     try {
       console.log("📦 Creating order...")
 
@@ -216,12 +253,15 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify(orderPayload),
       })
 
+      if (!createOrderResponse.ok) {
+        const errorText = await createOrderResponse.text()
+        console.error("❌ Order creation failed:", createOrderResponse.status, errorText)
+        throw new Error(`Order creation failed: ${createOrderResponse.status} ${errorText}`)
+      }
+
       const orderData = await createOrderResponse.json()
       console.log("📦 Order creation response:", orderData)
 
-      if (!createOrderResponse.ok) {
-        throw new Error(`Order creation failed: ${JSON.stringify(orderData)}`)
-      }
       order = orderData.data
       console.log("✅ Created order:", order.id)
     } catch (orderError) {
@@ -229,7 +269,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Failed to create order",
-          details: orderError instanceof Error ? orderError.message : orderError,
+          details: orderError instanceof Error ? orderError.message : "Unknown order error",
         },
         { status: 500 },
       )
@@ -274,19 +314,22 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify(lineItemPayload),
       })
 
+      if (!createLineItemResponse.ok) {
+        const errorText = await createLineItemResponse.text()
+        console.error("❌ Line item creation failed:", createLineItemResponse.status, errorText)
+        throw new Error(`Line item creation failed: ${createLineItemResponse.status} ${errorText}`)
+      }
+
       const lineItemData = await createLineItemResponse.json()
       console.log("🛒 Line item response:", lineItemData)
 
-      if (!createLineItemResponse.ok) {
-        throw new Error(`Line item creation failed: ${JSON.stringify(lineItemData)}`)
-      }
       console.log("✅ Added line item:", lineItemData.data.id, "SKU:", sku)
     } catch (lineItemError) {
       console.error("❌ Line item creation error:", lineItemError)
       return NextResponse.json(
         {
           error: "Failed to add SKU to order",
-          details: lineItemError instanceof Error ? lineItemError.message : lineItemError,
+          details: lineItemError instanceof Error ? lineItemError.message : "Unknown line item error",
           sku: sku,
           market: clMarketId,
           message: `Make sure SKU '${sku}' exists in your Commerce Layer catalog and is available in market '${clMarketId}'`,
@@ -296,24 +339,42 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 4: Get updated order with totals
-    console.log("🔄 Fetching updated order...")
-    const updatedOrderResponse = await fetch(
-      `${apiBase}/orders/${order.id}?include=line_items,line_items.item,market`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/vnd.api+json",
+    let updatedOrder: any
+    try {
+      console.log("🔄 Fetching updated order...")
+      const updatedOrderResponse = await fetch(
+        `${apiBase}/orders/${order.id}?include=line_items,line_items.item,market`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/vnd.api+json",
+          },
         },
-      },
-    )
+      )
 
-    const updatedOrderData = await updatedOrderResponse.json()
-    console.log("🔄 Updated order response:", updatedOrderData)
-    const updatedOrder = updatedOrderData.data
+      if (!updatedOrderResponse.ok) {
+        const errorText = await updatedOrderResponse.text()
+        console.error("❌ Failed to fetch updated order:", updatedOrderResponse.status, errorText)
+        throw new Error(`Failed to fetch updated order: ${updatedOrderResponse.status} ${errorText}`)
+      }
+
+      const updatedOrderData = await updatedOrderResponse.json()
+      console.log("🔄 Updated order response:", updatedOrderData)
+      updatedOrder = updatedOrderData.data
+    } catch (fetchError) {
+      console.error("❌ Failed to fetch updated order:", fetchError)
+      return NextResponse.json(
+        {
+          error: "Failed to fetch updated order",
+          details: fetchError instanceof Error ? fetchError.message : "Unknown fetch error",
+        },
+        { status: 500 },
+      )
+    }
 
     // Step 5: Create Stripe Payment Intent for the order total
-    let paymentIntent = null
-    let clientSecret = null
+    let paymentIntent: any = null
+    let clientSecret: string | null = null
 
     if (stripeSecretKey && updatedOrder.attributes.total_amount_cents > 0) {
       try {
@@ -344,7 +405,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: "Failed to create Stripe Payment Intent",
-            details: stripeError instanceof Error ? stripeError.message : stripeError,
+            details: stripeError instanceof Error ? stripeError.message : "Unknown Stripe error",
           },
           { status: 500 },
         )
@@ -354,7 +415,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 6: Store booking in database
-    let bookingId = null
+    let bookingId: string | null = null
     try {
       console.log("💾 Storing booking in database...")
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -438,47 +499,40 @@ async function getAccessTokenWithMarketScope(
   baseUrl: string,
   marketId: string,
 ): Promise<string> {
-  try {
-    console.log("🔑 Requesting access token with market scope...")
-    console.log("🔑 Token request details:", {
-      baseUrl,
-      marketId,
-      hasClientId: !!clientId,
-      hasClientSecret: !!clientSecret,
-    })
+  console.log("🔑 Requesting access token with market scope...")
+  console.log("🔑 Token request details:", {
+    baseUrl,
+    marketId,
+    hasClientId: !!clientId,
+    hasClientSecret: !!clientSecret,
+  })
 
-    const tokenPayload = {
-      grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
-      scope: `market:${marketId}`,
-    }
-
-    console.log("🔑 Token payload:", { ...tokenPayload, client_secret: "[REDACTED]" })
-
-    const response = await fetch(`${baseUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(tokenPayload),
-    })
-
-    console.log("🔑 Token response status:", response.status)
-
-    if (!response.ok) {
-      const errorData = await response.json()
-      console.error("🔑 Token error response:", errorData)
-      throw new Error(
-        `Failed to get access token: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`,
-      )
-    }
-
-    const data = await response.json()
-    console.log("✅ Access token obtained successfully")
-    return data.access_token
-  } catch (error) {
-    console.error("❌ Failed to get Commerce Layer access token:", error)
-    throw error
+  const tokenPayload = {
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: `market:${marketId}`,
   }
+
+  console.log("🔑 Token payload:", { ...tokenPayload, client_secret: "[REDACTED]" })
+
+  const response = await fetch(`${baseUrl}/oauth/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(tokenPayload),
+  })
+
+  console.log("🔑 Token response status:", response.status)
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error("🔑 Token error response:", errorText)
+    throw new Error(`Failed to get access token: ${response.status} ${response.statusText} - ${errorText}`)
+  }
+
+  const data = await response.json()
+  console.log("✅ Access token obtained successfully")
+  return data.access_token
 }
