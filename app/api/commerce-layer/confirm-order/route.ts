@@ -1,12 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
+// Initialize Supabase
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { orderId, paymentIntentId, bookingId } = body
+    const { bookingId, paymentIntentId } = body
+
+    // Validate required fields
+    if (!bookingId || !paymentIntentId) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
 
     // Update booking status to confirmed
     const { data: booking, error: updateError } = await supabase
@@ -14,10 +20,10 @@ export async function POST(request: NextRequest) {
       .update({
         status: "confirmed",
         confirmed_at: new Date().toISOString(),
-        commerce_layer_order_id: orderId,
+        payment_confirmed: true,
       })
       .eq("id", bookingId)
-      .eq("stripe_payment_intent_id", paymentIntentId)
+      .eq("payment_intent_id", paymentIntentId)
       .select()
       .single()
 
@@ -27,18 +33,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Here you could also:
-    // - Send confirmation email
-    // - Update Commerce Layer order status
-    // - Trigger webhooks
-    // - Send SMS notifications
+    // 1. Send confirmation email
+    // 2. Update Commerce Layer order status
+    // 3. Trigger any webhooks
+    // 4. Create calendar events
 
     return NextResponse.json({
       success: true,
-      booking: booking,
+      booking,
       message: "Booking confirmed successfully",
     })
   } catch (error) {
     console.error("Confirm order error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to confirm order" }, { status: 500 })
   }
 }

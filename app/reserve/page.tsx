@@ -2,178 +2,194 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, Star, Shield, Camera, Wifi, Car } from "lucide-react"
+import { MapPin, Clock, Car, Star } from "lucide-react"
 import { CommerceLayerCheckout } from "@/components/commerce-layer-checkout"
-import Image from "next/image"
 
 // Mock parking space for testing
 const mockParkingSpace = {
   id: "test-space-1",
-  title: "Premium City Centre Parking",
-  address: "123 High Street, London, SW1A 1AA",
-  price: 15,
-  price_per_day: 15,
-  price_per_hour: 3,
-  price_per_month: 300,
-  features: ["CCTV", "Secure", "WiFi", "EV Charging"],
+  title: "Premium City Center Parking",
+  description: "Secure covered parking space in the heart of London. Perfect for business meetings or shopping trips.",
+  address: "123 Business District, London SE17 1AA",
+  price_per_hour: 8.5,
+  price_per_day: 25.0,
+  price_per_month: 450.0,
+  latitude: 51.4948,
+  longitude: -0.0877,
+  features: ["Covered", "CCTV", "24/7 Access", "EV Charging"],
   rating: 4.8,
-  reviews: 124,
-  image: "/placeholder.svg?height=300&width=400",
+  reviews: 127,
+  host_name: "Premium Parking Ltd",
+  images: ["/placeholder.svg?height=300&width=400&text=Parking+Space"],
 }
 
+type DurationType = "hour" | "day" | "month"
+
+const durationOptions = [
+  {
+    type: "hour" as DurationType,
+    label: "Hourly",
+    price: mockParkingSpace.price_per_hour,
+    sku: "parking-hour",
+    description: "Perfect for short visits",
+  },
+  {
+    type: "day" as DurationType,
+    label: "Daily",
+    price: mockParkingSpace.price_per_day,
+    sku: "parking-day",
+    description: "Great for day trips",
+  },
+  {
+    type: "month" as DurationType,
+    label: "Monthly",
+    price: mockParkingSpace.price_per_month,
+    sku: "parking-month",
+    description: "Best value for regular parking",
+  },
+]
+
 export default function ReserveSpacePage() {
+  const [selectedDuration, setSelectedDuration] = useState<DurationType>("day")
   const [showCheckout, setShowCheckout] = useState(false)
-  const [selectedDuration, setSelectedDuration] = useState<"hour" | "day" | "month">("day")
 
-  const handleReserveClick = () => {
-    setShowCheckout(true)
-  }
-
-  const getPriceForDuration = () => {
-    switch (selectedDuration) {
-      case "hour":
-        return mockParkingSpace.price_per_hour
-      case "day":
-        return mockParkingSpace.price_per_day
-      case "month":
-        return mockParkingSpace.price_per_month
-      default:
-        return mockParkingSpace.price_per_day
-    }
-  }
-
-  const getSKU = () => {
-    return `parking-${selectedDuration}`
-  }
+  const selectedOption = durationOptions.find((opt) => opt.type === selectedDuration)!
 
   if (showCheckout) {
     return (
-      <CommerceLayerCheckout
-        space={mockParkingSpace}
-        sku={getSKU()}
-        duration={selectedDuration}
-        price={getPriceForDuration()}
-        onBack={() => setShowCheckout(false)}
-      />
+      <div className="min-h-screen bg-gray-50">
+        <CommerceLayerCheckout
+          space={mockParkingSpace}
+          duration={selectedDuration}
+          sku={selectedOption.sku}
+          price={selectedOption.price}
+          onBack={() => setShowCheckout(false)}
+        />
+      </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-4 max-w-4xl">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Reserve Parking Space</h1>
-          <p className="text-gray-600">Test Commerce Layer Integration</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Reserve Your Parking Space</h1>
+          <p className="text-gray-600">Test our Commerce Layer integration with Stripe checkout</p>
         </div>
 
-        {/* Main Content */}
-        <div className="max-w-2xl mx-auto">
-          <Card className="mb-6">
-            <CardHeader>
-              <div className="flex items-start gap-4">
-                <Image
-                  src={mockParkingSpace.image || "/placeholder.svg"}
-                  alt={mockParkingSpace.title}
-                  width={120}
-                  height={90}
-                  className="rounded-lg object-cover"
-                />
-                <div className="flex-1">
-                  <CardTitle className="text-xl mb-2">{mockParkingSpace.title}</CardTitle>
-                  <div className="flex items-center gap-2 mb-2">
-                    <MapPin className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">{mockParkingSpace.address}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                    <span className="text-sm">
-                      {mockParkingSpace.rating} ({mockParkingSpace.reviews} reviews)
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {mockParkingSpace.features.map((feature) => (
-                      <Badge key={feature} variant="secondary" className="flex items-center gap-1">
-                        {feature === "CCTV" && <Camera className="w-3 h-3" />}
-                        {feature === "Secure" && <Shield className="w-3 h-3" />}
-                        {feature === "WiFi" && <Wifi className="w-3 h-3" />}
-                        {feature === "EV Charging" && <Car className="w-3 h-3" />}
-                        {feature}
-                      </Badge>
-                    ))}
+        {/* Parking Space Card */}
+        <Card className="mb-8">
+          <div className="md:flex">
+            {/* Image */}
+            <div className="md:w-1/2">
+              <img
+                src={mockParkingSpace.images[0] || "/placeholder.svg"}
+                alt={mockParkingSpace.title}
+                className="w-full h-64 md:h-full object-cover rounded-t-lg md:rounded-l-lg md:rounded-t-none"
+              />
+            </div>
+
+            {/* Details */}
+            <div className="md:w-1/2 p-6">
+              <CardHeader className="p-0 mb-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-xl mb-2">{mockParkingSpace.title}</CardTitle>
+                    <div className="flex items-center text-gray-600 mb-2">
+                      <MapPin className="w-4 h-4 mr-1" />
+                      <span className="text-sm">{mockParkingSpace.address}</span>
+                    </div>
+                    <div className="flex items-center mb-3">
+                      <Star className="w-4 h-4 text-yellow-400 mr-1" />
+                      <span className="text-sm font-medium">{mockParkingSpace.rating}</span>
+                      <span className="text-sm text-gray-500 ml-1">({mockParkingSpace.reviews} reviews)</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {/* Duration Selection */}
-              <div className="mb-6">
-                <h3 className="font-semibold mb-3">Select Duration</h3>
-                <div className="grid grid-cols-3 gap-3">
-                  <Button
-                    variant={selectedDuration === "hour" ? "default" : "outline"}
-                    onClick={() => setSelectedDuration("hour")}
-                    className="flex flex-col p-4 h-auto"
-                  >
-                    <span className="font-semibold">Hourly</span>
-                    <span className="text-sm">£{mockParkingSpace.price_per_hour}/hour</span>
-                  </Button>
-                  <Button
-                    variant={selectedDuration === "day" ? "default" : "outline"}
-                    onClick={() => setSelectedDuration("day")}
-                    className="flex flex-col p-4 h-auto"
-                  >
-                    <span className="font-semibold">Daily</span>
-                    <span className="text-sm">£{mockParkingSpace.price_per_day}/day</span>
-                  </Button>
-                  <Button
-                    variant={selectedDuration === "month" ? "default" : "outline"}
-                    onClick={() => setSelectedDuration("month")}
-                    className="flex flex-col p-4 h-auto"
-                  >
-                    <span className="font-semibold">Monthly</span>
-                    <span className="text-sm">£{mockParkingSpace.price_per_month}/month</span>
-                  </Button>
+                <CardDescription>{mockParkingSpace.description}</CardDescription>
+              </CardHeader>
+
+              {/* Features */}
+              <div className="mb-4">
+                <h4 className="font-medium mb-2">Features:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {mockParkingSpace.features.map((feature) => (
+                    <Badge key={feature} variant="secondary" className="text-xs">
+                      {feature}
+                    </Badge>
+                  ))}
                 </div>
               </div>
 
-              {/* Price Display */}
-              <div className="text-center mb-6">
-                <div className="text-3xl font-bold text-green-600">
-                  £{getPriceForDuration()}
-                  <span className="text-lg font-normal text-gray-500">/{selectedDuration}</span>
-                </div>
-                <p className="text-sm text-gray-600 mt-1">SKU: {getSKU()}</p>
+              {/* Host */}
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">Hosted by:</span> {mockParkingSpace.host_name}
               </div>
+            </div>
+          </div>
+        </Card>
 
-              {/* Reserve Button */}
-              <div className="text-center">
-                <Button
-                  onClick={handleReserveClick}
-                  size="lg"
-                  className="w-full max-w-md bg-green-600 hover:bg-green-700 text-white font-semibold py-4 text-lg"
+        {/* Duration Selection */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Clock className="w-5 h-5 mr-2" />
+              Select Duration
+            </CardTitle>
+            <CardDescription>Choose how long you need the parking space</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-4">
+              {durationOptions.map((option) => (
+                <div
+                  key={option.type}
+                  className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                    selectedDuration === option.type
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => setSelectedDuration(option.type)}
                 >
-                  Reserve Space - £{getPriceForDuration()}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="text-center">
+                    <h3 className="font-semibold text-lg">{option.label}</h3>
+                    <p className="text-2xl font-bold text-blue-600 my-2">£{option.price.toFixed(2)}</p>
+                    <p className="text-sm text-gray-600">{option.description}</p>
+                    <Badge variant="outline" className="mt-2 text-xs">
+                      SKU: {option.sku}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Test Info */}
-          <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="pt-6">
-              <h3 className="font-semibold text-blue-800 mb-2">Test Information</h3>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li>• This is a test page for Commerce Layer integration</li>
-                <li>• SKUs configured: parking-hour, parking-day, parking-month</li>
-                <li>• Stripe payment processing enabled</li>
-                <li>• Use test card: 4242 4242 4242 4242</li>
-              </ul>
-            </CardContent>
-          </Card>
+        {/* Reserve Button */}
+        <div className="text-center">
+          <Button size="lg" className="px-12 py-4 text-lg" onClick={() => setShowCheckout(true)}>
+            <Car className="w-5 h-5 mr-2" />
+            Reserve Space - £{selectedOption.price.toFixed(2)} {selectedOption.label}
+          </Button>
+          <p className="text-sm text-gray-500 mt-2">You'll be able to review all details before payment</p>
         </div>
+
+        {/* Test Info */}
+        <Card className="mt-8 bg-blue-50 border-blue-200">
+          <CardContent className="p-4">
+            <h4 className="font-semibold text-blue-900 mb-2">🧪 Test Mode Information</h4>
+            <div className="text-sm text-blue-800 space-y-1">
+              <p>• This is a test integration with Commerce Layer and Stripe</p>
+              <p>
+                • Use test card: <code className="bg-blue-100 px-1 rounded">4242 4242 4242 4242</code>
+              </p>
+              <p>• Any expiry date in the future and any 3-digit CVC</p>
+              <p>• SKUs map to your Commerce Layer configuration</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
