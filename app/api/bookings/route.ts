@@ -7,6 +7,24 @@ export async function POST(request: NextRequest) {
 
     console.log("📝 Creating booking:", bookingData)
 
+    // Check if Supabase is properly configured
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ Supabase not configured")
+      return NextResponse.json(
+        {
+          error: "Database not configured",
+          details: "Missing Supabase environment variables",
+        },
+        { status: 500 },
+      )
+    }
+
     // TODO: Add user authentication to get real user_id
     const mockUserId = "550e8400-e29b-41d4-a716-446655440003" // Mock user for demo
 
@@ -89,6 +107,24 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Check if Supabase is properly configured
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ Supabase not configured")
+      return NextResponse.json(
+        {
+          error: "Database not configured",
+          details: "Missing Supabase environment variables",
+        },
+        { status: 500 },
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("userId")
 

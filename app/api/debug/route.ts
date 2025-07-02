@@ -1,75 +1,83 @@
 import { NextResponse } from "next/server"
-import { supabaseServer } from "@/lib/supabase-server"
 
 export async function GET() {
   try {
-    console.log("🔍 Testing Supabase connection...")
+    console.log("🔍 Debug endpoint called")
 
-    // Test basic connection
-    const { data: connectionTest, error: connectionError } = await supabaseServer
-      .from("messages")
-      .select("count")
-      .limit(1)
+    // Check environment variables
+    const envCheck = {
+      // Supabase
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? "✅ Set" : "❌ Missing",
+      SUPABASE_URL: process.env.SUPABASE_URL ? "✅ Set" : "❌ Missing",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "✅ Set" : "❌ Missing",
+      SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? "✅ Set" : "❌ Missing",
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? "✅ Set" : "❌ Missing",
 
-    if (connectionError) {
-      console.error("❌ Connection test failed:", connectionError)
-      return NextResponse.json({
-        status: "error",
-        message: "Failed to connect to Supabase",
-        error: connectionError,
-        env_check: {
-          SUPABASE_URL: !!process.env.SUPABASE_URL,
-          SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
-        },
-      })
+      // Commerce Layer
+      COMMERCE_LAYER_CLIENT_ID: process.env.COMMERCE_LAYER_CLIENT_ID ? "✅ Set" : "❌ Missing",
+      COMMERCE_LAYER_CLIENT_SECRET: process.env.COMMERCE_LAYER_CLIENT_SECRET ? "✅ Set" : "❌ Missing",
+      COMMERCE_LAYER_BASE_URL: process.env.COMMERCE_LAYER_BASE_URL || "❌ Missing",
+      COMMERCE_LAYER_MARKET_ID: process.env.COMMERCE_LAYER_MARKET_ID || "❌ Missing",
+
+      // Stripe
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ? "✅ Set" : "❌ Missing",
+      STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ? "✅ Set" : "❌ Missing",
+
+      // OpenAI
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? "✅ Set" : "❌ Missing",
     }
 
-    // Test message insertion
-    console.log("💾 Testing message insertion...")
-    const testMessage = {
-      user_message: "Test message from debug endpoint",
-      bot_response: "Test response from debug endpoint",
-      created_at: new Date().toISOString(),
+    console.log("🔍 Environment variables:", envCheck)
+
+    // Test Supabase connection
+    let supabaseTest = "❌ Failed"
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+      const supabaseKey =
+        process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.SUPABASE_ANON_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+      if (supabaseUrl && supabaseKey) {
+        const { createClient } = await import("@supabase/supabase-js")
+        const supabase = createClient(supabaseUrl, supabaseKey)
+
+        const { data, error } = await supabase.from("spaces").select("count").limit(1)
+
+        if (!error) {
+          supabaseTest = "✅ Connected"
+        } else {
+          supabaseTest = `❌ Error: ${error.message}`
+        }
+      } else {
+        supabaseTest = "❌ Missing credentials"
+      }
+    } catch (error) {
+      supabaseTest = `❌ Exception: ${error instanceof Error ? error.message : "Unknown error"}`
     }
 
-    const { data: insertData, error: insertError } = await supabaseServer.from("messages").insert(testMessage).select()
-
-    if (insertError) {
-      console.error("❌ Insert test failed:", insertError)
-      return NextResponse.json({
-        status: "error",
-        message: "Failed to insert test message",
-        error: insertError,
-        connection_ok: true,
-      })
-    }
-
-    // Get recent messages
-    const { data: recentMessages, error: selectError } = await supabaseServer
-      .from("messages")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(5)
-
-    console.log("✅ Debug test completed successfully")
-
-    return NextResponse.json({
-      status: "success",
-      message: "Supabase connection and operations working correctly",
-      test_insert: insertData,
-      recent_messages: recentMessages,
-      total_messages: recentMessages?.length || 0,
-      env_check: {
-        SUPABASE_URL: !!process.env.SUPABASE_URL,
-        SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+    const response = {
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      environmentVariables: envCheck,
+      supabaseConnection: supabaseTest,
+      buildInfo: {
+        nextVersion: "15.2.4",
+        nodeVersion: process.version,
       },
-    })
+    }
+
+    console.log("🔍 Debug response:", response)
+    return NextResponse.json(response)
   } catch (error) {
-    console.error("💥 Debug endpoint error:", error)
-    return NextResponse.json({
-      status: "error",
-      message: "Debug endpoint failed",
-      error: error instanceof Error ? error.message : "Unknown error",
-    })
+    console.error("❌ Debug endpoint error:", error)
+    return NextResponse.json(
+      {
+        error: "Debug endpoint failed",
+        details: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 },
+    )
   }
 }
