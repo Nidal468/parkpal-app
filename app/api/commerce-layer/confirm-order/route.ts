@@ -11,29 +11,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Order ID is required" }, { status: 400 })
     }
 
-    // Get Commerce Layer credentials
+    // Get Commerce Layer credentials - using correct server-side variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
+    const clScope = process.env.COMMERCE_LAYER_SCOPE
 
-    if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
+    if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId || !clScope) {
       return NextResponse.json({ error: "Commerce Layer not configured" }, { status: 500 })
     }
 
-    // Use only market scope as requested
-    const scope = `market:${clMarketId}`
-
-    // Get access token with Integration app credentials
+    // Get access token with Sales Channel app credentials
     const tokenPayload = {
       grant_type: "client_credentials",
       client_id: clClientId,
       client_secret: clClientSecret,
-      scope: scope,
+      scope: clScope,
     }
 
-    console.log("🔑 Getting access token for order confirmation with Integration app...")
-    console.log("🔑 Using market scope only:", scope)
+    console.log("🔑 Getting access token for order confirmation with Sales Channel app...")
+    console.log("🔑 Using scope:", clScope)
 
     const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
       method: "POST",

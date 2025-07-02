@@ -19,18 +19,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Customer name and email are required" }, { status: 400 })
     }
 
-    // Check Commerce Layer environment variables
+    // Check Commerce Layer environment variables - using correct server-side variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
+    const clScope = process.env.COMMERCE_LAYER_SCOPE
 
     // Log environment values for debugging
-    console.log("🔧 Environment Values Check:", {
+    console.log("🔧 Sales Channel App Environment Values:", {
       clClientId: clClientId ? `${clClientId.substring(0, 10)}...` : "undefined",
       clClientSecret: clClientSecret ? `${clClientSecret.substring(0, 10)}...` : "undefined",
       clBaseUrl,
       clMarketId,
+      clScope,
       hasClientId: !!clClientId,
       hasClientSecret: !!clClientSecret,
       clientIdLength: clClientId?.length || 0,
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!clClientId || !clClientSecret) {
-      console.error("❌ Missing Commerce Layer credentials")
+      console.error("❌ Missing Commerce Layer Sales Channel credentials")
       return NextResponse.json(
         {
           error: "Commerce Layer not configured",
@@ -78,6 +80,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (!clScope) {
+      console.error("❌ Missing Commerce Layer scope")
+      return NextResponse.json(
+        {
+          error: "Commerce Layer scope not configured",
+          details: "Missing COMMERCE_LAYER_SCOPE",
+          actualScope: clScope || "undefined",
+        },
+        { status: 500 },
+      )
+    }
+
     // Validate Stripe credentials are TEST keys
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY
     const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -104,11 +118,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get Commerce Layer access token with Integration app credentials
-    console.log("🔑 Getting access token with Integration app...")
+    // Get Commerce Layer access token with Sales Channel app credentials
+    console.log("🔑 Getting access token with Sales Channel app...")
     let accessToken: string
     try {
-      accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clBaseUrl, clMarketId)
+      accessToken = await getSalesChannelAccessToken(clClientId, clClientSecret, clBaseUrl, clScope)
       console.log("✅ Commerce Layer access token obtained")
     } catch (tokenError) {
       console.error("❌ Failed to get access token:", tokenError)
@@ -119,6 +133,7 @@ export async function POST(request: NextRequest) {
           debug: {
             baseUrl: clBaseUrl,
             marketId: clMarketId,
+            scope: clScope,
             hasCredentials: !!(clClientId && clClientSecret),
             clientIdPrefix: clClientId?.substring(0, 10) + "...",
             tokenError: tokenError instanceof Error ? tokenError.message : String(tokenError),
@@ -127,6 +142,7 @@ export async function POST(request: NextRequest) {
               clientSecret: clClientSecret ? "set" : "undefined",
               baseUrl: clBaseUrl || "undefined",
               marketId: clMarketId || "undefined",
+              scope: clScope || "undefined",
             },
           },
         },
@@ -508,22 +524,18 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to get Commerce Layer access token using Integration app credentials with market scope only
-async function getCommerceLayerAccessToken(
+// Helper function to get Commerce Layer access token using Sales Channel app credentials
+async function getSalesChannelAccessToken(
   clientId: string,
   clientSecret: string,
   baseUrl: string,
-  marketId: string,
+  scope: string,
 ): Promise<string> {
-  console.log("🔑 Requesting Commerce Layer access token...")
-
-  // Use only market scope as requested
-  const scope = `market:${marketId}`
+  console.log("🔑 Requesting Commerce Layer access token with Sales Channel app...")
 
   console.log("🔑 Token request details:", {
     baseUrl,
     tokenUrl: `${baseUrl}/oauth/token`,
-    marketId,
     scope,
     hasClientId: !!clientId,
     hasClientSecret: !!clientSecret,
@@ -575,7 +587,7 @@ async function getCommerceLayerAccessToken(
     }
 
     const data = await response.json()
-    console.log("✅ Access token obtained successfully with Integration app credentials")
+    console.log("✅ Access token obtained successfully with Sales Channel app credentials")
     console.log("🔑 Token response data:", {
       ...data,
       access_token: data.access_token?.substring(0, 20) + "...",

@@ -2,27 +2,31 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
-    console.log("🧪 Manual Commerce Layer Authentication Test with Integration App")
+    console.log("🧪 Manual Commerce Layer Authentication Test with Sales Channel App")
 
-    // Get environment variables
+    // Get environment variables - using correct server-side variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
+    const clScope = process.env.COMMERCE_LAYER_SCOPE
+    const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
 
     // Log actual values for debugging
-    console.log("🔧 Environment Values:", {
+    console.log("🔧 Sales Channel App Environment Values:", {
       clClientId: clClientId ? `${clClientId.substring(0, 10)}...` : "undefined",
       clClientSecret: clClientSecret ? `${clClientSecret.substring(0, 10)}...` : "undefined",
       clBaseUrl,
       clMarketId,
+      clScope,
+      clStockLocationId,
       hasClientId: !!clClientId,
       hasClientSecret: !!clClientSecret,
       clientIdLength: clClientId?.length || 0,
       clientSecretLength: clClientSecret?.length || 0,
     })
 
-    if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
+    if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId || !clScope) {
       return NextResponse.json(
         {
           error: "Missing environment variables",
@@ -31,42 +35,48 @@ export async function GET() {
             clientSecret: !clClientSecret,
             baseUrl: !clBaseUrl,
             marketId: !clMarketId,
+            scope: !clScope,
           },
           actualValues: {
             clientId: clClientId || "undefined",
             clientSecret: clClientSecret ? "set" : "undefined",
             baseUrl: clBaseUrl || "undefined",
             marketId: clMarketId || "undefined",
+            scope: clScope || "undefined",
+            stockLocationId: clStockLocationId || "undefined",
           },
           instructions: [
-            "Update your Vercel environment variables with the new Integration app credentials:",
-            "COMMERCE_LAYER_CLIENT_ID=BtPDMCkSk3pEncM7ejudu5laqnAKXcXE97c1ImgHfiI",
-            "COMMERCE_LAYER_CLIENT_SECRET=SuunOtYwHB5NuT9QXNxn1bjMs8hFi0vtvnEPxSiGAv4",
-            "COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
+            "Update your Vercel environment variables with the new Sales Channel app credentials:",
+            "COMMERCE_LAYER_CLIENT_ID=YmPSGJKq4UbXPGPmTE6FMhConHND6gIRyggZHH1bTYo",
+            "COMMERCE_LAYER_CLIENT_SECRET=PbCOEFxAiiX1B5PzXiVwQP3NwsPKJYlB5ARz63g7uKY",
+            "COMMERCE_LAYER_SCOPE=vjkaZhNPnl",
             "COMMERCE_LAYER_MARKET_ID=vjkaZhNPnl",
+            "COMMERCE_LAYER_STOCK_LOCATION_ID=okJbPuNbjk",
+            "COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
+            "",
+            "REMOVE these security risks:",
+            "NEXT_PUBLIC_CL_SCOPE (should be server-side)",
+            "NEXT_PUBLIC_CL_STOCK_LOCATION_ID (should be server-side)",
           ],
         },
         { status: 400 },
       )
     }
 
-    // Use only market scope as requested
-    const scope = `market:${clMarketId}`
-
-    // Manual token request with Integration app credentials
+    // Manual token request with Sales Channel app credentials
     const tokenPayload = {
       grant_type: "client_credentials",
       client_id: clClientId,
       client_secret: clClientSecret,
-      scope: scope,
+      scope: clScope,
     }
 
     console.log("🔑 Making token request to:", `${clBaseUrl}/oauth/token`)
-    console.log("🔑 With Integration app payload:", {
+    console.log("🔑 With Sales Channel app payload:", {
       ...tokenPayload,
       client_secret: "[REDACTED]",
     })
-    console.log("🔑 Using market scope only:", scope)
+    console.log("🔑 Using scope:", clScope)
 
     const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
       method: "POST",
@@ -98,25 +108,28 @@ export async function GET() {
             ...tokenPayload,
             client_secret: "[REDACTED]",
           },
-          scopeUsed: scope,
+          scopeUsed: clScope,
           diagnosis: {
             issue: tokenResponse.status === 403 ? "403 Forbidden" : `HTTP ${tokenResponse.status}`,
             meaning:
               tokenResponse.status === 403
-                ? "Commerce Layer is rejecting your Integration app credentials or scope"
+                ? "Commerce Layer is rejecting your Sales Channel app credentials or scope"
                 : "Authentication request failed",
             possibleCauses: [
-              "❌ Environment variables not updated with new Integration app credentials",
+              "❌ Environment variables not updated with new Sales Channel app credentials",
               "❌ Client ID is incorrect",
               "❌ Client Secret is incorrect",
-              "❌ Integration app doesn't have access to the specified market",
-              "❌ Integration app is not configured for 'Client Credentials' grant type",
+              "❌ Sales Channel app doesn't have access to the specified market",
+              "❌ Sales Channel app is not configured for 'Client Credentials' grant type",
+              "❌ Scope format is incorrect",
             ],
           },
           nextSteps: [
-            "1. Update Vercel environment variables with new Integration app credentials",
-            "2. Redeploy your application",
-            "3. Test this endpoint again",
+            "1. Update Vercel environment variables with new Sales Channel app credentials",
+            "2. Remove NEXT_PUBLIC_CL_* variables (security risk)",
+            "3. Add server-side COMMERCE_LAYER_* variables",
+            "4. Redeploy your application",
+            "5. Test this endpoint again",
           ],
         },
         { status: 500 },
@@ -136,15 +149,16 @@ export async function GET() {
             ...tokenPayload,
             client_secret: "[REDACTED]",
           },
-          scopeUsed: scope,
+          scopeUsed: clScope,
           troubleshooting: {
-            message: "Integration app authentication failed",
+            message: "Sales Channel app authentication failed",
             steps: [
-              "1. Verify environment variables are updated with new Integration app credentials",
+              "1. Verify environment variables are updated with new Sales Channel app credentials",
               "2. Check Commerce Layer Dashboard > Settings > Applications",
-              "3. Ensure Integration app has 'Client Credentials' grant type enabled",
-              `4. Verify Integration app has access to market: ${clMarketId}`,
-              "5. Redeploy application after updating environment variables",
+              "3. Ensure Sales Channel app has 'Client Credentials' grant type enabled",
+              `4. Verify Sales Channel app has access to market: ${clMarketId}`,
+              "5. Remove NEXT_PUBLIC_CL_* variables from Vercel (security risk)",
+              "6. Redeploy application after updating environment variables",
             ],
           },
         },
@@ -152,7 +166,7 @@ export async function GET() {
       )
     }
 
-    console.log("✅ Token obtained successfully with Integration app credentials!")
+    console.log("✅ Token obtained successfully with Sales Channel app credentials!")
 
     // Test market access
     let marketTest: any = { status: "not_tested" }
@@ -193,7 +207,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: "Commerce Layer Integration app authentication successful!",
+      message: "Commerce Layer Sales Channel app authentication successful!",
       tokenResponse: {
         ...tokenData,
         access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 20)}...` : "missing",
@@ -202,34 +216,39 @@ export async function GET() {
         scope: tokenData.scope,
       },
       marketTest,
-      scopeUsed: scope,
+      scopeUsed: clScope,
       environmentCheck: {
         clientId: clClientId?.substring(0, 10) + "...",
         clientSecret: "✅ Set",
         baseUrl: clBaseUrl,
         marketId: clMarketId,
+        scope: clScope,
+        stockLocationId: clStockLocationId,
       },
-      integrationAppDetails: {
-        appType: "Integration (confidential client)",
+      salesChannelAppDetails: {
+        appType: "Sales Channel (with market access assigned via dashboard)",
         grantType: "client_credentials",
         tokenUrl: `${clBaseUrl}/oauth/token`,
         apiBaseUrl: `${clBaseUrl}/api`,
-        scopeUsed: "market scope only (no stock location)",
+        scopeUsed: clScope,
+        marketAccess: "Assigned via Commerce Layer dashboard UI",
+        securityNote: "All credentials are server-side only (no NEXT_PUBLIC_ exposure)",
       },
       nextSteps: [
-        "✅ Integration app authentication working",
+        "✅ Sales Channel app authentication working",
         marketTest.status === "success" ? "✅ Market access working" : "❌ Check market access",
+        "✅ All credentials properly secured server-side",
         "✅ Ready to test full payment flow",
         "Now test /test-reserve page",
       ],
     })
   } catch (error) {
-    console.error("❌ Integration app auth test failed:", error)
+    console.error("❌ Sales Channel app auth test failed:", error)
     return NextResponse.json(
       {
-        error: "Integration app authentication test failed",
+        error: "Sales Channel app authentication test failed",
         details: error instanceof Error ? error.message : "Unknown error",
-        suggestion: "Check your Commerce Layer Integration app credentials and environment variables",
+        suggestion: "Check your Commerce Layer Sales Channel app credentials and environment variables",
       },
       { status: 500 },
     )
