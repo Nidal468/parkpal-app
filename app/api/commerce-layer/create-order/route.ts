@@ -24,14 +24,20 @@ export async function POST(request: NextRequest) {
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
-    const clScope = process.env.COMMERCE_LAYER_SCOPE || `market:${process.env.COMMERCE_LAYER_MARKET_ID}`
+    const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
+
+    // Create correct scope format
+    const clScope = clStockLocationId
+      ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
+      : `market:id:${clMarketId}`
 
     // Log environment values for debugging
-    console.log("🔧 Sales Channel App Environment Values:", {
+    console.log("🔧 Commerce Layer Environment Values:", {
       clClientId: clClientId ? `${clClientId.substring(0, 10)}...` : "undefined",
       clClientSecret: clClientSecret ? `${clClientSecret.substring(0, 10)}...` : "undefined",
       clBaseUrl,
       clMarketId,
+      clStockLocationId,
       clScope,
       hasClientId: !!clClientId,
       hasClientSecret: !!clClientSecret,
@@ -40,7 +46,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!clClientId || !clClientSecret) {
-      console.error("❌ Missing Commerce Layer Sales Channel credentials")
+      console.error("❌ Missing Commerce Layer credentials")
       return NextResponse.json(
         {
           error: "Commerce Layer not configured",
@@ -80,18 +86,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!clScope) {
-      console.error("❌ Missing Commerce Layer scope")
-      return NextResponse.json(
-        {
-          error: "Commerce Layer scope not configured",
-          details: "Missing COMMERCE_LAYER_SCOPE and COMMERCE_LAYER_MARKET_ID",
-          actualScope: clScope || "undefined",
-        },
-        { status: 500 },
-      )
-    }
-
     // Validate Stripe credentials are TEST keys
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY
     const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -118,11 +112,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get Commerce Layer access token with correct scope format
-    console.log("🔑 Getting access token with correct scope format...")
+    // Get Commerce Layer access token with correct endpoint and scope format
+    console.log("🔑 Getting access token with correct endpoint and scope format...")
     let accessToken: string
     try {
-      accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clBaseUrl, clScope)
+      accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clMarketId, clStockLocationId)
       console.log("✅ Commerce Layer access token obtained")
     } catch (tokenError) {
       console.error("❌ Failed to get access token:", tokenError)
@@ -524,18 +518,23 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to get Commerce Layer access token with correct scope format
+// Helper function to get Commerce Layer access token with correct endpoint and scope format
 async function getCommerceLayerAccessToken(
   clientId: string,
   clientSecret: string,
-  baseUrl: string,
-  scope: string,
+  marketId: string,
+  stockLocationId?: string,
 ): Promise<string> {
-  console.log("🔑 Requesting Commerce Layer access token with correct scope format...")
+  console.log("🔑 Requesting Commerce Layer access token with correct endpoint and scope format...")
+
+  // Use correct global auth endpoint
+  const tokenUrl = "https://auth.commercelayer.io/oauth/token"
+
+  // Create correct scope format
+  const scope = stockLocationId ? `market:id:${marketId} stock_location:id:${stockLocationId}` : `market:id:${marketId}`
 
   console.log("🔑 Token request details:", {
-    baseUrl,
-    tokenUrl: `${baseUrl}/oauth/token`,
+    tokenUrl,
     scope,
     hasClientId: !!clientId,
     hasClientSecret: !!clientSecret,
@@ -557,7 +556,7 @@ async function getCommerceLayerAccessToken(
   })
 
   try {
-    const response = await fetch(`${baseUrl}/oauth/token`, {
+    const response = await fetch(tokenUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -587,7 +586,7 @@ async function getCommerceLayerAccessToken(
     }
 
     const data = await response.json()
-    console.log("✅ Access token obtained successfully with correct scope format")
+    console.log("✅ Access token obtained successfully with correct endpoint and scope format")
     console.log("🔑 Token response data:", {
       ...data,
       access_token: data.access_token?.substring(0, 20) + "...",

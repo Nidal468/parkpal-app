@@ -2,29 +2,33 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
-    console.log("🧪 Manual Commerce Layer Authentication Test with Correct Scope Format")
+    console.log("🧪 Manual Commerce Layer Authentication Test with Correct Endpoint and Scope Format")
 
     // Get environment variables - using correct server-side variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
-    const clScope = process.env.COMMERCE_LAYER_SCOPE || `market:${process.env.COMMERCE_LAYER_MARKET_ID}`
     const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
 
+    // Create correct scope format
+    const clScope = clStockLocationId
+      ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
+      : `market:id:${clMarketId}`
+
     // Log actual values for debugging
-    console.log("🔧 Environment Values with Correct Scope:", {
+    console.log("🔧 Environment Values with Correct Endpoint and Scope:", {
       clClientId: clClientId ? `${clClientId.substring(0, 10)}...` : "undefined",
       clClientSecret: clClientSecret ? `${clClientSecret.substring(0, 10)}...` : "undefined",
       clBaseUrl,
       clMarketId,
-      clScope,
       clStockLocationId,
+      clScope,
       hasClientId: !!clClientId,
       hasClientSecret: !!clClientSecret,
       clientIdLength: clClientId?.length || 0,
       clientSecretLength: clClientSecret?.length || 0,
-      scopeFormat: clScope?.startsWith("market:") ? "✅ Correct format" : "❌ Missing 'market:' prefix",
+      scopeFormat: clScope?.includes("market:id:") ? "✅ Correct format" : "❌ Incorrect format",
     })
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
@@ -51,35 +55,37 @@ export async function GET() {
             "COMMERCE_LAYER_CLIENT_SECRET=<your_client_secret>",
             "COMMERCE_LAYER_MARKET_ID=<your_market_id>",
             "COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
+            "COMMERCE_LAYER_STOCK_LOCATION_ID=<your_stock_location_id> (optional)",
             "",
-            "For scope, either set:",
-            `COMMERCE_LAYER_SCOPE=market:${clMarketId || "<your_market_id>"}`,
-            "OR leave it unset and it will auto-generate from COMMERCE_LAYER_MARKET_ID",
+            "Scope will auto-generate as:",
+            `market:id:${clMarketId || "<your_market_id>"}`,
+            "OR with stock location:",
+            `market:id:${clMarketId || "<your_market_id>"} stock_location:id:${clStockLocationId || "<your_stock_location_id>"}`,
           ],
         },
         { status: 400 },
       )
     }
 
-    // Ensure scope has correct format
-    const correctScope = clScope?.startsWith("market:") ? clScope : `market:${clMarketId}`
+    // Use correct global auth endpoint
+    const tokenUrl = "https://auth.commercelayer.io/oauth/token"
 
-    // Manual token request with correct scope format
+    // Manual token request with correct endpoint and scope format
     const tokenPayload = {
       grant_type: "client_credentials",
       client_id: clClientId,
       client_secret: clClientSecret,
-      scope: correctScope,
+      scope: clScope,
     }
 
-    console.log("🔑 Making token request to:", `${clBaseUrl}/oauth/token`)
+    console.log("🔑 Making token request to CORRECT endpoint:", tokenUrl)
     console.log("🔑 With correct scope payload:", {
       ...tokenPayload,
       client_secret: "[REDACTED]",
     })
-    console.log("🔑 Using corrected scope:", correctScope)
+    console.log("🔑 Using corrected scope:", clScope)
 
-    const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
+    const tokenResponse = await fetch(tokenUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -104,16 +110,17 @@ export async function GET() {
           error: "Invalid JSON response from Commerce Layer",
           status: tokenResponse.status,
           rawResponse: responseText,
-          url: `${clBaseUrl}/oauth/token`,
+          url: tokenUrl,
           payload: {
             ...tokenPayload,
             client_secret: "[REDACTED]",
           },
-          scopeUsed: correctScope,
+          scopeUsed: clScope,
+          endpointUsed: tokenUrl,
           scopeFormat: {
-            original: clScope,
-            corrected: correctScope,
-            isCorrectFormat: correctScope.startsWith("market:"),
+            used: clScope,
+            explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
+            isCorrectFormat: clScope?.includes("market:id:"),
           },
           diagnosis: {
             issue: tokenResponse.status === 403 ? "403 Forbidden" : `HTTP ${tokenResponse.status}`,
@@ -126,14 +133,16 @@ export async function GET() {
               "❌ Client Secret is incorrect",
               "❌ Application doesn't have access to the specified market",
               "❌ Application is not configured for 'Client Credentials' grant type",
-              "❌ Scope format was incorrect (now fixed to use 'market:' prefix)",
+              "❌ Market ID is incorrect",
+              "❌ Stock Location ID is incorrect (if used)",
             ],
           },
           nextSteps: [
             "1. Verify your Commerce Layer application credentials",
             "2. Check that your app has 'Client Credentials' grant type enabled",
             "3. Ensure your app has access to the specified market",
-            "4. Try creating a new Integration application if issues persist",
+            "4. Verify market ID and stock location ID are correct",
+            "5. Try creating a new Integration application if issues persist",
           ],
         },
         { status: 500 },
@@ -148,27 +157,30 @@ export async function GET() {
           status: tokenResponse.status,
           statusText: tokenResponse.statusText,
           commerceLayerError: tokenData,
-          url: `${clBaseUrl}/oauth/token`,
+          url: tokenUrl,
           payload: {
             ...tokenPayload,
             client_secret: "[REDACTED]",
           },
-          scopeUsed: correctScope,
+          scopeUsed: clScope,
+          endpointUsed: tokenUrl,
           scopeFormat: {
-            original: clScope,
-            corrected: correctScope,
-            isCorrectFormat: correctScope.startsWith("market:"),
-            explanation: "Scope must be in format 'market:<market_id>'",
+            used: clScope,
+            explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
+            isCorrectFormat: clScope?.includes("market:id:"),
           },
           troubleshooting: {
-            message: "Authentication failed with correct scope format",
+            message: "Authentication failed with correct endpoint and scope format",
             steps: [
               "1. Verify environment variables are correct",
               "2. Check Commerce Layer Dashboard > Settings > Applications",
               "3. Ensure app has 'Client Credentials' grant type enabled",
               `4. Verify app has access to market: ${clMarketId}`,
-              "5. Try creating a new Integration application",
-              "6. Redeploy application after updating environment variables",
+              clStockLocationId
+                ? `5. Verify stock location exists: ${clStockLocationId}`
+                : "5. Stock location not used",
+              "6. Try creating a new Integration application",
+              "7. Redeploy application after updating environment variables",
             ],
           },
         },
@@ -176,7 +188,7 @@ export async function GET() {
       )
     }
 
-    console.log("✅ Token obtained successfully with correct scope format!")
+    console.log("✅ Token obtained successfully with correct endpoint and scope format!")
 
     // Test market access
     let marketTest: any = { status: "not_tested" }
@@ -217,7 +229,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: "Commerce Layer authentication successful with correct scope format!",
+      message: "Commerce Layer authentication successful with correct endpoint and scope format!",
       tokenResponse: {
         ...tokenData,
         access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 20)}...` : "missing",
@@ -226,30 +238,31 @@ export async function GET() {
         scope: tokenData.scope,
       },
       marketTest,
+      endpointUsed: tokenUrl,
       scopeDetails: {
-        original: clScope,
-        corrected: correctScope,
-        isCorrectFormat: correctScope.startsWith("market:"),
-        explanation: "Scope must be in format 'market:<market_id>'",
+        used: clScope,
+        explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
+        isCorrectFormat: clScope?.includes("market:id:"),
+        hasStockLocation: !!clStockLocationId,
       },
       environmentCheck: {
         clientId: clClientId?.substring(0, 10) + "...",
         clientSecret: "✅ Set",
         baseUrl: clBaseUrl,
         marketId: clMarketId,
-        scope: correctScope,
-        stockLocationId: clStockLocationId,
+        stockLocationId: clStockLocationId || "Not set",
+        scope: clScope,
       },
       applicationDetails: {
         grantType: "client_credentials",
-        tokenUrl: `${clBaseUrl}/oauth/token`,
+        tokenUrl: tokenUrl,
         apiBaseUrl: `${clBaseUrl}/api`,
-        scopeUsed: correctScope,
-        scopeFormat: "market:<market_id>",
+        scopeUsed: clScope,
+        scopeFormat: "market:id:<market_id> [stock_location:id:<stock_location_id>]",
         securityNote: "All credentials are server-side only (no NEXT_PUBLIC_ exposure)",
       },
       nextSteps: [
-        "✅ Authentication working with correct scope format",
+        "✅ Authentication working with correct endpoint and scope format",
         marketTest.status === "success" ? "✅ Market access working" : "❌ Check market access",
         "✅ All credentials properly secured server-side",
         "✅ Ready to test full payment flow",

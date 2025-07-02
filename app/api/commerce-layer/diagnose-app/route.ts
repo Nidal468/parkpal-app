@@ -9,20 +9,26 @@ export async function GET() {
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
-    const clScope = process.env.COMMERCE_LAYER_SCOPE || `market:${process.env.COMMERCE_LAYER_MARKET_ID}`
+    const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
+
+    // Create correct scope format
+    const clScope = clStockLocationId
+      ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
+      : `market:id:${clMarketId}`
 
     console.log("🔧 Environment Check:", {
       hasClientId: !!clClientId,
       hasClientSecret: !!clClientSecret,
       hasBaseUrl: !!clBaseUrl,
       hasMarketId: !!clMarketId,
-      hasScope: !!clScope,
+      hasStockLocationId: !!clStockLocationId,
       clientIdLength: clClientId?.length || 0,
       clientSecretLength: clClientSecret?.length || 0,
       baseUrl: clBaseUrl,
       marketId: clMarketId,
+      stockLocationId: clStockLocationId,
       scope: clScope,
-      scopeFormat: clScope?.startsWith("market:") ? "✅ Correct format" : "❌ Will be auto-corrected",
+      scopeFormat: clScope?.includes("market:id:") ? "✅ Correct format" : "❌ Incorrect format",
     })
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
@@ -49,23 +55,26 @@ export async function GET() {
           "4. Copy the NEW credentials and update Vercel:",
           "   COMMERCE_LAYER_CLIENT_ID=<new_client_id>",
           "   COMMERCE_LAYER_CLIENT_SECRET=<new_client_secret>",
-          `   COMMERCE_LAYER_SCOPE=market:${clMarketId || "<your_market_id>"}`,
-          "   COMMERCE_LAYER_MARKET_ID=<your_market_id>",
+          `   COMMERCE_LAYER_MARKET_ID=${clMarketId || "<your_market_id>"}`,
           "   COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
+          "   COMMERCE_LAYER_STOCK_LOCATION_ID=<your_stock_location_id> (optional)",
+          "",
+          "Scope will auto-generate as:",
+          `market:id:${clMarketId || "<your_market_id>"}`,
         ],
       })
     }
 
-    // Ensure scope has correct format
-    const correctScope = clScope?.startsWith("market:") ? clScope : `market:${clMarketId}`
+    // Use correct global auth endpoint
+    const tokenUrl = "https://auth.commercelayer.io/oauth/token"
 
     // Test different authentication approaches
     const results = []
 
-    // Test 1: Current credentials with corrected market scope
-    console.log("🧪 Test 1: Current credentials with corrected market scope")
+    // Test 1: Current credentials with corrected endpoint and scope
+    console.log("🧪 Test 1: Current credentials with corrected endpoint and scope")
     try {
-      const test1Response = await fetch(`${clBaseUrl}/oauth/token`, {
+      const test1Response = await fetch(tokenUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -75,33 +84,35 @@ export async function GET() {
           grant_type: "client_credentials",
           client_id: clClientId,
           client_secret: clClientSecret,
-          scope: correctScope,
+          scope: clScope,
         }),
       })
 
       const test1Text = await test1Response.text()
       results.push({
-        test: "Corrected Market Scope Authentication",
+        test: "Corrected Endpoint + Scope Authentication",
         status: test1Response.status,
         success: test1Response.ok,
         response: test1Text || "Empty response",
         headers: Object.fromEntries(test1Response.headers.entries()),
-        scopeUsed: correctScope,
+        endpointUsed: tokenUrl,
+        scopeUsed: clScope,
       })
     } catch (error) {
       results.push({
-        test: "Corrected Market Scope Authentication",
+        test: "Corrected Endpoint + Scope Authentication",
         status: "error",
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        scopeUsed: correctScope,
+        endpointUsed: tokenUrl,
+        scopeUsed: clScope,
       })
     }
 
     // Test 2: Try without scope (some apps don't need it)
     console.log("🧪 Test 2: Without scope")
     try {
-      const test2Response = await fetch(`${clBaseUrl}/oauth/token`, {
+      const test2Response = await fetch(tokenUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -121,6 +132,7 @@ export async function GET() {
         success: test2Response.ok,
         response: test2Text || "Empty response",
         headers: Object.fromEntries(test2Response.headers.entries()),
+        endpointUsed: tokenUrl,
         scopeUsed: "none",
       })
     } catch (error) {
@@ -129,20 +141,21 @@ export async function GET() {
         status: "error",
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
+        endpointUsed: tokenUrl,
         scopeUsed: "none",
       })
     }
 
     // Test 3: Try with different content type
-    console.log("🧪 Test 3: Form-encoded request with correct scope")
+    console.log("🧪 Test 3: Form-encoded request with correct endpoint and scope")
     try {
       const params = new URLSearchParams()
       params.append("grant_type", "client_credentials")
       params.append("client_id", clClientId)
       params.append("client_secret", clClientSecret)
-      params.append("scope", correctScope)
+      params.append("scope", clScope)
 
-      const test3Response = await fetch(`${clBaseUrl}/oauth/token`, {
+      const test3Response = await fetch(tokenUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -153,20 +166,22 @@ export async function GET() {
 
       const test3Text = await test3Response.text()
       results.push({
-        test: "Form-Encoded Authentication with Correct Scope",
+        test: "Form-Encoded Authentication with Correct Endpoint + Scope",
         status: test3Response.status,
         success: test3Response.ok,
         response: test3Text || "Empty response",
         headers: Object.fromEntries(test3Response.headers.entries()),
-        scopeUsed: correctScope,
+        endpointUsed: tokenUrl,
+        scopeUsed: clScope,
       })
     } catch (error) {
       results.push({
-        test: "Form-Encoded Authentication with Correct Scope",
+        test: "Form-Encoded Authentication with Correct Endpoint + Scope",
         status: "error",
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        scopeUsed: correctScope,
+        endpointUsed: tokenUrl,
+        scopeUsed: clScope,
       })
     }
 
@@ -181,14 +196,19 @@ export async function GET() {
         clientSecret: "✅ Set",
         baseUrl: clBaseUrl,
         marketId: clMarketId,
-        scope: correctScope,
-        scopeFormat: correctScope.startsWith("market:") ? "✅ Correct" : "❌ Incorrect",
+        stockLocationId: clStockLocationId || "Not set",
+        scope: clScope,
+        scopeFormat: clScope.includes("market:id:") ? "✅ Correct" : "❌ Incorrect",
+      },
+      endpointCorrection: {
+        correctEndpoint: tokenUrl,
+        explanation: "Using global auth endpoint instead of organization-specific endpoint",
       },
       scopeCorrection: {
-        original: clScope,
-        corrected: correctScope,
-        explanation: "Scope must be in format 'market:<market_id>'",
-        wasFixed: clScope !== correctScope,
+        used: clScope,
+        explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
+        isCorrectFormat: clScope.includes("market:id:"),
+        hasStockLocation: !!clStockLocationId,
       },
       testResults: results,
       analysis: {
@@ -198,13 +218,14 @@ export async function GET() {
         commonIssues: [
           "403 Forbidden usually means the app credentials are invalid",
           "Empty response body suggests the request is being rejected at the API gateway level",
-          "Incorrect scope format (missing 'market:' prefix) is a common cause",
+          "Incorrect endpoint URL was a common cause (now fixed)",
+          "Incorrect scope format was a common cause (now fixed)",
           "This often happens when the app type or configuration is incorrect",
         ],
       },
       recommendations: allFailed
         ? [
-            "🚨 ALL authentication tests failed - your app configuration is incorrect",
+            "🚨 ALL authentication tests failed - your app configuration is still incorrect",
             "",
             "SOLUTION: Create a new Integration app in Commerce Layer:",
             "1. Go to Commerce Layer Dashboard > Settings > Applications",
@@ -218,22 +239,23 @@ export async function GET() {
             "Then update your Vercel environment variables:",
             "COMMERCE_LAYER_CLIENT_ID=<new_integration_client_id>",
             "COMMERCE_LAYER_CLIENT_SECRET=<new_integration_client_secret>",
-            `COMMERCE_LAYER_SCOPE=market:${clMarketId}`,
             `COMMERCE_LAYER_MARKET_ID=${clMarketId}`,
+            "COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
+            "COMMERCE_LAYER_STOCK_LOCATION_ID=<your_stock_location_id> (optional)",
             "",
             "Integration apps have broader permissions and work better for server-side operations.",
           ]
         : [
             `✅ Found working authentication method: ${successfulTest?.test}`,
-            `✅ Scope format corrected to: ${correctScope}`,
+            `✅ Endpoint corrected to: ${tokenUrl}`,
+            `✅ Scope format corrected to: ${clScope}`,
             "Update your main authentication code to use this approach.",
           ],
       nextSteps: [
         "1. Create a new Integration application in Commerce Layer",
         "2. Update environment variables with Integration app credentials",
-        `3. Set COMMERCE_LAYER_SCOPE=market:${clMarketId}`,
-        "4. Redeploy your application",
-        "5. Test /api/commerce-layer/test-manual-auth again",
+        "3. Redeploy your application",
+        "4. Test /api/commerce-layer/test-manual-auth again",
       ],
     })
   } catch (error) {

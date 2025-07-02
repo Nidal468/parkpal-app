@@ -9,19 +9,25 @@ export async function GET() {
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
-    const clScope = process.env.COMMERCE_LAYER_SCOPE || `market:${process.env.COMMERCE_LAYER_MARKET_ID}`
+    const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
+
+    // Create correct scope format
+    const clScope = clStockLocationId
+      ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
+      : `market:id:${clMarketId}`
 
     console.log("🔧 Integration App Environment Check:", {
       hasClientId: !!clClientId,
       hasClientSecret: !!clClientSecret,
       hasBaseUrl: !!clBaseUrl,
       hasMarketId: !!clMarketId,
-      hasScope: !!clScope,
+      hasStockLocationId: !!clStockLocationId,
       clientIdPrefix: clClientId?.substring(0, 10) + "...",
       baseUrl: clBaseUrl,
       marketId: clMarketId,
+      stockLocationId: clStockLocationId,
       scope: clScope,
-      scopeFormat: clScope?.startsWith("market:") ? "✅ Correct format" : "❌ Will be auto-corrected",
+      scopeFormat: clScope?.includes("market:id:") ? "✅ Correct format" : "❌ Incorrect format",
     })
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
@@ -44,15 +50,18 @@ export async function GET() {
             "COMMERCE_LAYER_CLIENT_SECRET=<integration_client_secret>",
             "COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
             "COMMERCE_LAYER_MARKET_ID=<your_market_id>",
-            `COMMERCE_LAYER_SCOPE=market:${clMarketId || "<your_market_id>"}`,
+            "COMMERCE_LAYER_STOCK_LOCATION_ID=<your_stock_location_id> (optional)",
+            "",
+            "Scope will auto-generate as:",
+            `market:id:${clMarketId || "<your_market_id>"}`,
           ],
         },
         { status: 400 },
       )
     }
 
-    // Ensure scope has correct format
-    const correctScope = clScope?.startsWith("market:") ? clScope : `market:${clMarketId}`
+    // Use correct global auth endpoint
+    const tokenUrl = "https://auth.commercelayer.io/oauth/token"
 
     // Test Integration app authentication
     console.log("🔑 Testing Integration app token request...")
@@ -61,7 +70,7 @@ export async function GET() {
       grant_type: "client_credentials",
       client_id: clClientId,
       client_secret: clClientSecret,
-      scope: correctScope,
+      scope: clScope,
     }
 
     console.log("🔑 Token request payload:", {
@@ -69,7 +78,7 @@ export async function GET() {
       client_secret: "[REDACTED]",
     })
 
-    const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
+    const tokenResponse = await fetch(tokenUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -99,31 +108,34 @@ export async function GET() {
           status: tokenResponse.status,
           statusText: tokenResponse.statusText,
           response: responseText || "Empty response",
-          url: `${clBaseUrl}/oauth/token`,
+          url: tokenUrl,
           payload: {
             ...tokenPayload,
             client_secret: "[REDACTED]",
           },
+          endpointUsed: tokenUrl,
           scopeDetails: {
-            original: clScope,
-            corrected: correctScope,
-            isCorrectFormat: correctScope.startsWith("market:"),
-            explanation: "Scope must be in format 'market:<market_id>'",
+            used: clScope,
+            explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
+            isCorrectFormat: clScope.includes("market:id:"),
+            hasStockLocation: !!clStockLocationId,
           },
           troubleshooting: {
             status403: tokenResponse.status === 403 ? "Invalid credentials or app not configured correctly" : null,
             status401: tokenResponse.status === 401 ? "Authentication failed - check client ID and secret" : null,
             status404: tokenResponse.status === 404 ? "Invalid base URL or endpoint" : null,
             emptyResponse: !responseText ? "Empty response suggests request rejected at API gateway" : null,
-            scopeIssue: !correctScope.startsWith("market:") ? "Scope format was incorrect (now corrected)" : null,
+            endpointFixed: "Now using correct global auth endpoint",
+            scopeFixed: "Now using correct scope format",
           },
           nextSteps: [
             "1. Verify you created an 'Integration' app (not Sales Channel)",
             "2. Check that 'Client Credentials' grant type is enabled",
             "3. Verify the client ID and secret are correct",
             "4. Make sure the app has access to your market",
-            `5. Ensure scope is set to: market:${clMarketId}`,
-            "6. Try creating a completely new Integration app",
+            `5. Ensure market ID is correct: ${clMarketId}`,
+            clStockLocationId ? `6. Verify stock location exists: ${clStockLocationId}` : "6. Stock location not used",
+            "7. Try creating a completely new Integration app",
           ],
         },
         { status: tokenResponse.status },
@@ -187,7 +199,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: "Integration app authentication successful with correct scope format!",
+      message: "Integration app authentication successful with correct endpoint and scope format!",
       appType: "Integration",
       tokenResponse: {
         access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 20)}...` : "missing",
@@ -196,32 +208,36 @@ export async function GET() {
         scope: tokenData.scope,
       },
       apiTest,
+      endpointUsed: tokenUrl,
       scopeDetails: {
-        original: clScope,
-        corrected: correctScope,
-        isCorrectFormat: correctScope.startsWith("market:"),
-        explanation: "Scope must be in format 'market:<market_id>'",
-        wasFixed: clScope !== correctScope,
+        used: clScope,
+        explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
+        isCorrectFormat: clScope.includes("market:id:"),
+        hasStockLocation: !!clStockLocationId,
+        wasFixed: "Scope format corrected from previous versions",
       },
       environmentCheck: {
         clientId: clClientId?.substring(0, 10) + "...",
         clientSecret: "✅ Set",
         baseUrl: clBaseUrl,
         marketId: clMarketId,
-        scope: correctScope,
+        stockLocationId: clStockLocationId || "Not set",
+        scope: clScope,
       },
       integrationAppDetails: {
         appType: "Integration (server-side with full API access)",
         grantType: "client_credentials",
-        tokenUrl: `${clBaseUrl}/oauth/token`,
+        tokenUrl: tokenUrl,
         apiBaseUrl: `${clBaseUrl}/api`,
-        scopeUsed: correctScope,
-        scopeFormat: "market:<market_id>",
+        scopeUsed: clScope,
+        scopeFormat: "market:id:<market_id> [stock_location:id:<stock_location_id>]",
         permissions: "Full API access for server-side operations",
+        endpointFixed: "Now using correct global auth endpoint",
       },
       nextSteps: [
-        "✅ Integration app authentication working with correct scope",
+        "✅ Integration app authentication working with correct endpoint and scope",
         apiTest.status === "success" ? "✅ API access working" : "❌ Check API access",
+        "✅ Endpoint corrected to global auth URL",
         "✅ Scope format corrected",
         "✅ Ready to update main payment flow",
         "Now test the payment flow at /test-reserve",

@@ -16,27 +16,33 @@ export async function POST(request: NextRequest) {
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
-    const clScope = process.env.COMMERCE_LAYER_SCOPE || `market:${process.env.COMMERCE_LAYER_MARKET_ID}`
+    const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
       return NextResponse.json({ error: "Commerce Layer not configured" }, { status: 500 })
     }
 
-    // Ensure scope has correct format
-    const correctScope = clScope?.startsWith("market:") ? clScope : `market:${clMarketId}`
+    // Create correct scope format
+    const clScope = clStockLocationId
+      ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
+      : `market:id:${clMarketId}`
 
-    // Get access token with correct scope format
+    // Use correct global auth endpoint
+    const tokenUrl = "https://auth.commercelayer.io/oauth/token"
+
+    // Get access token with correct endpoint and scope format
     const tokenPayload = {
       grant_type: "client_credentials",
       client_id: clClientId,
       client_secret: clClientSecret,
-      scope: correctScope,
+      scope: clScope,
     }
 
-    console.log("🔑 Getting access token for order confirmation with correct scope format...")
-    console.log("🔑 Using scope:", correctScope)
+    console.log("🔑 Getting access token for order confirmation with correct endpoint and scope format...")
+    console.log("🔑 Using endpoint:", tokenUrl)
+    console.log("🔑 Using scope:", clScope)
 
-    const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
+    const tokenResponse = await fetch(tokenUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
