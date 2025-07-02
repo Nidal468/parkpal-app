@@ -5,13 +5,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     console.log("✅ Incoming request body:", JSON.stringify(body, null, 2))
-    console.log("✅ Environment check:", {
-      clClientId: process.env.COMMERCE_LAYER_CLIENT_ID ? "set" : "missing",
-      clClientSecret: process.env.COMMERCE_LAYER_CLIENT_SECRET ? "set" : "missing",
-      clBaseUrl: process.env.COMMERCE_LAYER_BASE_URL,
-      clMarketId: process.env.COMMERCE_LAYER_MARKET_ID,
-      stripeKey: process.env.STRIPE_SECRET_KEY ? "set" : "missing",
-    })
 
     const { sku, quantity = 1, customerDetails, bookingDetails } = body
 
@@ -32,11 +25,14 @@ export async function POST(request: NextRequest) {
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
 
-    console.log("🔧 Environment check:", {
+    // ChatGPT's debugging suggestion - log actual values
+    console.log("🔧 ACTUAL Environment Values:", {
+      clClientId,
+      clClientSecret: clClientSecret ? `${clClientSecret.substring(0, 10)}...` : "undefined",
+      clBaseUrl,
+      clMarketId,
       hasClientId: !!clClientId,
       hasClientSecret: !!clClientSecret,
-      baseUrl: clBaseUrl,
-      marketId: clMarketId,
       clientIdLength: clClientId?.length || 0,
       clientSecretLength: clClientSecret?.length || 0,
     })
@@ -50,6 +46,8 @@ export async function POST(request: NextRequest) {
           debug: {
             hasClientId: !!clClientId,
             hasClientSecret: !!clClientSecret,
+            actualClientId: clClientId || "undefined",
+            actualClientSecret: clClientSecret ? "set" : "undefined",
           },
         },
         { status: 500 },
@@ -62,6 +60,7 @@ export async function POST(request: NextRequest) {
         {
           error: "Commerce Layer base URL not configured",
           details: "Missing COMMERCE_LAYER_BASE_URL",
+          actualBaseUrl: clBaseUrl || "undefined",
         },
         { status: 500 },
       )
@@ -73,6 +72,7 @@ export async function POST(request: NextRequest) {
         {
           error: "Commerce Layer market not configured",
           details: "Missing COMMERCE_LAYER_MARKET_ID",
+          actualMarketId: clMarketId || "undefined",
         },
         { status: 500 },
       )
@@ -122,6 +122,12 @@ export async function POST(request: NextRequest) {
             hasCredentials: !!(clClientId && clClientSecret),
             clientIdPrefix: clClientId?.substring(0, 10) + "...",
             tokenError: tokenError instanceof Error ? tokenError.message : String(tokenError),
+            actualValues: {
+              clientId: clClientId || "undefined",
+              clientSecret: clClientSecret ? "set" : "undefined",
+              baseUrl: clBaseUrl || "undefined",
+              marketId: clMarketId || "undefined",
+            },
           },
         },
         { status: 500 },

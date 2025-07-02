@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log("🔄 Confirming Commerce Layer order:", body)
+    console.log("✅ Confirm order request:", JSON.stringify(body, null, 2))
 
     const { orderId, paymentIntentId } = body
 
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payment Intent ID is required" }, { status: 400 })
     }
 
-    // Get Commerce Layer credentials
+    // Get Commerce Layer environment variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Commerce Layer not configured",
-          details: "Missing Commerce Layer environment variables",
+          details: "Missing required environment variables",
         },
         { status: 500 },
       )
@@ -48,11 +48,11 @@ export async function POST(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
-      console.error("❌ Token request failed:", errorText)
+      console.error("❌ Token request failed:", tokenResponse.status, errorText)
       return NextResponse.json(
         {
           error: "Failed to authenticate with Commerce Layer",
-          details: errorText,
+          details: `HTTP ${tokenResponse.status}: ${errorText}`,
         },
         { status: 500 },
       )
@@ -61,9 +61,8 @@ export async function POST(request: NextRequest) {
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
 
-    // Update order status to confirmed
-    const apiBase = `${clBaseUrl}/api`
-    const updateOrderResponse = await fetch(`${apiBase}/orders/${orderId}`, {
+    // Update order status to placed
+    const updateOrderResponse = await fetch(`${clBaseUrl}/api/orders/${orderId}`, {
       method: "PATCH",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -75,10 +74,10 @@ export async function POST(request: NextRequest) {
           type: "orders",
           id: orderId,
           attributes: {
+            _place: true,
             metadata: {
               stripe_payment_intent_id: paymentIntentId,
-              payment_status: "succeeded",
-              confirmed_at: new Date().toISOString(),
+              payment_confirmed_at: new Date().toISOString(),
             },
           },
         },
@@ -87,18 +86,18 @@ export async function POST(request: NextRequest) {
 
     if (!updateOrderResponse.ok) {
       const errorText = await updateOrderResponse.text()
-      console.error("❌ Order update failed:", errorText)
+      console.error("❌ Order update failed:", updateOrderResponse.status, errorText)
       return NextResponse.json(
         {
-          error: "Failed to update order",
-          details: errorText,
+          error: "Failed to confirm order",
+          details: `HTTP ${updateOrderResponse.status}: ${errorText}`,
         },
         { status: 500 },
       )
     }
 
     const updatedOrder = await updateOrderResponse.json()
-    console.log("✅ Order confirmed:", updatedOrder.data.id)
+    console.log("✅ Order confirmed successfully:", updatedOrder.data.id)
 
     // Update booking in database
     try {
@@ -113,7 +112,7 @@ export async function POST(request: NextRequest) {
           .from("bookings")
           .update({
             status: "confirmed",
-            payment_status: "succeeded",
+            payment_status: "paid",
             confirmed_at: new Date().toISOString(),
           })
           .eq("commerce_layer_order_id", orderId)
@@ -131,8 +130,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       orderId: orderId,
-      status: "confirmed",
+      status: updatedOrder.data.attributes.status,
       paymentIntentId: paymentIntentId,
+      confirmedAt: new Date().toISOString(),
     })
   } catch (error) {
     console.error("❌ Confirm order error:", error)
