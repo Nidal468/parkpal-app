@@ -50,8 +50,8 @@ export async function GET() {
       )
     }
 
-    // Use the exact scope format specified
-    const scope = `market:${clMarketId} stock_location:okJbPuNbjk`
+    // Use only market scope as requested
+    const scope = `market:${clMarketId}`
 
     // Manual token request with Integration app credentials
     const tokenPayload = {
@@ -66,7 +66,7 @@ export async function GET() {
       ...tokenPayload,
       client_secret: "[REDACTED]",
     })
-    console.log("🔑 Using scope:", scope)
+    console.log("🔑 Using market scope only:", scope)
 
     const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
       method: "POST",
@@ -110,7 +110,6 @@ export async function GET() {
               "❌ Client ID is incorrect",
               "❌ Client Secret is incorrect",
               "❌ Integration app doesn't have access to the specified market",
-              "❌ Integration app doesn't have access to the specified stock location",
               "❌ Integration app is not configured for 'Client Credentials' grant type",
             ],
           },
@@ -145,8 +144,7 @@ export async function GET() {
               "2. Check Commerce Layer Dashboard > Settings > Applications",
               "3. Ensure Integration app has 'Client Credentials' grant type enabled",
               `4. Verify Integration app has access to market: ${clMarketId}`,
-              "5. Verify Integration app has access to stock location: okJbPuNbjk",
-              "6. Redeploy application after updating environment variables",
+              "5. Redeploy application after updating environment variables",
             ],
           },
         },
@@ -210,13 +208,13 @@ export async function GET() {
         clientSecret: "✅ Set",
         baseUrl: clBaseUrl,
         marketId: clMarketId,
-        stockLocationId: "okJbPuNbjk",
       },
       integrationAppDetails: {
         appType: "Integration (confidential client)",
         grantType: "client_credentials",
         tokenUrl: `${clBaseUrl}/oauth/token`,
         apiBaseUrl: `${clBaseUrl}/api`,
+        scopeUsed: "market scope only (no stock location)",
       },
       nextSteps: [
         "✅ Integration app authentication working",

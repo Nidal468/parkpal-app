@@ -508,7 +508,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to get Commerce Layer access token using Integration app credentials
+// Helper function to get Commerce Layer access token using Integration app credentials with market scope only
 async function getCommerceLayerAccessToken(
   clientId: string,
   clientSecret: string,
@@ -517,14 +517,13 @@ async function getCommerceLayerAccessToken(
 ): Promise<string> {
   console.log("🔑 Requesting Commerce Layer access token...")
 
-  // Use the exact scope format you specified
-  const scope = `market:${marketId} stock_location:okJbPuNbjk`
+  // Use only market scope as requested
+  const scope = `market:${marketId}`
 
   console.log("🔑 Token request details:", {
     baseUrl,
     tokenUrl: `${baseUrl}/oauth/token`,
     marketId,
-    stockLocationId: "okJbPuNbjk",
     scope,
     hasClientId: !!clientId,
     hasClientSecret: !!clientSecret,
