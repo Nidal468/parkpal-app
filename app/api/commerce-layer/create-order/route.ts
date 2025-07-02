@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
-    const clScope = process.env.COMMERCE_LAYER_SCOPE
+    const clScope = process.env.COMMERCE_LAYER_SCOPE || `market:${process.env.COMMERCE_LAYER_MARKET_ID}`
 
     // Log environment values for debugging
     console.log("🔧 Sales Channel App Environment Values:", {
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Commerce Layer scope not configured",
-          details: "Missing COMMERCE_LAYER_SCOPE",
+          details: "Missing COMMERCE_LAYER_SCOPE and COMMERCE_LAYER_MARKET_ID",
           actualScope: clScope || "undefined",
         },
         { status: 500 },
@@ -118,11 +118,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get Commerce Layer access token with Sales Channel app credentials
-    console.log("🔑 Getting access token with Sales Channel app...")
+    // Get Commerce Layer access token with correct scope format
+    console.log("🔑 Getting access token with correct scope format...")
     let accessToken: string
     try {
-      accessToken = await getSalesChannelAccessToken(clClientId, clClientSecret, clBaseUrl, clScope)
+      accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clBaseUrl, clScope)
       console.log("✅ Commerce Layer access token obtained")
     } catch (tokenError) {
       console.error("❌ Failed to get access token:", tokenError)
@@ -524,14 +524,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to get Commerce Layer access token using Sales Channel app credentials
-async function getSalesChannelAccessToken(
+// Helper function to get Commerce Layer access token with correct scope format
+async function getCommerceLayerAccessToken(
   clientId: string,
   clientSecret: string,
   baseUrl: string,
   scope: string,
 ): Promise<string> {
-  console.log("🔑 Requesting Commerce Layer access token with Sales Channel app...")
+  console.log("🔑 Requesting Commerce Layer access token with correct scope format...")
 
   console.log("🔑 Token request details:", {
     baseUrl,
@@ -587,7 +587,7 @@ async function getSalesChannelAccessToken(
     }
 
     const data = await response.json()
-    console.log("✅ Access token obtained successfully with Sales Channel app credentials")
+    console.log("✅ Access token obtained successfully with correct scope format")
     console.log("🔑 Token response data:", {
       ...data,
       access_token: data.access_token?.substring(0, 20) + "...",

@@ -16,22 +16,25 @@ export async function POST(request: NextRequest) {
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
-    const clScope = process.env.COMMERCE_LAYER_SCOPE
+    const clScope = process.env.COMMERCE_LAYER_SCOPE || `market:${process.env.COMMERCE_LAYER_MARKET_ID}`
 
-    if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId || !clScope) {
+    if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
       return NextResponse.json({ error: "Commerce Layer not configured" }, { status: 500 })
     }
 
-    // Get access token with Sales Channel app credentials
+    // Ensure scope has correct format
+    const correctScope = clScope?.startsWith("market:") ? clScope : `market:${clMarketId}`
+
+    // Get access token with correct scope format
     const tokenPayload = {
       grant_type: "client_credentials",
       client_id: clClientId,
       client_secret: clClientSecret,
-      scope: clScope,
+      scope: correctScope,
     }
 
-    console.log("🔑 Getting access token for order confirmation with Sales Channel app...")
-    console.log("🔑 Using scope:", clScope)
+    console.log("🔑 Getting access token for order confirmation with correct scope format...")
+    console.log("🔑 Using scope:", correctScope)
 
     const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
       method: "POST",
