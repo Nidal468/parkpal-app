@@ -3,110 +3,87 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log("🔄 Commerce Layer - Confirm order request:", body)
+    console.log("🔄 Confirm order request:", JSON.stringify(body, null, 2))
 
     const { orderId, paymentIntentId } = body
 
-    if (!orderId) {
-      return NextResponse.json({ error: "Order ID is required" }, { status: 400 })
+    if (!orderId || !paymentIntentId) {
+      console.error("❌ Missing orderId or paymentIntentId")
+      return NextResponse.json({ error: "Order ID and Payment Intent ID are required" }, { status: 400 })
     }
 
-    if (!paymentIntentId) {
-      return NextResponse.json({ error: "Payment Intent ID is required" }, { status: 400 })
-    }
-
-    // Check Commerce Layer environment variables
+    // Get Commerce Layer credentials
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
+      console.error("❌ Missing Commerce Layer configuration")
+      return NextResponse.json({ error: "Commerce Layer not configured" }, { status: 500 })
+    }
+
+    // Get access token
+    console.log("🔑 Getting access token for order confirmation...")
+    let accessToken: string
+    try {
+      accessToken = await getAccessTokenWithMarketScope(clClientId, clClientSecret, clBaseUrl, clMarketId)
+      console.log("✅ Access token obtained for confirmation")
+    } catch (tokenError) {
+      console.error("❌ Failed to get access token for confirmation:", tokenError)
       return NextResponse.json(
         {
-          error: "Commerce Layer not configured",
-          details: "Missing Commerce Layer environment variables",
+          error: "Failed to authenticate with Commerce Layer",
+          details: tokenError instanceof Error ? tokenError.message : "Unknown authentication error",
         },
         { status: 500 },
       )
     }
 
-    // Get Commerce Layer access token
-    const accessToken = await getAccessTokenWithMarketScope(clClientId, clClientSecret, clBaseUrl, clMarketId)
-
-    // Initialize Commerce Layer API base URL
     const apiBase = `${clBaseUrl}/api`
 
-    // Verify Stripe payment was successful
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
-    if (stripeSecretKey) {
-      try {
-        const Stripe = (await import("stripe")).default
-        const stripe = new Stripe(stripeSecretKey, {
-          apiVersion: "2024-12-18.acacia",
-        })
-
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
-
-        if (paymentIntent.status !== "succeeded") {
-          return NextResponse.json(
-            {
-              error: "Payment not completed",
-              details: `Payment status: ${paymentIntent.status}`,
-            },
-            { status: 400 },
-          )
-        }
-
-        console.log("✅ Stripe payment verified:", paymentIntent.id)
-      } catch (stripeError) {
-        console.error("❌ Stripe verification error:", stripeError)
-        return NextResponse.json(
-          {
-            error: "Failed to verify payment",
-            details: stripeError instanceof Error ? stripeError.message : "Unknown Stripe error",
-          },
-          { status: 500 },
-        )
-      }
-    }
-
-    // Update Commerce Layer order status
+    // Update order status to confirmed
     try {
-      const updateOrderResponse = await fetch(`${apiBase}/orders/${orderId}`, {
+      console.log("📦 Updating order status to confirmed...")
+
+      const updatePayload = {
+        data: {
+          type: "orders",
+          id: orderId,
+          attributes: {
+            metadata: {
+              stripe_payment_intent_id: paymentIntentId,
+              payment_status: "succeeded",
+              confirmed_at: new Date().toISOString(),
+            },
+          },
+        },
+      }
+
+      console.log("📦 Update payload:", JSON.stringify(updatePayload, null, 2))
+
+      const updateResponse = await fetch(`${apiBase}/orders/${orderId}`, {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${accessToken}`,
           Accept: "application/vnd.api+json",
           "Content-Type": "application/vnd.api+json",
         },
-        body: JSON.stringify({
-          data: {
-            type: "orders",
-            id: orderId,
-            attributes: {
-              _place: true, // This places the order in Commerce Layer
-              metadata: {
-                payment_confirmed: true,
-                stripe_payment_intent_id: paymentIntentId,
-                confirmed_at: new Date().toISOString(),
-              },
-            },
-          },
-        }),
+        body: JSON.stringify(updatePayload),
       })
 
-      if (!updateOrderResponse.ok) {
-        const errorText = await updateOrderResponse.text()
-        console.error("❌ Order update failed:", updateOrderResponse.status, errorText)
-        throw new Error(`Order update failed: ${updateOrderResponse.status} ${errorText}`)
+      if (!updateResponse.ok) {
+        const errorText = await updateResponse.text()
+        console.error("❌ Order update failed:", updateResponse.status, errorText)
+        throw new Error(`Order update failed: ${updateResponse.status} ${errorText}`)
       }
 
-      const updatedOrderData = await updateOrderResponse.json()
-      console.log("✅ Order placed successfully:", updatedOrderData.data.id)
+      const updatedOrderData = await updateResponse.json()
+      console.log("✅ Order updated successfully:", JSON.stringify(updatedOrderData, null, 2))
 
-      // Update booking status in database
+      // Update booking in database
       try {
+        console.log("💾 Updating booking status in database...")
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
         const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -114,48 +91,48 @@ export async function POST(request: NextRequest) {
           const { createClient } = await import("@supabase/supabase-js")
           const supabase = createClient(supabaseUrl, supabaseKey)
 
-          const { error } = await supabase
+          const { data, error } = await supabase
             .from("bookings")
             .update({
               status: "confirmed",
-              payment_status: "paid",
+              stripe_payment_intent_id: paymentIntentId,
               confirmed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
             })
             .eq("commerce_layer_order_id", orderId)
+            .select()
 
           if (error) {
             console.error("❌ Database update error:", error)
           } else {
-            console.log("✅ Booking status updated to confirmed")
+            console.log("✅ Booking status updated in database:", data)
           }
         }
       } catch (dbError) {
-        console.error("❌ Database connection error:", dbError)
+        console.error("❌ Database update failed:", dbError)
       }
 
       return NextResponse.json({
         success: true,
         orderId: orderId,
-        status: updatedOrderData.data.attributes.status,
+        paymentIntentId: paymentIntentId,
+        status: "confirmed",
         message: "Order confirmed successfully",
-        bookingReference: `PK${Date.now().toString().slice(-6)}`,
       })
-    } catch (orderError) {
-      console.error("❌ Order confirmation error:", orderError)
+    } catch (updateError) {
+      console.error("❌ Order confirmation error:", updateError)
       return NextResponse.json(
         {
           error: "Failed to confirm order",
-          details: orderError instanceof Error ? orderError.message : "Unknown order error",
+          details: updateError instanceof Error ? updateError.message : "Unknown error",
         },
         { status: 500 },
       )
     }
   } catch (error) {
-    console.error("❌ Commerce Layer confirm order error:", error)
+    console.error("❌ Confirm order error:", error)
     return NextResponse.json(
       {
-        error: "Failed to confirm Commerce Layer order",
+        error: "Failed to confirm order",
         details: error instanceof Error ? error.message : "Unknown error",
         success: false,
       },
@@ -171,6 +148,8 @@ async function getAccessTokenWithMarketScope(
   baseUrl: string,
   marketId: string,
 ): Promise<string> {
+  console.log("🔑 Requesting access token for confirmation...")
+
   const tokenPayload = {
     grant_type: "client_credentials",
     client_id: clientId,
@@ -178,19 +157,29 @@ async function getAccessTokenWithMarketScope(
     scope: `market:${marketId}`,
   }
 
-  const response = await fetch(`${baseUrl}/oauth/token`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(tokenPayload),
-  })
+  try {
+    const response = await fetch(`${baseUrl}/oauth/token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(tokenPayload),
+    })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Failed to get access token: ${response.status} ${response.statusText} - ${errorText}`)
+    console.log("🔑 Confirmation token response status:", response.status)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("🔑 Confirmation token error:", errorText)
+      throw new Error(`Failed to get access token: ${response.status} ${response.statusText} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    console.log("✅ Confirmation access token obtained")
+    return data.access_token
+  } catch (fetchError) {
+    console.error("🔑 Confirmation token request failed:", fetchError)
+    throw new Error(`Token request failed: ${fetchError instanceof Error ? fetchError.message : "Unknown error"}`)
   }
-
-  const data = await response.json()
-  return data.access_token
 }
