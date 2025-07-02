@@ -104,11 +104,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get Commerce Layer access token with market scope
+    // Get Commerce Layer access token with market AND stock location scope
     console.log("🔑 Getting access token...")
     let accessToken: string
     try {
-      accessToken = await getAccessTokenWithMarketScope(clClientId, clClientSecret, clBaseUrl, clMarketId)
+      accessToken = await getAccessTokenWithMarketAndStockLocationScope(
+        clClientId,
+        clClientSecret,
+        clBaseUrl,
+        clMarketId,
+      )
       console.log("✅ Commerce Layer access token obtained")
     } catch (tokenError) {
       console.error("❌ Failed to get access token:", tokenError)
@@ -508,17 +513,23 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to get Commerce Layer access token with market scope
-async function getAccessTokenWithMarketScope(
+// Updated helper function to include BOTH market and stock location scopes
+async function getAccessTokenWithMarketAndStockLocationScope(
   clientId: string,
   clientSecret: string,
   baseUrl: string,
   marketId: string,
 ): Promise<string> {
-  console.log("🔑 Requesting access token with market scope...")
+  console.log("🔑 Requesting access token with market AND stock location scope...")
+
+  // Include both market and stock location scopes as shown in the screenshot
+  const scope = `market:${marketId} stock_location:okJbPuNbjk`
+
   console.log("🔑 Token request details:", {
     baseUrl,
     marketId,
+    stockLocationId: "okJbPuNbjk",
+    scope,
     hasClientId: !!clientId,
     hasClientSecret: !!clientSecret,
     clientIdPrefix: clientId?.substring(0, 10) + "...",
@@ -529,7 +540,7 @@ async function getAccessTokenWithMarketScope(
     grant_type: "client_credentials",
     client_id: clientId,
     client_secret: clientSecret,
-    scope: `market:${marketId}`,
+    scope: scope, // This now includes both market and stock location
   }
 
   console.log("🔑 Token payload:", {
@@ -569,7 +580,7 @@ async function getAccessTokenWithMarketScope(
     }
 
     const data = await response.json()
-    console.log("✅ Access token obtained successfully")
+    console.log("✅ Access token obtained successfully with both market and stock location scopes")
     console.log("🔑 Token response data:", {
       ...data,
       access_token: data.access_token?.substring(0, 20) + "...",

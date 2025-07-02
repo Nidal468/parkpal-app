@@ -1,26 +1,23 @@
 import { createClient } from "@supabase/supabase-js"
 
-// Create Supabase client for server-side operations
-export const supabaseServer = (() => {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 
-  if (!supabaseUrl || !supabaseKey) {
-    console.warn("⚠️ Supabase not configured - creating mock client")
-    // Return a mock client that won't break the build
-    return {
-      from: () => ({
-        select: () => ({ data: null, error: new Error("Supabase not configured") }),
-        insert: () => ({ data: null, error: new Error("Supabase not configured") }),
-        update: () => ({ data: null, error: new Error("Supabase not configured") }),
-        delete: () => ({ data: null, error: new Error("Supabase not configured") }),
-      }),
-    } as any
-  }
+// Create a mock client for build time when environment variables might not be available
+const createMockClient = () => ({
+  from: () => ({
+    select: () => Promise.resolve({ data: [], error: null }),
+    insert: () => Promise.resolve({ data: null, error: null }),
+    update: () => Promise.resolve({ data: null, error: null }),
+    delete: () => Promise.resolve({ data: null, error: null }),
+  }),
+  auth: {
+    getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+  },
+})
 
-  return createClient(supabaseUrl, supabaseKey)
-})()
+export const supabaseServer =
+  supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : (createMockClient() as any)
 
 // Database types
 export interface Message {

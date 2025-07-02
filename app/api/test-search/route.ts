@@ -1,37 +1,31 @@
 import { NextResponse } from "next/server"
-import { supabaseServer } from "@/lib/supabase-server"
+import { searchParkingSpaces } from "@/lib/parking-search"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    console.log("🔍 Testing parking space search...")
+    const { searchParams } = new URL(request.url)
+    const query = searchParams.get("q") || ""
+    const location = searchParams.get("location") || ""
 
-    const { data, error } = await supabaseServer.from("parking_spaces").select("*").limit(5)
+    console.log("🔍 Search request:", { query, location })
 
-    if (error) {
-      console.error("❌ Database error:", error)
-      return NextResponse.json(
-        {
-          error: "Database query failed",
-          details: error.message,
-          code: error.code,
-        },
-        { status: 500 },
-      )
-    }
+    const results = await searchParkingSpaces(query, location)
 
-    console.log("✅ Found parking spaces:", data?.length || 0)
+    console.log("✅ Search results:", results.length, "spaces found")
 
     return NextResponse.json({
       success: true,
-      count: data?.length || 0,
-      spaces: data || [],
-      message: data?.length ? "Parking spaces found" : "No parking spaces in database",
+      query,
+      location,
+      results,
+      count: results.length,
     })
   } catch (error) {
-    console.error("❌ API error:", error)
+    console.error("❌ Search error:", error)
     return NextResponse.json(
       {
-        error: "Internal server error",
+        success: false,
+        error: "Search failed",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },

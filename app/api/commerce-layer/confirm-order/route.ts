@@ -3,65 +3,70 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log("✅ Confirm order request:", JSON.stringify(body, null, 2))
-
     const { orderId, paymentIntentId } = body
+
+    console.log("🔄 Confirming Commerce Layer order:", { orderId, paymentIntentId })
 
     if (!orderId) {
       return NextResponse.json({ error: "Order ID is required" }, { status: 400 })
     }
 
-    if (!paymentIntentId) {
-      return NextResponse.json({ error: "Payment Intent ID is required" }, { status: 400 })
-    }
-
-    // Get Commerce Layer environment variables
+    // Get Commerce Layer credentials
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
-      return NextResponse.json(
-        {
-          error: "Commerce Layer not configured",
-          details: "Missing required environment variables",
-        },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Commerce Layer not configured" }, { status: 500 })
     }
 
-    // Get access token
+    // Updated scope to include both market and stock location
+    const scope = `market:${clMarketId} stock_location:okJbPuNbjk`
+
+    // Get access token with both scopes
+    const tokenPayload = {
+      grant_type: "client_credentials",
+      client_id: clClientId,
+      client_secret: clClientSecret,
+      scope: scope,
+    }
+
+    console.log("🔑 Getting access token for order confirmation with scope:", scope)
+
     const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({
-        grant_type: "client_credentials",
-        client_id: clClientId,
-        client_secret: clClientSecret,
-        scope: `market:${clMarketId}`,
-      }),
+      body: JSON.stringify(tokenPayload),
     })
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
       console.error("❌ Token request failed:", tokenResponse.status, errorText)
-      return NextResponse.json(
-        {
-          error: "Failed to authenticate with Commerce Layer",
-          details: `HTTP ${tokenResponse.status}: ${errorText}`,
-        },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Failed to authenticate with Commerce Layer" }, { status: 500 })
     }
 
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
 
-    // Update order status to placed
+    // Update order status to confirmed
+    const updateOrderPayload = {
+      data: {
+        type: "orders",
+        id: orderId,
+        attributes: {
+          metadata: {
+            payment_confirmed: true,
+            stripe_payment_intent_id: paymentIntentId,
+            confirmed_at: new Date().toISOString(),
+          },
+        },
+      },
+    }
+
     const updateOrderResponse = await fetch(`${clBaseUrl}/api/orders/${orderId}`, {
       method: "PATCH",
       headers: {
@@ -69,35 +74,16 @@ export async function POST(request: NextRequest) {
         Accept: "application/vnd.api+json",
         "Content-Type": "application/vnd.api+json",
       },
-      body: JSON.stringify({
-        data: {
-          type: "orders",
-          id: orderId,
-          attributes: {
-            _place: true,
-            metadata: {
-              stripe_payment_intent_id: paymentIntentId,
-              payment_confirmed_at: new Date().toISOString(),
-            },
-          },
-        },
-      }),
+      body: JSON.stringify(updateOrderPayload),
     })
 
     if (!updateOrderResponse.ok) {
       const errorText = await updateOrderResponse.text()
       console.error("❌ Order update failed:", updateOrderResponse.status, errorText)
-      return NextResponse.json(
-        {
-          error: "Failed to confirm order",
-          details: `HTTP ${updateOrderResponse.status}: ${errorText}`,
-        },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Failed to update order" }, { status: 500 })
     }
 
     const updatedOrder = await updateOrderResponse.json()
-    console.log("✅ Order confirmed successfully:", updatedOrder.data.id)
 
     // Update booking in database
     try {
@@ -120,22 +106,22 @@ export async function POST(request: NextRequest) {
         if (error) {
           console.error("❌ Database update error:", error)
         } else {
-          console.log("✅ Booking updated in database")
+          console.log("✅ Booking confirmed in database")
         }
       }
     } catch (dbError) {
       console.error("❌ Database connection error:", dbError)
     }
 
+    console.log("✅ Order confirmed successfully")
     return NextResponse.json({
       success: true,
       orderId: orderId,
-      status: updatedOrder.data.attributes.status,
-      paymentIntentId: paymentIntentId,
-      confirmedAt: new Date().toISOString(),
+      status: "confirmed",
+      order: updatedOrder.data,
     })
   } catch (error) {
-    console.error("❌ Confirm order error:", error)
+    console.error("❌ Order confirmation error:", error)
     return NextResponse.json(
       {
         error: "Failed to confirm order",

@@ -39,12 +39,15 @@ export async function GET() {
       )
     }
 
-    // Manual token request exactly as ChatGPT suggested
+    // Updated scope to include BOTH market and stock location as shown in screenshot
+    const scope = `market:${clMarketId} stock_location:okJbPuNbjk`
+
+    // Manual token request with both scopes
     const tokenPayload = {
       grant_type: "client_credentials",
       client_id: clClientId,
       client_secret: clClientSecret,
-      scope: `market:${clMarketId}`,
+      scope: scope,
     }
 
     console.log("🔑 Making manual token request to:", `${clBaseUrl}/oauth/token`)
@@ -52,6 +55,7 @@ export async function GET() {
       ...tokenPayload,
       client_secret: "[REDACTED]",
     })
+    console.log("🔑 Using BOTH market and stock location scopes:", scope)
 
     const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
       method: "POST",
@@ -83,6 +87,32 @@ export async function GET() {
             ...tokenPayload,
             client_secret: "[REDACTED]",
           },
+          scopeUsed: scope,
+          diagnosis: {
+            issue: tokenResponse.status === 403 ? "403 Forbidden with empty response" : `HTTP ${tokenResponse.status}`,
+            meaning:
+              tokenResponse.status === 403
+                ? "Commerce Layer is rejecting your credentials or scope"
+                : "Authentication request failed",
+            mostLikelyCauses: [
+              "❌ Client ID is incorrect or doesn't exist",
+              "❌ Client Secret is incorrect or expired",
+              "❌ Application is not configured for 'Client Credentials' grant type",
+              "❌ Application doesn't have access to the specified market",
+              "❌ Application doesn't have access to the specified stock location",
+              "❌ Stock location ID 'okJbPuNbjk' is incorrect",
+              "❌ Application is disabled or suspended",
+            ],
+          },
+          immediateActions: [
+            "1. Go to Commerce Layer Dashboard > Settings > Applications",
+            "2. Find your integration app (or create a new one)",
+            "3. Copy the EXACT Client ID and Client Secret",
+            "4. Ensure Grant Type includes 'Client Credentials'",
+            "5. Verify the app has access to your market: " + clMarketId,
+            "6. Verify the app has access to stock location: okJbPuNbjk",
+            "7. Update your Vercel environment variables with fresh credentials",
+          ],
         },
         { status: 500 },
       )
@@ -101,6 +131,7 @@ export async function GET() {
             ...tokenPayload,
             client_secret: "[REDACTED]",
           },
+          scopeUsed: scope,
           troubleshooting: {
             message: "Check your Commerce Layer dashboard:",
             steps: [
@@ -110,7 +141,8 @@ export async function GET() {
               "4. Regenerate Client Secret if needed",
               "5. Ensure app has 'Client Credentials' grant type",
               `6. Verify app has access to market: ${clMarketId}`,
-              "7. Check if app has correct scopes/permissions",
+              "7. Verify app has access to stock location: okJbPuNbjk",
+              "8. Check if app has correct scopes/permissions",
             ],
           },
         },
@@ -118,7 +150,7 @@ export async function GET() {
       )
     }
 
-    console.log("✅ Token obtained successfully!")
+    console.log("✅ Token obtained successfully with both market and stock location scopes!")
 
     // Test market access
     let marketTest: any = { status: "not_tested" }
@@ -159,20 +191,22 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: "Commerce Layer authentication successful!",
+      message: "Commerce Layer authentication successful with both market and stock location scopes!",
       tokenResponse: {
         ...tokenData,
         access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 20)}...` : "missing",
       },
       marketTest,
+      scopeUsed: scope,
       environmentCheck: {
         clientId: clClientId?.substring(0, 10) + "...",
         clientSecret: "✅ Set",
         baseUrl: clBaseUrl,
         marketId: clMarketId,
+        stockLocationId: "okJbPuNbjk",
       },
       nextSteps: [
-        "✅ Authentication working",
+        "✅ Authentication working with both scopes",
         marketTest.status === "success" ? "✅ Market access working" : "❌ Check market access",
         "Now test the full create-order flow",
       ],
