@@ -1,57 +1,29 @@
 import { NextResponse } from "next/server"
+import { searchParkingSpaces } from "@/lib/parking-search"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    console.log("🔍 Test search endpoint called")
+    const { searchParams } = new URL(request.url)
+    const query = searchParams.get("q") || "parking near me"
 
-    // Check if Supabase is configured
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    console.log("🔍 Test search query:", query)
 
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({
-        error: "Supabase not configured",
-        details: "Missing environment variables",
-        supabaseUrl: !!supabaseUrl,
-        supabaseKey: !!supabaseKey,
-      })
-    }
+    const results = await searchParkingSpaces(query)
 
-    // Test database connection
-    const { createClient } = await import("@supabase/supabase-js")
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    console.log("🔍 Testing database connection...")
-
-    const { data: spaces, error } = await supabase.from("spaces").select("*").limit(5)
-
-    if (error) {
-      console.error("❌ Database error:", error)
-      return NextResponse.json({
-        error: "Database query failed",
-        details: error.message,
-        code: error.code,
-      })
-    }
-
-    console.log("✅ Found spaces:", spaces?.length || 0)
+    console.log("✅ Test search results:", results.length)
 
     return NextResponse.json({
       success: true,
-      spacesFound: spaces?.length || 0,
-      spaces: spaces || [],
-      timestamp: new Date().toISOString(),
+      query: query,
+      results: results,
+      count: results.length,
     })
   } catch (error) {
     console.error("❌ Test search error:", error)
     return NextResponse.json(
       {
-        error: "Test search failed",
+        error: "Search failed",
         details: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )

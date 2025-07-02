@@ -1,14 +1,12 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { supabaseServer } from "@/lib/supabase-server"
 
-export async function POST(request: NextRequest) {
+export async function GET() {
   try {
-    const bookingData = await request.json()
+    console.log("📋 Fetching bookings...")
 
-    console.log("📝 Creating booking:", bookingData)
-
-    // Check if Supabase is properly configured
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+    // Check if Supabase is configured
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
       process.env.SUPABASE_ANON_KEY ||
@@ -25,90 +23,48 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // TODO: Add user authentication to get real user_id
-    const mockUserId = "550e8400-e29b-41d4-a716-446655440003" // Mock user for demo
+    const { data: bookings, error } = await supabaseServer
+      .from("bookings")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(10)
 
-    // First, check if the space has available capacity
-    const { data: spaceData, error: spaceError } = await supabaseServer
-      .from("spaces")
-      .select("total_spaces, booked_spaces, title")
-      .eq("id", bookingData.spaceId)
-      .single()
-
-    if (spaceError || !spaceData) {
-      console.error("❌ Error fetching space data:", spaceError)
-      return NextResponse.json({ error: "Space not found" }, { status: 404 })
-    }
-
-    const totalSpaces = spaceData.total_spaces || 1
-    const bookedSpaces = spaceData.booked_spaces || 0
-    const availableSpaces = totalSpaces - bookedSpaces
-
-    if (availableSpaces <= 0) {
-      console.log("🚫 Space is fully booked")
+    if (error) {
+      console.error("❌ Database error:", error)
       return NextResponse.json(
         {
-          error: "This parking space is currently fully booked. Please try another location.",
+          error: "Failed to fetch bookings",
+          details: error.message,
         },
-        { status: 400 },
+        { status: 500 },
       )
     }
 
-    // Insert booking into database
-    const { data, error } = await supabaseServer
-      .from("bookings")
-      .insert({
-        user_id: mockUserId,
-        space_id: bookingData.spaceId,
-        start_date: bookingData.startDate,
-        end_date: bookingData.endDate,
-        total_price: bookingData.totalPrice,
-        contact_email: bookingData.contactEmail,
-        contact_phone: bookingData.contactPhone,
-        special_requests: bookingData.specialRequests,
-        status: "confirmed",
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error("❌ Booking creation error:", error)
-      return NextResponse.json({ error: "Failed to create booking" }, { status: 500 })
-    }
-
-    // Update the booked_spaces count
-    const { error: updateError } = await supabaseServer
-      .from("spaces")
-      .update({ booked_spaces: bookedSpaces + 1 })
-      .eq("id", bookingData.spaceId)
-
-    if (updateError) {
-      console.error("❌ Error updating booked spaces count:", updateError)
-      // Note: In production, you'd want to rollback the booking here
-    }
-
-    console.log("✅ Booking created successfully:", data)
-    console.log(`📊 Space "${spaceData.title}" now has ${availableSpaces - 1} available spots`)
-
-    // TODO: Send confirmation email
-    // TODO: Send notification to space host
-
+    console.log("✅ Bookings fetched successfully:", bookings?.length || 0)
     return NextResponse.json({
       success: true,
-      booking: data,
-      message: "Booking confirmed successfully!",
-      remainingSpaces: availableSpaces - 1,
+      bookings: bookings || [],
+      count: bookings?.length || 0,
     })
   } catch (error) {
-    console.error("💥 Booking API error:", error)
-    return NextResponse.json({ error: "Failed to process booking" }, { status: 500 })
+    console.error("❌ Bookings API error:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to fetch bookings",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    // Check if Supabase is properly configured
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+    const body = await request.json()
+    console.log("📋 Creating booking:", body)
+
+    // Check if Supabase is configured
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
       process.env.SUPABASE_ANON_KEY ||
@@ -125,32 +81,32 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get("userId")
-
-    let query = supabaseServer
-      .from("bookings")
-      .select(`
-        *,
-        space:spaces(*),
-        vehicle:vehicles(*)
-      `)
-      .order("created_at", { ascending: false })
-
-    if (userId) {
-      query = query.eq("user_id", userId)
-    }
-
-    const { data, error } = await query
+    const { data: booking, error } = await supabaseServer.from("bookings").insert(body).select().single()
 
     if (error) {
-      console.error("❌ Bookings fetch error:", error)
-      return NextResponse.json({ error: "Failed to fetch bookings" }, { status: 500 })
+      console.error("❌ Database error:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to create booking",
+          details: error.message,
+        },
+        { status: 500 },
+      )
     }
 
-    return NextResponse.json(data || [])
+    console.log("✅ Booking created successfully:", booking.id)
+    return NextResponse.json({
+      success: true,
+      booking: booking,
+    })
   } catch (error) {
-    console.error("💥 Bookings API error:", error)
-    return NextResponse.json({ error: "Failed to fetch bookings" }, { status: 500 })
+    console.error("❌ Create booking error:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to create booking",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

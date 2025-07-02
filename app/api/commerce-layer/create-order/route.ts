@@ -120,6 +120,8 @@ export async function POST(request: NextRequest) {
             baseUrl: clBaseUrl,
             marketId: clMarketId,
             hasCredentials: !!(clClientId && clClientSecret),
+            clientIdPrefix: clClientId?.substring(0, 10) + "...",
+            tokenError: tokenError instanceof Error ? tokenError.message : String(tokenError),
           },
         },
         { status: 500 },
@@ -551,8 +553,10 @@ async function getAccessTokenWithMarketScope(
       try {
         const errorJson = JSON.parse(errorText)
         errorDetails = JSON.stringify(errorJson, null, 2)
+        console.error("🔑 Parsed token error:", errorJson)
       } catch {
         // Keep as text if not JSON
+        console.error("🔑 Raw token error:", errorText)
       }
 
       throw new Error(`Failed to get access token: ${response.status} ${response.statusText} - ${errorDetails}`)
