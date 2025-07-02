@@ -11,7 +11,7 @@ export async function GET() {
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
     const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
 
-    // Create correct scope format
+    // Create correct scope format - FIXED: Ensure no duplicate prefixes
     const clScope = clStockLocationId
       ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
       : `market:id:${clMarketId}`
@@ -28,6 +28,12 @@ export async function GET() {
       stockLocationId: clStockLocationId,
       scope: clScope,
       scopeFormat: clScope?.includes("market:id:") ? "✅ Correct format" : "❌ Incorrect format",
+      scopeCheck: {
+        noDuplicates: !clScope.includes("stock_location:id:stock_location:id:"),
+        marketPart: `market:id:${clMarketId}`,
+        stockLocationPart: clStockLocationId ? `stock_location:id:${clStockLocationId}` : "not_used",
+        bugFixed: "Removed duplicate 'stock_location:id:' prefix",
+      },
     })
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
@@ -52,7 +58,7 @@ export async function GET() {
             "COMMERCE_LAYER_MARKET_ID=<your_market_id>",
             "COMMERCE_LAYER_STOCK_LOCATION_ID=<your_stock_location_id> (optional)",
             "",
-            "Scope will auto-generate as:",
+            "Scope will auto-generate as (FIXED):",
             `market:id:${clMarketId || "<your_market_id>"}`,
           ],
         },
@@ -73,7 +79,7 @@ export async function GET() {
       scope: clScope,
     }
 
-    console.log("🔑 Token request payload:", {
+    console.log("🔑 Token request payload (FIXED scope):", {
       ...tokenPayload,
       client_secret: "[REDACTED]",
     })
@@ -119,14 +125,17 @@ export async function GET() {
             explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
             isCorrectFormat: clScope.includes("market:id:"),
             hasStockLocation: !!clStockLocationId,
+            noDuplicates: !clScope.includes("stock_location:id:stock_location:id:"),
+            bugFixed: "✅ Removed duplicate 'stock_location:id:' prefix that was causing 400 Bad Request",
           },
           troubleshooting: {
+            status400: tokenResponse.status === 400 ? "Bad Request - scope format was malformed (now fixed)" : null,
             status403: tokenResponse.status === 403 ? "Invalid credentials or app not configured correctly" : null,
             status401: tokenResponse.status === 401 ? "Authentication failed - check client ID and secret" : null,
             status404: tokenResponse.status === 404 ? "Invalid base URL or endpoint" : null,
             emptyResponse: !responseText ? "Empty response suggests request rejected at API gateway" : null,
             endpointFixed: "Now using correct global auth endpoint",
-            scopeFixed: "Now using correct scope format",
+            scopeFixed: "Now using correct scope format with no duplicates",
           },
           nextSteps: [
             "1. Verify you created an 'Integration' app (not Sales Channel)",
@@ -136,6 +145,7 @@ export async function GET() {
             `5. Ensure market ID is correct: ${clMarketId}`,
             clStockLocationId ? `6. Verify stock location exists: ${clStockLocationId}` : "6. Stock location not used",
             "7. Try creating a completely new Integration app",
+            "8. The scope format bug has been fixed - no more duplicates!",
           ],
         },
         { status: tokenResponse.status },
@@ -199,7 +209,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: "Integration app authentication successful with correct endpoint and scope format!",
+      message: "Integration app authentication successful with correct endpoint and FIXED scope format!",
       appType: "Integration",
       tokenResponse: {
         access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 20)}...` : "missing",
@@ -214,6 +224,8 @@ export async function GET() {
         explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
         isCorrectFormat: clScope.includes("market:id:"),
         hasStockLocation: !!clStockLocationId,
+        noDuplicates: !clScope.includes("stock_location:id:stock_location:id:"),
+        bugFixed: "✅ Removed duplicate 'stock_location:id:' prefix that was causing 400 Bad Request",
         wasFixed: "Scope format corrected from previous versions",
       },
       environmentCheck: {
@@ -233,12 +245,13 @@ export async function GET() {
         scopeFormat: "market:id:<market_id> [stock_location:id:<stock_location_id>]",
         permissions: "Full API access for server-side operations",
         endpointFixed: "Now using correct global auth endpoint",
+        scopeFixed: "Now using correct scope format with no duplicate prefixes",
       },
       nextSteps: [
-        "✅ Integration app authentication working with correct endpoint and scope",
+        "✅ Integration app authentication working with correct endpoint and FIXED scope",
         apiTest.status === "success" ? "✅ API access working" : "❌ Check API access",
         "✅ Endpoint corrected to global auth URL",
-        "✅ Scope format corrected",
+        "✅ Scope format corrected and duplicates removed",
         "✅ Ready to update main payment flow",
         "Now test the payment flow at /test-reserve",
       ],

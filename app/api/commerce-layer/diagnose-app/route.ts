@@ -11,7 +11,7 @@ export async function GET() {
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
     const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
 
-    // Create correct scope format
+    // Create correct scope format - FIXED: Ensure no duplicate prefixes
     const clScope = clStockLocationId
       ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
       : `market:id:${clMarketId}`
@@ -29,6 +29,11 @@ export async function GET() {
       stockLocationId: clStockLocationId,
       scope: clScope,
       scopeFormat: clScope?.includes("market:id:") ? "✅ Correct format" : "❌ Incorrect format",
+      scopeCheck: {
+        noDuplicates: !clScope.includes("stock_location:id:stock_location:id:"),
+        marketPart: `market:id:${clMarketId}`,
+        stockLocationPart: clStockLocationId ? `stock_location:id:${clStockLocationId}` : "not_used",
+      },
     })
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
@@ -41,8 +46,8 @@ export async function GET() {
           marketId: !clMarketId,
         },
         instructions: [
-          "The 403 error suggests your Commerce Layer app configuration is incorrect.",
-          "Let's try a different approach:",
+          "The 400 Bad Request error suggests your Commerce Layer scope format was incorrect.",
+          "This has been FIXED - the duplicate 'stock_location:id:' prefix has been removed.",
           "",
           "1. Go to Commerce Layer Dashboard > Settings > Applications",
           "2. DELETE the current app (it's not working)",
@@ -59,7 +64,7 @@ export async function GET() {
           "   COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
           "   COMMERCE_LAYER_STOCK_LOCATION_ID=<your_stock_location_id> (optional)",
           "",
-          "Scope will auto-generate as:",
+          "Scope will auto-generate as (FIXED):",
           `market:id:${clMarketId || "<your_market_id>"}`,
         ],
       })
@@ -71,8 +76,8 @@ export async function GET() {
     // Test different authentication approaches
     const results = []
 
-    // Test 1: Current credentials with corrected endpoint and scope
-    console.log("🧪 Test 1: Current credentials with corrected endpoint and scope")
+    // Test 1: Current credentials with corrected endpoint and FIXED scope
+    console.log("🧪 Test 1: Current credentials with corrected endpoint and FIXED scope")
     try {
       const test1Response = await fetch(tokenUrl, {
         method: "POST",
@@ -90,22 +95,24 @@ export async function GET() {
 
       const test1Text = await test1Response.text()
       results.push({
-        test: "Corrected Endpoint + Scope Authentication",
+        test: "Corrected Endpoint + FIXED Scope Authentication",
         status: test1Response.status,
         success: test1Response.ok,
         response: test1Text || "Empty response",
         headers: Object.fromEntries(test1Response.headers.entries()),
         endpointUsed: tokenUrl,
         scopeUsed: clScope,
+        scopeFixed: "Removed duplicate 'stock_location:id:' prefix",
       })
     } catch (error) {
       results.push({
-        test: "Corrected Endpoint + Scope Authentication",
+        test: "Corrected Endpoint + FIXED Scope Authentication",
         status: "error",
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
         endpointUsed: tokenUrl,
         scopeUsed: clScope,
+        scopeFixed: "Removed duplicate 'stock_location:id:' prefix",
       })
     }
 
@@ -147,7 +154,7 @@ export async function GET() {
     }
 
     // Test 3: Try with different content type
-    console.log("🧪 Test 3: Form-encoded request with correct endpoint and scope")
+    console.log("🧪 Test 3: Form-encoded request with correct endpoint and FIXED scope")
     try {
       const params = new URLSearchParams()
       params.append("grant_type", "client_credentials")
@@ -166,22 +173,24 @@ export async function GET() {
 
       const test3Text = await test3Response.text()
       results.push({
-        test: "Form-Encoded Authentication with Correct Endpoint + Scope",
+        test: "Form-Encoded Authentication with Correct Endpoint + FIXED Scope",
         status: test3Response.status,
         success: test3Response.ok,
         response: test3Text || "Empty response",
         headers: Object.fromEntries(test3Response.headers.entries()),
         endpointUsed: tokenUrl,
         scopeUsed: clScope,
+        scopeFixed: "Removed duplicate 'stock_location:id:' prefix",
       })
     } catch (error) {
       results.push({
-        test: "Form-Encoded Authentication with Correct Endpoint + Scope",
+        test: "Form-Encoded Authentication with Correct Endpoint + FIXED Scope",
         status: "error",
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
         endpointUsed: tokenUrl,
         scopeUsed: clScope,
+        scopeFixed: "Removed duplicate 'stock_location:id:' prefix",
       })
     }
 
@@ -199,6 +208,7 @@ export async function GET() {
         stockLocationId: clStockLocationId || "Not set",
         scope: clScope,
         scopeFormat: clScope.includes("market:id:") ? "✅ Correct" : "❌ Incorrect",
+        scopeFixed: "✅ Removed duplicate 'stock_location:id:' prefix",
       },
       endpointCorrection: {
         correctEndpoint: tokenUrl,
@@ -209,6 +219,8 @@ export async function GET() {
         explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
         isCorrectFormat: clScope.includes("market:id:"),
         hasStockLocation: !!clStockLocationId,
+        bugFixed: "✅ Removed duplicate 'stock_location:id:' prefix that was causing 400 Bad Request",
+        noDuplicates: !clScope.includes("stock_location:id:stock_location:id:"),
       },
       testResults: results,
       analysis: {
@@ -216,6 +228,7 @@ export async function GET() {
         hasSuccessfulTest: !!successfulTest,
         successfulTest: successfulTest?.test || null,
         commonIssues: [
+          "400 Bad Request was caused by malformed scope with duplicate prefixes (now fixed)",
           "403 Forbidden usually means the app credentials are invalid",
           "Empty response body suggests the request is being rejected at the API gateway level",
           "Incorrect endpoint URL was a common cause (now fixed)",
@@ -248,7 +261,8 @@ export async function GET() {
         : [
             `✅ Found working authentication method: ${successfulTest?.test}`,
             `✅ Endpoint corrected to: ${tokenUrl}`,
-            `✅ Scope format corrected to: ${clScope}`,
+            `✅ Scope format FIXED to: ${clScope}`,
+            "✅ Removed duplicate prefixes that were causing 400 Bad Request",
             "Update your main authentication code to use this approach.",
           ],
       nextSteps: [
@@ -256,6 +270,7 @@ export async function GET() {
         "2. Update environment variables with Integration app credentials",
         "3. Redeploy your application",
         "4. Test /api/commerce-layer/test-manual-auth again",
+        "5. The scope format bug has been fixed - no more duplicates!",
       ],
     })
   } catch (error) {

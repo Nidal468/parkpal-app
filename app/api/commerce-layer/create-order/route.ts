@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
     const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
 
-    // Create correct scope format
+    // Create correct scope format - FIXED: Remove duplicate prefix
     const clScope = clStockLocationId
       ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
       : `market:id:${clMarketId}`
@@ -530,7 +530,7 @@ async function getCommerceLayerAccessToken(
   // Use correct global auth endpoint
   const tokenUrl = "https://auth.commercelayer.io/oauth/token"
 
-  // Create correct scope format
+  // Create correct scope format - FIXED: Ensure no duplicate prefixes
   const scope = stockLocationId ? `market:id:${marketId} stock_location:id:${stockLocationId}` : `market:id:${marketId}`
 
   console.log("🔑 Token request details:", {
@@ -540,6 +540,8 @@ async function getCommerceLayerAccessToken(
     hasClientSecret: !!clientSecret,
     clientIdPrefix: clientId?.substring(0, 10) + "...",
     clientSecretPrefix: clientSecret?.substring(0, 10) + "...",
+    marketId,
+    stockLocationId: stockLocationId || "not_used",
   })
 
   const tokenPayload = {

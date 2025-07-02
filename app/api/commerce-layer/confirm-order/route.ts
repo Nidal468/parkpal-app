@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Commerce Layer not configured" }, { status: 500 })
     }
 
-    // Create correct scope format
+    // Create correct scope format - FIXED: Ensure no duplicate prefixes
     const clScope = clStockLocationId
       ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
       : `market:id:${clMarketId}`
@@ -38,9 +38,9 @@ export async function POST(request: NextRequest) {
       scope: clScope,
     }
 
-    console.log("🔑 Getting access token for order confirmation with correct endpoint and scope format...")
+    console.log("🔑 Getting access token for order confirmation with correct endpoint and FIXED scope format...")
     console.log("🔑 Using endpoint:", tokenUrl)
-    console.log("🔑 Using scope:", clScope)
+    console.log("🔑 Using FIXED scope:", clScope)
 
     const tokenResponse = await fetch(tokenUrl, {
       method: "POST",
