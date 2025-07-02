@@ -25,9 +25,9 @@ export async function POST(request: NextRequest) {
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
 
-    // ChatGPT's debugging suggestion - log actual values
-    console.log("🔧 ACTUAL Environment Values:", {
-      clClientId,
+    // Log environment values for debugging
+    console.log("🔧 Environment Values Check:", {
+      clClientId: clClientId ? `${clClientId.substring(0, 10)}...` : "undefined",
       clClientSecret: clClientSecret ? `${clClientSecret.substring(0, 10)}...` : "undefined",
       clBaseUrl,
       clMarketId,
@@ -104,16 +104,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get Commerce Layer access token with market AND stock location scope
-    console.log("🔑 Getting access token...")
+    // Get Commerce Layer access token with Integration app credentials
+    console.log("🔑 Getting access token with Integration app...")
     let accessToken: string
     try {
-      accessToken = await getAccessTokenWithMarketAndStockLocationScope(
-        clClientId,
-        clClientSecret,
-        clBaseUrl,
-        clMarketId,
-      )
+      accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clBaseUrl, clMarketId)
       console.log("✅ Commerce Layer access token obtained")
     } catch (tokenError) {
       console.error("❌ Failed to get access token:", tokenError)
@@ -513,20 +508,21 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Updated helper function to include BOTH market and stock location scopes
-async function getAccessTokenWithMarketAndStockLocationScope(
+// Helper function to get Commerce Layer access token using Integration app credentials
+async function getCommerceLayerAccessToken(
   clientId: string,
   clientSecret: string,
   baseUrl: string,
   marketId: string,
 ): Promise<string> {
-  console.log("🔑 Requesting access token with market AND stock location scope...")
+  console.log("🔑 Requesting Commerce Layer access token...")
 
-  // Include both market and stock location scopes as shown in the screenshot
+  // Use the exact scope format you specified
   const scope = `market:${marketId} stock_location:okJbPuNbjk`
 
   console.log("🔑 Token request details:", {
     baseUrl,
+    tokenUrl: `${baseUrl}/oauth/token`,
     marketId,
     stockLocationId: "okJbPuNbjk",
     scope,
@@ -540,7 +536,7 @@ async function getAccessTokenWithMarketAndStockLocationScope(
     grant_type: "client_credentials",
     client_id: clientId,
     client_secret: clientSecret,
-    scope: scope, // This now includes both market and stock location
+    scope: scope,
   }
 
   console.log("🔑 Token payload:", {
@@ -580,10 +576,13 @@ async function getAccessTokenWithMarketAndStockLocationScope(
     }
 
     const data = await response.json()
-    console.log("✅ Access token obtained successfully with both market and stock location scopes")
+    console.log("✅ Access token obtained successfully with Integration app credentials")
     console.log("🔑 Token response data:", {
       ...data,
       access_token: data.access_token?.substring(0, 20) + "...",
+      token_type: data.token_type,
+      expires_in: data.expires_in,
+      scope: data.scope,
     })
 
     return data.access_token

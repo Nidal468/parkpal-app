@@ -2,20 +2,24 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
-    console.log("🧪 Manual Commerce Layer Authentication Test")
+    console.log("🧪 Manual Commerce Layer Authentication Test with Integration App")
 
-    // Get environment variables exactly as ChatGPT suggested
+    // Get environment variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
 
-    // Log actual values as ChatGPT suggested
-    console.log("🔧 Raw Environment Values:", {
-      clClientId,
+    // Log actual values for debugging
+    console.log("🔧 Environment Values:", {
+      clClientId: clClientId ? `${clClientId.substring(0, 10)}...` : "undefined",
       clClientSecret: clClientSecret ? `${clClientSecret.substring(0, 10)}...` : "undefined",
       clBaseUrl,
       clMarketId,
+      hasClientId: !!clClientId,
+      hasClientSecret: !!clClientSecret,
+      clientIdLength: clClientId?.length || 0,
+      clientSecretLength: clClientSecret?.length || 0,
     })
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
@@ -34,15 +38,22 @@ export async function GET() {
             baseUrl: clBaseUrl || "undefined",
             marketId: clMarketId || "undefined",
           },
+          instructions: [
+            "Update your Vercel environment variables with the new Integration app credentials:",
+            "COMMERCE_LAYER_CLIENT_ID=BtPDMCkSk3pEncM7ejudu5laqnAKXcXE97c1ImgHfiI",
+            "COMMERCE_LAYER_CLIENT_SECRET=SuunOtYwHB5NuT9QXNxn1bjMs8hFi0vtvnEPxSiGAv4",
+            "COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
+            "COMMERCE_LAYER_MARKET_ID=vjkaZhNPnl",
+          ],
         },
         { status: 400 },
       )
     }
 
-    // Updated scope to include BOTH market and stock location as shown in screenshot
+    // Use the exact scope format specified
     const scope = `market:${clMarketId} stock_location:okJbPuNbjk`
 
-    // Manual token request with both scopes
+    // Manual token request with Integration app credentials
     const tokenPayload = {
       grant_type: "client_credentials",
       client_id: clClientId,
@@ -50,12 +61,12 @@ export async function GET() {
       scope: scope,
     }
 
-    console.log("🔑 Making manual token request to:", `${clBaseUrl}/oauth/token`)
-    console.log("🔑 With payload:", {
+    console.log("🔑 Making token request to:", `${clBaseUrl}/oauth/token`)
+    console.log("🔑 With Integration app payload:", {
       ...tokenPayload,
       client_secret: "[REDACTED]",
     })
-    console.log("🔑 Using BOTH market and stock location scopes:", scope)
+    console.log("🔑 Using scope:", scope)
 
     const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
       method: "POST",
@@ -89,29 +100,24 @@ export async function GET() {
           },
           scopeUsed: scope,
           diagnosis: {
-            issue: tokenResponse.status === 403 ? "403 Forbidden with empty response" : `HTTP ${tokenResponse.status}`,
+            issue: tokenResponse.status === 403 ? "403 Forbidden" : `HTTP ${tokenResponse.status}`,
             meaning:
               tokenResponse.status === 403
-                ? "Commerce Layer is rejecting your credentials or scope"
+                ? "Commerce Layer is rejecting your Integration app credentials or scope"
                 : "Authentication request failed",
-            mostLikelyCauses: [
-              "❌ Client ID is incorrect or doesn't exist",
-              "❌ Client Secret is incorrect or expired",
-              "❌ Application is not configured for 'Client Credentials' grant type",
-              "❌ Application doesn't have access to the specified market",
-              "❌ Application doesn't have access to the specified stock location",
-              "❌ Stock location ID 'okJbPuNbjk' is incorrect",
-              "❌ Application is disabled or suspended",
+            possibleCauses: [
+              "❌ Environment variables not updated with new Integration app credentials",
+              "❌ Client ID is incorrect",
+              "❌ Client Secret is incorrect",
+              "❌ Integration app doesn't have access to the specified market",
+              "❌ Integration app doesn't have access to the specified stock location",
+              "❌ Integration app is not configured for 'Client Credentials' grant type",
             ],
           },
-          immediateActions: [
-            "1. Go to Commerce Layer Dashboard > Settings > Applications",
-            "2. Find your integration app (or create a new one)",
-            "3. Copy the EXACT Client ID and Client Secret",
-            "4. Ensure Grant Type includes 'Client Credentials'",
-            "5. Verify the app has access to your market: " + clMarketId,
-            "6. Verify the app has access to stock location: okJbPuNbjk",
-            "7. Update your Vercel environment variables with fresh credentials",
+          nextSteps: [
+            "1. Update Vercel environment variables with new Integration app credentials",
+            "2. Redeploy your application",
+            "3. Test this endpoint again",
           ],
         },
         { status: 500 },
@@ -133,16 +139,14 @@ export async function GET() {
           },
           scopeUsed: scope,
           troubleshooting: {
-            message: "Check your Commerce Layer dashboard:",
+            message: "Integration app authentication failed",
             steps: [
-              "1. Go to Settings > Applications",
-              "2. Find your integration app",
-              "3. Verify Client ID matches your environment variable",
-              "4. Regenerate Client Secret if needed",
-              "5. Ensure app has 'Client Credentials' grant type",
-              `6. Verify app has access to market: ${clMarketId}`,
-              "7. Verify app has access to stock location: okJbPuNbjk",
-              "8. Check if app has correct scopes/permissions",
+              "1. Verify environment variables are updated with new Integration app credentials",
+              "2. Check Commerce Layer Dashboard > Settings > Applications",
+              "3. Ensure Integration app has 'Client Credentials' grant type enabled",
+              `4. Verify Integration app has access to market: ${clMarketId}`,
+              "5. Verify Integration app has access to stock location: okJbPuNbjk",
+              "6. Redeploy application after updating environment variables",
             ],
           },
         },
@@ -150,7 +154,7 @@ export async function GET() {
       )
     }
 
-    console.log("✅ Token obtained successfully with both market and stock location scopes!")
+    console.log("✅ Token obtained successfully with Integration app credentials!")
 
     // Test market access
     let marketTest: any = { status: "not_tested" }
@@ -191,10 +195,13 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: "Commerce Layer authentication successful with both market and stock location scopes!",
+      message: "Commerce Layer Integration app authentication successful!",
       tokenResponse: {
         ...tokenData,
         access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 20)}...` : "missing",
+        token_type: tokenData.token_type,
+        expires_in: tokenData.expires_in,
+        scope: tokenData.scope,
       },
       marketTest,
       scopeUsed: scope,
@@ -205,19 +212,26 @@ export async function GET() {
         marketId: clMarketId,
         stockLocationId: "okJbPuNbjk",
       },
+      integrationAppDetails: {
+        appType: "Integration (confidential client)",
+        grantType: "client_credentials",
+        tokenUrl: `${clBaseUrl}/oauth/token`,
+        apiBaseUrl: `${clBaseUrl}/api`,
+      },
       nextSteps: [
-        "✅ Authentication working with both scopes",
+        "✅ Integration app authentication working",
         marketTest.status === "success" ? "✅ Market access working" : "❌ Check market access",
-        "Now test the full create-order flow",
+        "✅ Ready to test full payment flow",
+        "Now test /test-reserve page",
       ],
     })
   } catch (error) {
-    console.error("❌ Manual auth test failed:", error)
+    console.error("❌ Integration app auth test failed:", error)
     return NextResponse.json(
       {
-        error: "Manual authentication test failed",
+        error: "Integration app authentication test failed",
         details: error instanceof Error ? error.message : "Unknown error",
-        suggestion: "Check your Commerce Layer credentials in the dashboard",
+        suggestion: "Check your Commerce Layer Integration app credentials and environment variables",
       },
       { status: 500 },
     )

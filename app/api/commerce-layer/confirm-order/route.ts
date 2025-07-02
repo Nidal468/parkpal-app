@@ -21,10 +21,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Commerce Layer not configured" }, { status: 500 })
     }
 
-    // Updated scope to include both market and stock location
+    // Use the exact scope format with Integration app credentials
     const scope = `market:${clMarketId} stock_location:okJbPuNbjk`
 
-    // Get access token with both scopes
+    // Get access token with Integration app credentials
     const tokenPayload = {
       grant_type: "client_credentials",
       client_id: clClientId,
@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
       scope: scope,
     }
 
-    console.log("🔑 Getting access token for order confirmation with scope:", scope)
+    console.log("🔑 Getting access token for order confirmation with Integration app...")
+    console.log("🔑 Using scope:", scope)
 
     const tokenResponse = await fetch(`${clBaseUrl}/oauth/token`, {
       method: "POST",
@@ -51,6 +52,8 @@ export async function POST(request: NextRequest) {
 
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
+
+    console.log("✅ Access token obtained for order confirmation")
 
     // Update order status to confirmed
     const updateOrderPayload = {
