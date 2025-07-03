@@ -233,16 +233,16 @@ export async function GET() {
           })
         }
 
-        // Test customer creation with proper payload
+        // Test customer creation with minimal payload (only email and metadata)
         const testCustomer = {
           data: {
             type: "customers",
             attributes: {
               email: `full-diagnostic-${Date.now()}@example.com`,
-              first_name: "Full",
-              last_name: "Diagnostic",
-              phone: null,
-              metadata: { source: "full_diagnostic_test" },
+              metadata: {
+                customer_name: "Full Diagnostic",
+                source: "full_diagnostic_test",
+              },
             },
           },
         }

@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     // Step 1: Search for existing customer (Integration app has full permissions)
     console.log("👤 Searching for existing customer (Integration app)...")
-    // Fix the filter syntax - use proper Commerce Layer filter format
+    // Use the correct filter syntax for Commerce Layer
     const customerSearchUrl = `${apiBase}/customers?filter[q][email_eq]=${encodeURIComponent(customerDetails.email)}`
     console.log("🔍 Customer search URL:", customerSearchUrl)
 
@@ -75,17 +75,18 @@ export async function POST(request: NextRequest) {
               type: "customers",
               id: customer.id,
               attributes: {
-                first_name: customerDetails.name?.split(" ")[0] || customer.attributes.first_name,
-                last_name: customerDetails.name?.split(" ").slice(1).join(" ") || customer.attributes.last_name,
-                phone: customerDetails.phone || customer.attributes.phone,
+                // Only include fields that are allowed for updates
+                email: customerDetails.email,
                 metadata: {
                   ...customer.attributes.metadata,
+                  customer_name: customerDetails.name,
                   vehicle_registration: bookingDetails?.vehicleReg || "",
                   vehicle_type: bookingDetails?.vehicleType || "car",
                   booking_start_date: bookingDetails?.startDate || "",
                   booking_start_time: bookingDetails?.startTime || "",
                   special_requests: bookingDetails?.specialRequests || "",
                   space_id: spaceId || "",
+                  phone: customerDetails.phone || "",
                   last_booking_update: new Date().toISOString(),
                 },
               },
@@ -125,15 +126,16 @@ export async function POST(request: NextRequest) {
       const customerCreateUrl = `${apiBase}/customers`
       console.log("🔧 Customer create URL:", customerCreateUrl)
 
+      // Use minimal customer payload - only include required/allowed fields
       const customerPayload = {
         data: {
           type: "customers",
           attributes: {
             email: customerDetails.email,
-            first_name: customerDetails.name?.split(" ")[0] || "Customer",
-            last_name: customerDetails.name?.split(" ").slice(1).join(" ") || "",
-            phone: customerDetails.phone || null,
+            // Store name and other details in metadata instead of separate fields
             metadata: {
+              customer_name: customerDetails.name,
+              phone: customerDetails.phone || "",
               vehicle_registration: bookingDetails?.vehicleReg || "",
               vehicle_type: bookingDetails?.vehicleType || "car",
               booking_start_date: bookingDetails?.startDate || "",
