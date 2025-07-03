@@ -20,6 +20,7 @@ export async function getCommerceLayerAccessToken(
     hasClientId: !!clientId,
     hasClientSecret: !!clientSecret,
     clientIdPrefix: clientId?.substring(0, 10) + "...",
+    clientSecretPrefix: clientSecret?.substring(0, 10) + "...",
     marketId,
     stockLocationId: stockLocationId || "not_used",
   })
@@ -30,6 +31,12 @@ export async function getCommerceLayerAccessToken(
     client_secret: clientSecret,
     scope,
   }
+
+  console.log("🔑 Token payload:", {
+    ...tokenPayload,
+    client_secret: "[REDACTED]",
+    client_id: clientId?.substring(0, 10) + "...",
+  })
 
   const response = await fetch(tokenUrl, {
     method: "POST",
@@ -48,6 +55,13 @@ export async function getCommerceLayerAccessToken(
 
   const data = await response.json()
   console.log("✅ Access token obtained successfully")
+  console.log("🔑 Token response data:", {
+    ...data,
+    access_token: data.access_token?.substring(0, 20) + "...",
+    token_type: data.token_type,
+    expires_in: data.expires_in,
+    scope: data.scope,
+  })
 
   return data.access_token
 }

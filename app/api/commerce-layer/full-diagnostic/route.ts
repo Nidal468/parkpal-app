@@ -1,279 +1,249 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 FULL Commerce Layer Environment Diagnostic")
-    console.log("🔍 Using centralized authentication function...")
+    console.log("🔍 Starting comprehensive Commerce Layer diagnostic...")
 
-    // Get ALL environment variables that could be related
-    const allEnvVars = {
-      // Server-side Commerce Layer vars (correct)
+    // Collect all environment variables
+    const envVars = {
+      // Server-side variables
       COMMERCE_LAYER_CLIENT_ID: process.env.COMMERCE_LAYER_CLIENT_ID,
       COMMERCE_LAYER_CLIENT_SECRET: process.env.COMMERCE_LAYER_CLIENT_SECRET,
       COMMERCE_LAYER_BASE_URL: process.env.COMMERCE_LAYER_BASE_URL,
       COMMERCE_LAYER_MARKET_ID: process.env.COMMERCE_LAYER_MARKET_ID,
-      COMMERCE_LAYER_SCOPE: process.env.COMMERCE_LAYER_SCOPE,
       COMMERCE_LAYER_STOCK_LOCATION_ID: process.env.COMMERCE_LAYER_STOCK_LOCATION_ID,
+      COMMERCE_LAYER_SCOPE: process.env.COMMERCE_LAYER_SCOPE,
 
-      // Legacy public vars (should NOT exist)
+      // Client-side variables (these might interfere)
       NEXT_PUBLIC_CL_CLIENT_ID: process.env.NEXT_PUBLIC_CL_CLIENT_ID,
       NEXT_PUBLIC_CL_CLIENT_SECRET: process.env.NEXT_PUBLIC_CL_CLIENT_SECRET,
-      NEXT_PUBLIC_CL_BASE_URL: process.env.NEXT_PUBLIC_CL_BASE_URL,
       NEXT_PUBLIC_CL_MARKET_ID: process.env.NEXT_PUBLIC_CL_MARKET_ID,
       NEXT_PUBLIC_CL_SCOPE: process.env.NEXT_PUBLIC_CL_SCOPE,
       NEXT_PUBLIC_CL_STOCK_LOCATION_ID: process.env.NEXT_PUBLIC_CL_STOCK_LOCATION_ID,
-
-      // Other potential interference
-      CL_CLIENT_ID: process.env.CL_CLIENT_ID,
-      CL_CLIENT_SECRET: process.env.CL_CLIENT_SECRET,
-      CL_BASE_URL: process.env.CL_BASE_URL,
-      CL_MARKET_ID: process.env.CL_MARKET_ID,
-      CL_SCOPE: process.env.CL_SCOPE,
-
-      // Node environment
-      NODE_ENV: process.env.NODE_ENV,
-      VERCEL: process.env.VERCEL,
-      VERCEL_ENV: process.env.VERCEL_ENV,
     }
 
-    // Check what values are actually being used
-    const actualValues = {
-      clientId: process.env.COMMERCE_LAYER_CLIENT_ID,
-      clientSecret: process.env.COMMERCE_LAYER_CLIENT_SECRET,
-      baseUrl: process.env.COMMERCE_LAYER_BASE_URL,
-      marketId: process.env.COMMERCE_LAYER_MARKET_ID,
-      stockLocationId: process.env.COMMERCE_LAYER_STOCK_LOCATION_ID,
+    const diagnostic = {
+      timestamp: new Date().toISOString(),
+      environment: {} as any,
+      warnings: [] as string[],
+      tests: {} as any,
     }
 
-    console.log("🔧 Actual values being used:", {
-      clientId: actualValues.clientId ? `${actualValues.clientId.substring(0, 10)}...` : "undefined",
-      clientSecret: actualValues.clientSecret ? `${actualValues.clientSecret.substring(0, 10)}...` : "undefined",
-      baseUrl: actualValues.baseUrl,
-      marketId: actualValues.marketId,
-      stockLocationId: actualValues.stockLocationId,
-    })
-
-    // Test the centralized authentication function
-    console.log("🧪 Testing centralized authentication function...")
-
-    if (!actualValues.clientId || !actualValues.clientSecret || !actualValues.baseUrl || !actualValues.marketId) {
-      return NextResponse.json({
-        error: "Missing required environment variables",
-        diagnosis: "Environment variables are not properly set in Vercel",
-        allEnvironmentVars: Object.fromEntries(
-          Object.entries(allEnvVars).map(([key, value]) => [
-            key,
-            value ? (key.includes("SECRET") ? "✅ SET" : value) : "❌ UNDEFINED",
-          ]),
-        ),
-        actualValuesUsed: {
-          clientId: actualValues.clientId || "❌ UNDEFINED",
-          clientSecret: actualValues.clientSecret ? "✅ SET" : "❌ UNDEFINED",
-          baseUrl: actualValues.baseUrl || "❌ UNDEFINED",
-          marketId: actualValues.marketId || "❌ UNDEFINED",
-          stockLocationId: actualValues.stockLocationId || "❌ UNDEFINED",
-        },
-        interference: {
-          hasLegacyPublicVars: !!(
-            process.env.NEXT_PUBLIC_CL_CLIENT_ID ||
-            process.env.NEXT_PUBLIC_CL_CLIENT_SECRET ||
-            process.env.NEXT_PUBLIC_CL_BASE_URL
-          ),
-          hasShortVars: !!(process.env.CL_CLIENT_ID || process.env.CL_CLIENT_SECRET),
-          environment: process.env.NODE_ENV,
-          isVercel: !!process.env.VERCEL,
-          vercelEnv: process.env.VERCEL_ENV,
-        },
-        instructions: [
-          "❌ Required environment variables are missing in Vercel",
-          "Go to Vercel Dashboard > Your Project > Settings > Environment Variables",
-          "Ensure these are set:",
-          "COMMERCE_LAYER_CLIENT_ID=<your_client_id>",
-          "COMMERCE_LAYER_CLIENT_SECRET=<your_client_secret>",
-          "COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
-          "COMMERCE_LAYER_MARKET_ID=<your_market_id>",
-          "COMMERCE_LAYER_STOCK_LOCATION_ID=<your_stock_location_id> (optional)",
-          "",
-          "Then redeploy your application",
-        ],
-      })
+    // Environment analysis
+    diagnostic.environment = {
+      serverSide: {
+        hasClientId: !!envVars.COMMERCE_LAYER_CLIENT_ID,
+        hasClientSecret: !!envVars.COMMERCE_LAYER_CLIENT_SECRET,
+        hasBaseUrl: !!envVars.COMMERCE_LAYER_BASE_URL,
+        hasMarketId: !!envVars.COMMERCE_LAYER_MARKET_ID,
+        hasStockLocationId: !!envVars.COMMERCE_LAYER_STOCK_LOCATION_ID,
+        hasScope: !!envVars.COMMERCE_LAYER_SCOPE,
+        clientIdLength: envVars.COMMERCE_LAYER_CLIENT_ID?.length || 0,
+        clientSecretLength: envVars.COMMERCE_LAYER_CLIENT_SECRET?.length || 0,
+        baseUrl: envVars.COMMERCE_LAYER_BASE_URL,
+        marketId: envVars.COMMERCE_LAYER_MARKET_ID,
+        stockLocationId: envVars.COMMERCE_LAYER_STOCK_LOCATION_ID,
+        scope: envVars.COMMERCE_LAYER_SCOPE,
+      },
+      clientSide: {
+        hasClientId: !!envVars.NEXT_PUBLIC_CL_CLIENT_ID,
+        hasClientSecret: !!envVars.NEXT_PUBLIC_CL_CLIENT_SECRET,
+        hasMarketId: !!envVars.NEXT_PUBLIC_CL_MARKET_ID,
+        hasScope: !!envVars.NEXT_PUBLIC_CL_SCOPE,
+        hasStockLocationId: !!envVars.NEXT_PUBLIC_CL_STOCK_LOCATION_ID,
+      },
     }
 
-    // Test centralized authentication function
-    let authResult: any
+    // Check for potential conflicts
+    if (envVars.NEXT_PUBLIC_CL_CLIENT_ID && envVars.COMMERCE_LAYER_CLIENT_ID) {
+      if (envVars.NEXT_PUBLIC_CL_CLIENT_ID !== envVars.COMMERCE_LAYER_CLIENT_ID) {
+        diagnostic.warnings.push("Client ID mismatch between server and client environment variables")
+      }
+    }
+
+    if (envVars.COMMERCE_LAYER_SCOPE) {
+      diagnostic.warnings.push("COMMERCE_LAYER_SCOPE is set - this might override dynamic scope construction")
+    }
+
+    // Check required variables
+    const requiredVars = [
+      "COMMERCE_LAYER_CLIENT_ID",
+      "COMMERCE_LAYER_CLIENT_SECRET",
+      "COMMERCE_LAYER_BASE_URL",
+      "COMMERCE_LAYER_MARKET_ID",
+    ]
+    const missingVars = requiredVars.filter((varName) => !envVars[varName as keyof typeof envVars])
+
+    if (missingVars.length > 0) {
+      diagnostic.tests.environment = {
+        passed: false,
+        error: `Missing required environment variables: ${missingVars.join(", ")}`,
+        missingVars,
+      }
+      return NextResponse.json(diagnostic, { status: 500 })
+    }
+
+    diagnostic.tests.environment = { passed: true }
+
+    // Test authentication using centralized function
     try {
+      console.log("🔑 Testing authentication with centralized function...")
       const accessToken = await getCommerceLayerAccessToken(
-        actualValues.clientId,
-        actualValues.clientSecret,
-        actualValues.marketId,
-        actualValues.stockLocationId,
+        envVars.COMMERCE_LAYER_CLIENT_ID!,
+        envVars.COMMERCE_LAYER_CLIENT_SECRET!,
+        envVars.COMMERCE_LAYER_MARKET_ID!,
+        envVars.COMMERCE_LAYER_STOCK_LOCATION_ID,
       )
-      authResult = {
-        success: true,
-        accessToken: accessToken ? `${accessToken.substring(0, 20)}...` : "missing",
-        usingCentralizedFunction: true,
+
+      diagnostic.tests.authentication = {
+        passed: true,
+        method: "centralized_function",
+        tokenObtained: true,
+        tokenLength: accessToken.length,
+        tokenPrefix: accessToken.substring(0, 20) + "...",
       }
     } catch (authError) {
-      authResult = {
-        success: false,
-        error: authError instanceof Error ? authError.message : "Unknown error",
-        usingCentralizedFunction: true,
+      diagnostic.tests.authentication = {
+        passed: false,
+        method: "centralized_function",
+        error: authError instanceof Error ? authError.message : "Unknown auth error",
+      }
+      return NextResponse.json(diagnostic, { status: 500 })
+    }
+
+    // Test API calls
+    const accessToken = await getCommerceLayerAccessToken(
+      envVars.COMMERCE_LAYER_CLIENT_ID!,
+      envVars.COMMERCE_LAYER_CLIENT_SECRET!,
+      envVars.COMMERCE_LAYER_MARKET_ID!,
+      envVars.COMMERCE_LAYER_STOCK_LOCATION_ID,
+    )
+
+    const apiBase = `${envVars.COMMERCE_LAYER_BASE_URL}/api`
+
+    // Test market access
+    try {
+      const marketResponse = await fetch(`${apiBase}/markets/${envVars.COMMERCE_LAYER_MARKET_ID}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.api+json",
+        },
+      })
+
+      if (marketResponse.ok) {
+        const marketData = await marketResponse.json()
+        diagnostic.tests.marketAccess = {
+          passed: true,
+          marketId: marketData.data.id,
+          marketName: marketData.data.attributes.name,
+          url: `${apiBase}/markets/${envVars.COMMERCE_LAYER_MARKET_ID}`,
+        }
+      } else {
+        const errorText = await marketResponse.text()
+        diagnostic.tests.marketAccess = {
+          passed: false,
+          error: `${marketResponse.status}: ${errorText}`,
+          url: `${apiBase}/markets/${envVars.COMMERCE_LAYER_MARKET_ID}`,
+        }
+      }
+    } catch (marketError) {
+      diagnostic.tests.marketAccess = {
+        passed: false,
+        error: marketError instanceof Error ? marketError.message : "Unknown error",
       }
     }
 
-    // Comprehensive analysis
-    const analysis = {
-      environmentCheck: {
-        usingCorrectVars: !!(
-          actualValues.clientId &&
-          actualValues.clientSecret &&
-          actualValues.baseUrl &&
-          actualValues.marketId
-        ),
-        hasLegacyInterference: !!(
-          process.env.NEXT_PUBLIC_CL_CLIENT_ID ||
-          process.env.NEXT_PUBLIC_CL_CLIENT_SECRET ||
-          process.env.NEXT_PUBLIC_CL_BASE_URL
-        ),
-        hasShortVarInterference: !!(process.env.CL_CLIENT_ID || process.env.CL_CLIENT_SECRET),
-        environment: process.env.NODE_ENV,
-        isVercel: !!process.env.VERCEL,
-        vercelEnv: process.env.VERCEL_ENV,
-      },
-      authenticationTest: authResult,
-      credentialsUsed: {
-        clientId: actualValues.clientId?.substring(0, 10) + "...",
-        clientIdLength: actualValues.clientId?.length || 0,
-        clientSecret: "✅ SET",
-        clientSecretLength: actualValues.clientSecret?.length || 0,
-        baseUrl: actualValues.baseUrl,
-        marketId: actualValues.marketId,
-        stockLocationId: actualValues.stockLocationId || "Not set",
-      },
-    }
+    // Test customer search (this was failing before)
+    try {
+      const testEmail = "diagnostic-test@example.com"
+      const customerSearchUrl = `${apiBase}/customers?filter[email_eq]=${encodeURIComponent(testEmail)}`
 
-    if (!authResult.success) {
-      return NextResponse.json({
-        error: "Authentication failed with centralized function",
-        authError: authResult.error,
-        analysis,
-        allEnvironmentVars: Object.fromEntries(
-          Object.entries(allEnvVars).map(([key, value]) => [
-            key,
-            value ? (key.includes("SECRET") ? "✅ SET" : value) : "❌ UNDEFINED",
-          ]),
-        ),
-        actualValuesUsed: {
-          clientId: actualValues.clientId?.substring(0, 15) + "...",
-          clientSecret: actualValues.clientSecret ? "✅ SET" : "❌ UNDEFINED",
-          baseUrl: actualValues.baseUrl,
-          marketId: actualValues.marketId,
-          stockLocationId: actualValues.stockLocationId,
-        },
-        interference: {
-          legacyPublicVars: {
-            NEXT_PUBLIC_CL_CLIENT_ID: process.env.NEXT_PUBLIC_CL_CLIENT_ID ? "⚠️ EXISTS" : "✅ NOT SET",
-            NEXT_PUBLIC_CL_CLIENT_SECRET: process.env.NEXT_PUBLIC_CL_CLIENT_SECRET ? "⚠️ EXISTS" : "✅ NOT SET",
-            NEXT_PUBLIC_CL_BASE_URL: process.env.NEXT_PUBLIC_CL_BASE_URL ? "⚠️ EXISTS" : "✅ NOT SET",
-          },
-          shortVars: {
-            CL_CLIENT_ID: process.env.CL_CLIENT_ID ? "⚠️ EXISTS" : "✅ NOT SET",
-            CL_CLIENT_SECRET: process.env.CL_CLIENT_SECRET ? "⚠️ EXISTS" : "✅ NOT SET",
-          },
-        },
-        diagnosis: {
-          issue: "Commerce Layer is rejecting the credentials from Vercel environment",
-          usingCentralizedFunction: true,
-          possibleCauses: [
-            "❌ Client ID is incorrect in Vercel",
-            "❌ Client Secret is incorrect in Vercel",
-            "❌ Commerce Layer application was deleted or doesn't exist",
-            "❌ Application doesn't have 'Client Credentials' grant type enabled",
-            "❌ Application doesn't have access to the specified market",
-            "❌ Base URL is incorrect",
-          ],
-        },
-        solution: {
-          immediate: [
-            "1. Go to Commerce Layer Dashboard",
-            "2. Check if your application still exists",
-            "3. Verify the Client ID and Secret are correct",
-            "4. Create a NEW Integration application if needed",
-            "5. Update Vercel environment variables with new credentials",
-            "6. Redeploy",
-          ],
-          createNewApp: [
-            "If your app doesn't exist, create a new one:",
-            "1. Commerce Layer Dashboard > Settings > Applications",
-            "2. New Application > Integration",
-            "3. Name: 'ParkPal Integration'",
-            "4. Grant Types: ✅ Client Credentials",
-            "5. Scopes: Select your market",
-            "6. Save and copy NEW credentials to Vercel",
-          ],
+      const customerResponse = await fetch(customerSearchUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.api+json",
         },
       })
+
+      if (customerResponse.ok || customerResponse.status === 404) {
+        diagnostic.tests.customerSearch = {
+          passed: true,
+          status: customerResponse.status,
+          message: customerResponse.status === 404 ? "No customers found (expected)" : "Customer search successful",
+          url: customerSearchUrl,
+        }
+      } else {
+        const errorText = await customerResponse.text()
+        diagnostic.tests.customerSearch = {
+          passed: false,
+          error: `${customerResponse.status}: ${errorText}`,
+          url: customerSearchUrl,
+        }
+      }
+    } catch (customerError) {
+      diagnostic.tests.customerSearch = {
+        passed: false,
+        error: customerError instanceof Error ? customerError.message : "Unknown error",
+      }
     }
 
+    // Test stock location (if configured)
+    if (envVars.COMMERCE_LAYER_STOCK_LOCATION_ID) {
+      try {
+        const stockResponse = await fetch(`${apiBase}/stock_locations/${envVars.COMMERCE_LAYER_STOCK_LOCATION_ID}`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/vnd.api+json",
+          },
+        })
+
+        if (stockResponse.ok) {
+          const stockData = await stockResponse.json()
+          diagnostic.tests.stockLocation = {
+            passed: true,
+            stockLocationId: stockData.data.id,
+            stockLocationName: stockData.data.attributes.name,
+          }
+        } else {
+          const errorText = await stockResponse.text()
+          diagnostic.tests.stockLocation = {
+            passed: false,
+            error: `${stockResponse.status}: ${errorText}`,
+          }
+        }
+      } catch (stockError) {
+        diagnostic.tests.stockLocation = {
+          passed: false,
+          error: stockError instanceof Error ? stockError.message : "Unknown error",
+        }
+      }
+    } else {
+      diagnostic.tests.stockLocation = {
+        passed: true,
+        note: "Stock location not configured (optional)",
+      }
+    }
+
+    const allTestsPassed = Object.values(diagnostic.tests).every((test: any) => test.passed)
+
     return NextResponse.json({
-      success: true,
-      message: "✅ Environment variables are working correctly with centralized function!",
-      analysis,
-      authenticationTest: authResult,
-      allEnvironmentVars: Object.fromEntries(
-        Object.entries(allEnvVars).map(([key, value]) => [
-          key,
-          value ? (key.includes("SECRET") ? "✅ SET" : value) : "❌ UNDEFINED",
-        ]),
-      ),
-      actualValuesUsed: {
-        clientId: actualValues.clientId?.substring(0, 15) + "...",
-        clientSecret: "✅ SET",
-        baseUrl: actualValues.baseUrl,
-        marketId: actualValues.marketId,
-        stockLocationId: actualValues.stockLocationId,
+      ...diagnostic,
+      overall: {
+        passed: allTestsPassed,
+        message: allTestsPassed
+          ? "All diagnostic tests passed! Commerce Layer is properly configured."
+          : "Some tests failed. Check the details above.",
+        warningCount: diagnostic.warnings.length,
       },
-      interference: {
-        legacyPublicVars: {
-          NEXT_PUBLIC_CL_CLIENT_ID: process.env.NEXT_PUBLIC_CL_CLIENT_ID ? "⚠️ EXISTS (remove)" : "✅ NOT SET",
-          NEXT_PUBLIC_CL_CLIENT_SECRET: process.env.NEXT_PUBLIC_CL_CLIENT_SECRET ? "⚠️ EXISTS (remove)" : "✅ NOT SET",
-          NEXT_PUBLIC_CL_BASE_URL: process.env.NEXT_PUBLIC_CL_BASE_URL ? "⚠️ EXISTS (remove)" : "✅ NOT SET",
-        },
-        shortVars: {
-          CL_CLIENT_ID: process.env.CL_CLIENT_ID ? "⚠️ EXISTS (remove)" : "✅ NOT SET",
-          CL_CLIENT_SECRET: process.env.CL_CLIENT_SECRET ? "⚠️ EXISTS (remove)" : "✅ NOT SET",
-        },
-        hasInterference: !!(
-          process.env.NEXT_PUBLIC_CL_CLIENT_ID ||
-          process.env.NEXT_PUBLIC_CL_CLIENT_SECRET ||
-          process.env.CL_CLIENT_ID ||
-          process.env.CL_CLIENT_SECRET
-        ),
-      },
-      environment: {
-        nodeEnv: process.env.NODE_ENV,
-        isVercel: !!process.env.VERCEL,
-        vercelEnv: process.env.VERCEL_ENV,
-        usingCorrectServerSideVars: true,
-        usingCentralizedFunction: true,
-      },
-      nextSteps: [
-        "✅ Environment variables are correctly configured",
-        "✅ No local .env interference detected",
-        "✅ Using proper server-side variables",
-        "✅ Token authentication successful with centralized function",
-        "✅ All authentication logic now centralized",
-        "Ready to test full payment flow at /test-reserve",
-      ],
     })
   } catch (error) {
     console.error("❌ Full diagnostic failed:", error)
     return NextResponse.json(
       {
-        error: "Full diagnostic failed",
+        error: "Diagnostic failed",
         details: error instanceof Error ? error.message : "Unknown error",
-        suggestion: "Check network connectivity and Commerce Layer service status",
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )

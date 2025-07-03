@@ -162,7 +162,10 @@ export async function POST(request: NextRequest) {
       console.log("👤 Customer search response status:", customersResponse.status)
       console.log("👤 Customer search response headers:", Object.fromEntries(customersResponse.headers.entries()))
 
-      if (!customersResponse.ok) {
+      // FIXED: Allow 404 responses to fall through to customer creation
+      if (customersResponse.status === 404) {
+        console.warn("⚠️ Customer not found — proceeding to create a new one")
+      } else if (!customersResponse.ok) {
         const errorText = await customersResponse.text()
         console.error("❌ Customer search failed:", customersResponse.status, errorText)
         console.error("❌ Customer search URL was:", customerSearchUrl)
@@ -171,10 +174,13 @@ export async function POST(request: NextRequest) {
         throw new Error(`Customer search failed: ${customersResponse.status} ${errorText}`)
       }
 
-      const customersData = await customersResponse.json()
-      console.log("👤 Customer search response:", JSON.stringify(customersData, null, 2))
+      let customersData: any = null
+      if (customersResponse.status !== 404) {
+        customersData = await customersResponse.json()
+        console.log("👤 Customer search response:", JSON.stringify(customersData, null, 2))
+      }
 
-      if (customersData.data && customersData.data.length > 0) {
+      if (customersData?.data && customersData.data.length > 0) {
         customer = customersData.data[0]
         console.log("✅ Found existing customer:", customer.id)
       } else {

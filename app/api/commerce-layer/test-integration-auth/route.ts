@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    console.log("🧪 Testing Commerce Layer Integration App Authentication")
+    console.log("🔧 Testing Commerce Layer Integration app authentication...")
 
     // Get environment variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
@@ -12,159 +12,201 @@ export async function GET() {
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
     const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
 
-    console.log("🔧 Integration App Environment Check:", {
+    console.log("🔧 Environment check:", {
       hasClientId: !!clClientId,
       hasClientSecret: !!clClientSecret,
-      hasBaseUrl: !!clBaseUrl,
-      hasMarketId: !!clMarketId,
-      hasStockLocationId: !!clStockLocationId,
-      clientIdPrefix: clClientId?.substring(0, 10) + "...",
       baseUrl: clBaseUrl,
       marketId: clMarketId,
       stockLocationId: clStockLocationId,
+      clientIdType: clClientId?.startsWith("integration_") ? "Integration" : "Unknown",
     })
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
       return NextResponse.json(
         {
-          error: "Missing Integration app credentials",
-          instructions: [
-            "Create a new Integration application in Commerce Layer:",
-            "",
-            "1. Go to Commerce Layer Dashboard > Settings > Applications",
-            "2. Click 'New Application'",
-            "3. Select 'Integration' as the application type",
-            "4. Name: 'ParkPal Integration'",
-            "5. Grant Types: ✅ Client Credentials",
-            "6. Scopes: Select your market scope",
-            "7. Save and copy the credentials",
-            "",
-            "Then set these environment variables in Vercel:",
-            "COMMERCE_LAYER_CLIENT_ID=<integration_client_id>",
-            "COMMERCE_LAYER_CLIENT_SECRET=<integration_client_secret>",
-            "COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
-            "COMMERCE_LAYER_MARKET_ID=<your_market_id>",
-            "COMMERCE_LAYER_STOCK_LOCATION_ID=<your_stock_location_id> (optional)",
-          ],
-        },
-        { status: 400 },
-      )
-    }
-
-    // Test Integration app authentication using centralized function
-    let accessToken: string
-    try {
-      console.log("🔑 Testing Integration app token request using centralized function...")
-      accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clMarketId, clStockLocationId)
-      console.log("✅ Integration app authentication successful using centralized function!")
-    } catch (tokenError) {
-      console.error("❌ Integration app authentication failed:", tokenError)
-      return NextResponse.json(
-        {
-          error: "Integration app authentication failed",
-          details: tokenError instanceof Error ? tokenError.message : "Unknown authentication error",
-          troubleshooting: {
-            possibleCauses: [
-              "❌ Client ID is incorrect",
-              "❌ Client Secret is incorrect",
-              "❌ Application doesn't have access to the specified market",
-              "❌ Application is not configured for 'Client Credentials' grant type",
-              "❌ Market ID is incorrect",
-              "❌ Stock Location ID is incorrect (if used)",
-            ],
+          error: "Missing required Commerce Layer environment variables",
+          missing: {
+            clientId: !clClientId,
+            clientSecret: !clClientSecret,
+            baseUrl: !clBaseUrl,
+            marketId: !clMarketId,
           },
-          nextSteps: [
-            "1. Verify you created an 'Integration' app (not Sales Channel)",
-            "2. Check that 'Client Credentials' grant type is enabled",
-            "3. Verify the client ID and secret are correct",
-            "4. Make sure the app has access to your market",
-            `5. Ensure market ID is correct: ${clMarketId}`,
-            clStockLocationId ? `6. Verify stock location exists: ${clStockLocationId}` : "6. Stock location not used",
-            "7. Try creating a completely new Integration app",
-          ],
         },
         { status: 500 },
       )
     }
 
-    // Test API access with the token
-    let apiTest: any = { status: "not_tested" }
-    if (accessToken) {
+    // Test authentication using centralized function
+    console.log("🔑 Testing Integration app authentication...")
+    const accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clMarketId, clStockLocationId)
+
+    console.log("✅ Integration authentication successful!")
+
+    // Test API access with Integration app
+    const apiBase = `${clBaseUrl}/api`
+    const tests = []
+
+    // Test 1: Market access
+    try {
+      const marketResponse = await fetch(`${apiBase}/markets/${clMarketId}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.api+json",
+        },
+      })
+
+      if (marketResponse.ok) {
+        const marketData = await marketResponse.json()
+        tests.push({
+          test: "Market Access",
+          passed: true,
+          data: {
+            marketId: marketData.data.id,
+            marketName: marketData.data.attributes.name,
+          },
+        })
+      } else {
+        const errorText = await marketResponse.text()
+        tests.push({
+          test: "Market Access",
+          passed: false,
+          error: `${marketResponse.status}: ${errorText}`,
+        })
+      }
+    } catch (marketError) {
+      tests.push({
+        test: "Market Access",
+        passed: false,
+        error: marketError instanceof Error ? marketError.message : "Unknown error",
+      })
+    }
+
+    // Test 2: Customer creation (Integration apps should have this permission)
+    try {
+      const customerPayload = {
+        data: {
+          type: "customers",
+          attributes: {
+            email: `test-${Date.now()}@example.com`,
+            first_name: "Test",
+            last_name: "Customer",
+            metadata: {
+              source: "integration_test",
+            },
+          },
+        },
+      }
+
+      const customerResponse = await fetch(`${apiBase}/customers`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.api+json",
+          "Content-Type": "application/vnd.api+json",
+        },
+        body: JSON.stringify(customerPayload),
+      })
+
+      if (customerResponse.ok) {
+        const customerData = await customerResponse.json()
+        tests.push({
+          test: "Customer Creation",
+          passed: true,
+          data: {
+            customerId: customerData.data.id,
+            customerEmail: customerData.data.attributes.email,
+          },
+        })
+
+        // Clean up test customer
+        try {
+          await fetch(`${apiBase}/customers/${customerData.data.id}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: "application/vnd.api+json",
+            },
+          })
+        } catch {
+          // Ignore cleanup errors
+        }
+      } else {
+        const errorText = await customerResponse.text()
+        tests.push({
+          test: "Customer Creation",
+          passed: false,
+          error: `${customerResponse.status}: ${errorText}`,
+        })
+      }
+    } catch (customerError) {
+      tests.push({
+        test: "Customer Creation",
+        passed: false,
+        error: customerError instanceof Error ? customerError.message : "Unknown error",
+      })
+    }
+
+    // Test 3: Stock location access (if configured)
+    if (clStockLocationId) {
       try {
-        console.log("🧪 Testing API access...")
-        const apiResponse = await fetch(`${clBaseUrl}/api/markets`, {
+        const stockResponse = await fetch(`${apiBase}/stock_locations/${clStockLocationId}`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
             Accept: "application/vnd.api+json",
           },
         })
 
-        if (apiResponse.ok) {
-          const apiData = await apiResponse.json()
-          apiTest = {
-            status: "success",
-            marketsFound: apiData.data?.length || 0,
-            markets:
-              apiData.data?.map((m: any) => ({
-                id: m.id,
-                name: m.attributes?.name,
-              })) || [],
-          }
+        if (stockResponse.ok) {
+          const stockData = await stockResponse.json()
+          tests.push({
+            test: "Stock Location Access",
+            passed: true,
+            data: {
+              stockLocationId: stockData.data.id,
+              stockLocationName: stockData.data.attributes.name,
+            },
+          })
         } else {
-          const apiError = await apiResponse.text()
-          apiTest = {
-            status: "failed",
-            error: `HTTP ${apiResponse.status}: ${apiError}`,
-          }
+          const errorText = await stockResponse.text()
+          tests.push({
+            test: "Stock Location Access",
+            passed: false,
+            error: `${stockResponse.status}: ${errorText}`,
+          })
         }
-      } catch (apiError) {
-        apiTest = {
-          status: "error",
-          error: apiError instanceof Error ? apiError.message : "Unknown error",
-        }
+      } catch (stockError) {
+        tests.push({
+          test: "Stock Location Access",
+          passed: false,
+          error: stockError instanceof Error ? stockError.message : "Unknown error",
+        })
       }
     }
 
+    const allTestsPassed = tests.every((test) => test.passed)
+
     return NextResponse.json({
-      success: true,
-      message: "Integration app authentication successful using centralized function!",
+      success: allTestsPassed,
+      message: allTestsPassed
+        ? "Integration app authentication and API access successful"
+        : "Some tests failed - check Integration app permissions",
       appType: "Integration",
-      tokenResponse: {
-        access_token: accessToken ? `${accessToken.substring(0, 20)}...` : "missing",
-        token_type: "Bearer",
-      },
-      apiTest,
-      environmentCheck: {
-        clientId: clClientId?.substring(0, 10) + "...",
-        clientSecret: "✅ Set",
+      tokenObtained: true,
+      tests,
+      environment: {
         baseUrl: clBaseUrl,
         marketId: clMarketId,
-        stockLocationId: clStockLocationId || "Not set",
+        stockLocationId: clStockLocationId || "not_configured",
+        clientIdPrefix: clClientId?.substring(0, 20) + "...",
       },
-      integrationAppDetails: {
-        appType: "Integration (server-side with full API access)",
-        grantType: "client_credentials",
-        tokenUrl: "https://auth.commercelayer.io/oauth/token",
-        apiBaseUrl: `${clBaseUrl}/api`,
-        permissions: "Full API access for server-side operations",
-        usingCentralizedFunction: true,
-      },
-      nextSteps: [
-        "✅ Integration app authentication working with centralized function",
-        apiTest.status === "success" ? "✅ API access working" : "❌ Check API access",
-        "✅ Using centralized authentication function",
-        "✅ Scope format corrected and duplicates removed",
-        "✅ Ready to update main payment flow",
-        "Now test the payment flow at /test-reserve",
-      ],
     })
   } catch (error) {
-    console.error("❌ Integration app test failed:", error)
+    console.error("❌ Integration auth test failed:", error)
     return NextResponse.json(
       {
-        error: "Integration app test failed",
+        error: "Integration app authentication failed",
         details: error instanceof Error ? error.message : "Unknown error",
-        suggestion: "Check your Commerce Layer Integration app configuration",
+        success: false,
       },
       { status: 500 },
     )
