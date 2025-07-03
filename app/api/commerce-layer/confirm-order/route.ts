@@ -4,15 +4,15 @@ import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log("✅ Confirm order request:", JSON.stringify(body, null, 2))
-
     const { orderId, paymentIntentId } = body
+
+    console.log("✅ Confirming Commerce Layer order:", { orderId, paymentIntentId })
 
     if (!orderId) {
       return NextResponse.json({ error: "Order ID is required" }, { status: 400 })
     }
 
-    // Get Commerce Layer environment variables
+    // Get environment variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
     const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
     const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
@@ -35,36 +35,38 @@ export async function POST(request: NextRequest) {
     const apiBase = `${clBaseUrl}/api`
 
     // Update order status to confirmed
-    const updateOrderResponse = await fetch(`${apiBase}/orders/${orderId}`, {
+    const updateOrderPayload = {
+      data: {
+        type: "orders",
+        id: orderId,
+        attributes: {
+          metadata: {
+            stripe_payment_intent_id: paymentIntentId,
+            payment_status: "completed",
+            confirmed_at: new Date().toISOString(),
+          },
+        },
+      },
+    }
+
+    const updateResponse = await fetch(`${apiBase}/orders/${orderId}`, {
       method: "PATCH",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/vnd.api+json",
         "Content-Type": "application/vnd.api+json",
       },
-      body: JSON.stringify({
-        data: {
-          type: "orders",
-          id: orderId,
-          attributes: {
-            metadata: {
-              payment_confirmed: true,
-              stripe_payment_intent_id: paymentIntentId,
-              confirmed_at: new Date().toISOString(),
-            },
-          },
-        },
-      }),
+      body: JSON.stringify(updateOrderPayload),
     })
 
-    if (!updateOrderResponse.ok) {
-      const errorText = await updateOrderResponse.text()
-      console.error("❌ Order update failed:", updateOrderResponse.status, errorText)
-      throw new Error(`Order update failed: ${updateOrderResponse.status} ${errorText}`)
+    if (!updateResponse.ok) {
+      const errorText = await updateResponse.text()
+      console.error("❌ Order confirmation failed:", updateResponse.status, errorText)
+      throw new Error(`Order confirmation failed: ${updateResponse.status} ${errorText}`)
     }
 
-    const updatedOrder = await updateOrderResponse.json()
-    console.log("✅ Order confirmed:", updatedOrder.data.id)
+    const updatedOrder = await updateResponse.json()
+    console.log("✅ Order confirmed successfully:", updatedOrder.data.id)
 
     // Update booking status in database
     try {
@@ -79,6 +81,7 @@ export async function POST(request: NextRequest) {
           .from("bookings")
           .update({
             status: "confirmed",
+            stripe_payment_intent_id: paymentIntentId,
             confirmed_at: new Date().toISOString(),
           })
           .eq("commerce_layer_order_id", orderId)
@@ -97,7 +100,7 @@ export async function POST(request: NextRequest) {
       success: true,
       orderId: orderId,
       status: "confirmed",
-      confirmedAt: new Date().toISOString(),
+      paymentIntentId: paymentIntentId,
     })
   } catch (error) {
     console.error("❌ Order confirmation error:", error)

@@ -1,9 +1,9 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    console.log("🔧 Testing Commerce Layer manual authentication...")
+    console.log("🔧 Testing manual Commerce Layer authentication...")
 
     // Get environment variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
@@ -39,9 +39,8 @@ export async function GET(request: NextRequest) {
     console.log("🔑 Testing authentication with centralized function...")
     const accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clMarketId, clStockLocationId)
 
-    console.log("✅ Authentication successful!")
-
-    // Test a simple API call to verify the token works
+    // Test API access
+    console.log("🧪 Testing API access...")
     const apiBase = `${clBaseUrl}/api`
     const testResponse = await fetch(`${apiBase}/markets/${clMarketId}`, {
       headers: {
@@ -52,15 +51,7 @@ export async function GET(request: NextRequest) {
 
     if (!testResponse.ok) {
       const errorText = await testResponse.text()
-      console.error("❌ API test failed:", testResponse.status, errorText)
-      return NextResponse.json(
-        {
-          error: "Authentication succeeded but API test failed",
-          details: `${testResponse.status}: ${errorText}`,
-          tokenObtained: true,
-        },
-        { status: 500 },
-      )
+      throw new Error(`API test failed: ${testResponse.status} ${errorText}`)
     }
 
     const marketData = await testResponse.json()
@@ -69,8 +60,12 @@ export async function GET(request: NextRequest) {
       success: true,
       message: "Commerce Layer authentication successful",
       tokenObtained: true,
-      apiTestPassed: true,
-      marketData: marketData.data,
+      apiAccessible: true,
+      market: {
+        id: marketData.data.id,
+        name: marketData.data.attributes.name,
+        currency: marketData.data.attributes.currency_code,
+      },
       environment: {
         baseUrl: clBaseUrl,
         marketId: clMarketId,
@@ -81,9 +76,9 @@ export async function GET(request: NextRequest) {
     console.error("❌ Manual auth test failed:", error)
     return NextResponse.json(
       {
-        error: "Commerce Layer authentication failed",
-        details: error instanceof Error ? error.message : "Unknown error",
         success: false,
+        error: "Authentication test failed",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

@@ -5,7 +5,6 @@ export async function getCommerceLayerAccessToken(
   stockLocationId?: string,
 ): Promise<string> {
   console.log("🔑 Requesting Commerce Layer access token...")
-
   const tokenUrl = "https://auth.commercelayer.io/oauth/token"
 
   // Construct scope string safely from raw IDs
@@ -14,16 +13,7 @@ export async function getCommerceLayerAccessToken(
     scope += ` stock_location:id:${stockLocationId}`
   }
 
-  console.log("🔑 Token request details:", {
-    tokenUrl,
-    scope,
-    hasClientId: !!clientId,
-    hasClientSecret: !!clientSecret,
-    clientIdPrefix: clientId?.substring(0, 10) + "...",
-    clientSecretPrefix: clientSecret?.substring(0, 10) + "...",
-    marketId,
-    stockLocationId: stockLocationId || "not_used",
-  })
+  console.log("🎯 Constructed scope:", scope)
 
   const tokenPayload = {
     grant_type: "client_credentials",
@@ -31,12 +21,6 @@ export async function getCommerceLayerAccessToken(
     client_secret: clientSecret,
     scope,
   }
-
-  console.log("🔑 Token payload:", {
-    ...tokenPayload,
-    client_secret: "[REDACTED]",
-    client_id: clientId?.substring(0, 10) + "...",
-  })
 
   const response = await fetch(tokenUrl, {
     method: "POST",
@@ -55,13 +39,5 @@ export async function getCommerceLayerAccessToken(
 
   const data = await response.json()
   console.log("✅ Access token obtained successfully")
-  console.log("🔑 Token response data:", {
-    ...data,
-    access_token: data.access_token?.substring(0, 20) + "...",
-    token_type: data.token_type,
-    expires_in: data.expires_in,
-    scope: data.scope,
-  })
-
   return data.access_token
 }

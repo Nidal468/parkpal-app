@@ -13,8 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle, CreditCard, AlertCircle, Info } from "lucide-react"
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+// Initialize Stripe - add error handling
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "")
 
 interface BookingFormData {
   customerName: string
@@ -101,12 +101,23 @@ function CheckoutForm() {
         throw new Error(orderData.details || orderData.error || "Failed to create order")
       }
 
-      if (!orderData.clientSecret) {
-        setDebugInfo(orderData)
-        throw new Error("No payment required or Stripe not configured")
+      // Check if payment is required
+      if (!orderData.paymentRequired) {
+        console.log("🆓 No payment required - order completed")
+        setSuccess(true)
+        setDebugInfo(null)
+        return
       }
 
-      // Step 2: Confirm payment with Stripe
+      // Handle case where clientSecret is not provided but payment is required
+      if (!orderData.clientSecret) {
+        setDebugInfo(orderData)
+        console.log("💳 Payment required but no Stripe integration configured")
+        setError("Payment integration not fully configured. Order created but payment setup needed.")
+        return
+      }
+
+      // Step 2: Confirm payment with Stripe (only if clientSecret is provided)
       console.log("💳 Confirming payment with Stripe...")
       const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(orderData.clientSecret, {
         payment_method: {

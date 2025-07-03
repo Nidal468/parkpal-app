@@ -1,7 +1,7 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log("🔍 Starting Commerce Layer app diagnosis...")
 
@@ -16,139 +16,115 @@ export async function GET(request: NextRequest) {
       environment: {
         hasClientId: !!clClientId,
         hasClientSecret: !!clClientSecret,
+        hasBaseUrl: !!clBaseUrl,
+        hasMarketId: !!clMarketId,
+        hasStockLocationId: !!clStockLocationId,
         baseUrl: clBaseUrl,
         marketId: clMarketId,
         stockLocationId: clStockLocationId,
-        clientIdLength: clClientId?.length || 0,
-        clientSecretLength: clClientSecret?.length || 0,
       },
-      tests: {} as any,
+      tests: {
+        authentication: { status: "pending", details: null },
+        marketAccess: { status: "pending", details: null },
+        stockLocationAccess: { status: "pending", details: null },
+      },
     }
 
-    // Test 1: Environment variables
-    if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
-      diagnosis.tests.environment = {
-        passed: false,
-        error: "Missing required environment variables",
-        missing: {
-          clientId: !clClientId,
-          clientSecret: !clClientSecret,
-          baseUrl: !clBaseUrl,
-          marketId: !clMarketId,
-        },
-      }
-      return NextResponse.json(diagnosis, { status: 500 })
-    }
-
-    diagnosis.tests.environment = { passed: true }
-
-    // Test 2: Authentication using centralized function
+    // Test 1: Authentication
     try {
-      console.log("🔑 Testing authentication...")
+      if (!clClientId || !clClientSecret || !clMarketId) {
+        throw new Error("Missing required credentials")
+      }
+
       const accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clMarketId, clStockLocationId)
       diagnosis.tests.authentication = {
-        passed: true,
-        tokenObtained: true,
-        tokenLength: accessToken.length,
+        status: "success",
+        details: "Access token obtained successfully",
       }
-    } catch (authError) {
-      diagnosis.tests.authentication = {
-        passed: false,
-        error: authError instanceof Error ? authError.message : "Unknown auth error",
-      }
-      return NextResponse.json(diagnosis, { status: 500 })
-    }
 
-    // Test 3: API connectivity
-    try {
-      console.log("🌐 Testing API connectivity...")
-      const accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clMarketId, clStockLocationId)
+      // Test 2: Market Access
       const apiBase = `${clBaseUrl}/api`
-
-      const apiResponse = await fetch(`${apiBase}/markets/${clMarketId}`, {
+      const marketResponse = await fetch(`${apiBase}/markets/${clMarketId}`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           Accept: "application/vnd.api+json",
         },
       })
 
-      if (apiResponse.ok) {
-        const marketData = await apiResponse.json()
-        diagnosis.tests.apiConnectivity = {
-          passed: true,
-          marketName: marketData.data.attributes.name,
-          marketId: marketData.data.id,
+      if (marketResponse.ok) {
+        const marketData = await marketResponse.json()
+        diagnosis.tests.marketAccess = {
+          status: "success",
+          details: {
+            name: marketData.data.attributes.name,
+            currency: marketData.data.attributes.currency_code,
+            id: marketData.data.id,
+          },
         }
       } else {
-        const errorText = await apiResponse.text()
-        diagnosis.tests.apiConnectivity = {
-          passed: false,
-          error: `API call failed: ${apiResponse.status} ${errorText}`,
+        const errorText = await marketResponse.text()
+        diagnosis.tests.marketAccess = {
+          status: "failed",
+          details: `Market access failed: ${marketResponse.status} ${errorText}`,
         }
       }
-    } catch (apiError) {
-      diagnosis.tests.apiConnectivity = {
-        passed: false,
-        error: apiError instanceof Error ? apiError.message : "Unknown API error",
-      }
-    }
 
-    // Test 4: Stock location (if configured)
-    if (clStockLocationId) {
-      try {
-        console.log("📦 Testing stock location...")
-        const accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clMarketId, clStockLocationId)
-        const apiBase = `${clBaseUrl}/api`
-
-        const stockResponse = await fetch(`${apiBase}/stock_locations/${clStockLocationId}`, {
+      // Test 3: Stock Location Access (if configured)
+      if (clStockLocationId) {
+        const stockLocationResponse = await fetch(`${apiBase}/stock_locations/${clStockLocationId}`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
             Accept: "application/vnd.api+json",
           },
         })
 
-        if (stockResponse.ok) {
-          const stockData = await stockResponse.json()
-          diagnosis.tests.stockLocation = {
-            passed: true,
-            stockLocationName: stockData.data.attributes.name,
-            stockLocationId: stockData.data.id,
+        if (stockLocationResponse.ok) {
+          const stockLocationData = await stockLocationResponse.json()
+          diagnosis.tests.stockLocationAccess = {
+            status: "success",
+            details: {
+              name: stockLocationData.data.attributes.name,
+              id: stockLocationData.data.id,
+            },
           }
         } else {
-          const errorText = await stockResponse.text()
-          diagnosis.tests.stockLocation = {
-            passed: false,
-            error: `Stock location test failed: ${stockResponse.status} ${errorText}`,
+          const errorText = await stockLocationResponse.text()
+          diagnosis.tests.stockLocationAccess = {
+            status: "failed",
+            details: `Stock location access failed: ${stockLocationResponse.status} ${errorText}`,
           }
         }
-      } catch (stockError) {
-        diagnosis.tests.stockLocation = {
-          passed: false,
-          error: stockError instanceof Error ? stockError.message : "Unknown stock location error",
+      } else {
+        diagnosis.tests.stockLocationAccess = {
+          status: "skipped",
+          details: "No stock location ID configured",
         }
       }
-    } else {
-      diagnosis.tests.stockLocation = {
-        passed: true,
-        note: "Stock location not configured (optional)",
+    } catch (authError) {
+      diagnosis.tests.authentication = {
+        status: "failed",
+        details: authError instanceof Error ? authError.message : "Unknown authentication error",
       }
     }
 
-    const allTestsPassed = Object.values(diagnosis.tests).every((test: any) => test.passed)
+    const overallStatus = Object.values(diagnosis.tests).every(
+      (test) => test.status === "success" || test.status === "skipped",
+    )
 
     return NextResponse.json({
-      ...diagnosis,
-      overall: {
-        passed: allTestsPassed,
-        message: allTestsPassed
-          ? "All tests passed! Commerce Layer is properly configured."
-          : "Some tests failed. Check the details above.",
+      success: overallStatus,
+      diagnosis,
+      summary: {
+        authentication: diagnosis.tests.authentication.status,
+        marketAccess: diagnosis.tests.marketAccess.status,
+        stockLocationAccess: diagnosis.tests.stockLocationAccess.status,
       },
     })
   } catch (error) {
-    console.error("❌ Diagnosis failed:", error)
+    console.error("❌ App diagnosis failed:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Diagnosis failed",
         details: error instanceof Error ? error.message : "Unknown error",
       },
