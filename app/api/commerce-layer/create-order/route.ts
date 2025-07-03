@@ -182,12 +182,12 @@ export async function POST(request: NextRequest) {
     const orderCreateUrl = `${apiBase}/orders`
     console.log("🔧 Order create URL:", orderCreateUrl)
 
+    // Minimal order payload - only include allowed fields
     const orderPayload = {
       data: {
         type: "orders",
         attributes: {
-          currency_code: "GBP",
-          language_code: "en",
+          // Remove currency_code and language_code - they're not allowed
           customer_email: customerDetails.email,
           metadata: {
             customer_name: customerDetails.name,
