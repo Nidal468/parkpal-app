@@ -3,267 +3,240 @@ import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
 export async function GET() {
   try {
-    console.log("🔍 Starting full Commerce Layer diagnostic (Integration app expected)...")
+    console.log("🔍 Starting comprehensive Commerce Layer diagnostic...")
 
-    // Environment Analysis
+    const timestamp = new Date().toISOString()
+
+    // Get environment variables
+    const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
+    const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
+    const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL
+    const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
+    const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
+    const clScope = process.env.COMMERCE_LAYER_SCOPE
+
+    // Client-side environment variables (should NOT be set for security)
+    const clClientIdPublic = process.env.NEXT_PUBLIC_CL_CLIENT_ID
+    const clClientSecretPublic = process.env.NEXT_PUBLIC_CL_CLIENT_SECRET
+    const clMarketIdPublic = process.env.NEXT_PUBLIC_CL_MARKET_ID
+    const clScopePublic = process.env.NEXT_PUBLIC_CL_SCOPE
+    const clStockLocationIdPublic = process.env.NEXT_PUBLIC_CL_STOCK_LOCATION_ID
+
     const environment = {
       server: {
-        COMMERCE_LAYER_CLIENT_ID: process.env.COMMERCE_LAYER_CLIENT_ID,
-        COMMERCE_LAYER_CLIENT_SECRET: process.env.COMMERCE_LAYER_CLIENT_SECRET,
-        COMMERCE_LAYER_BASE_URL: process.env.COMMERCE_LAYER_BASE_URL,
-        COMMERCE_LAYER_MARKET_ID: process.env.COMMERCE_LAYER_MARKET_ID,
-        COMMERCE_LAYER_STOCK_LOCATION_ID: process.env.COMMERCE_LAYER_STOCK_LOCATION_ID,
-        COMMERCE_LAYER_SCOPE: process.env.COMMERCE_LAYER_SCOPE,
+        COMMERCE_LAYER_CLIENT_ID: clClientId ? `${clClientId.substring(0, 20)}...` : "not_set",
+        COMMERCE_LAYER_CLIENT_SECRET: clClientSecret ? "✅ SET" : "not_set",
+        COMMERCE_LAYER_BASE_URL: clBaseUrl || "not_set",
+        COMMERCE_LAYER_MARKET_ID: clMarketId || "not_set",
+        COMMERCE_LAYER_STOCK_LOCATION_ID: clStockLocationId || "not_set",
+        COMMERCE_LAYER_SCOPE: clScope || "not_set (auto-generated)",
       },
       client: {
-        NEXT_PUBLIC_CL_CLIENT_ID: process.env.NEXT_PUBLIC_CL_CLIENT_ID,
-        NEXT_PUBLIC_CL_CLIENT_SECRET: process.env.NEXT_PUBLIC_CL_CLIENT_SECRET,
-        NEXT_PUBLIC_CL_MARKET_ID: process.env.NEXT_PUBLIC_CL_MARKET_ID,
-        NEXT_PUBLIC_CL_SCOPE: process.env.NEXT_PUBLIC_CL_SCOPE,
-        NEXT_PUBLIC_CL_STOCK_LOCATION_ID: process.env.NEXT_PUBLIC_CL_STOCK_LOCATION_ID,
+        NEXT_PUBLIC_CL_CLIENT_ID: clClientIdPublic || "not_set",
+        NEXT_PUBLIC_CL_CLIENT_SECRET: clClientSecretPublic ? "❌ SET (SECURITY RISK)" : "✅ not_set",
+        NEXT_PUBLIC_CL_MARKET_ID: clMarketIdPublic || "not_set",
+        NEXT_PUBLIC_CL_SCOPE: clScopePublic || "not_set",
+        NEXT_PUBLIC_CL_STOCK_LOCATION_ID: clStockLocationIdPublic || "not_set",
       },
     }
 
-    // Redact sensitive values for logging
-    const safeEnvironment = {
-      server: {
-        COMMERCE_LAYER_CLIENT_ID: environment.server.COMMERCE_LAYER_CLIENT_ID
-          ? `${environment.server.COMMERCE_LAYER_CLIENT_ID.substring(0, 20)}...`
-          : "❌ UNDEFINED",
-        COMMERCE_LAYER_CLIENT_SECRET: environment.server.COMMERCE_LAYER_CLIENT_SECRET ? "✅ SET" : "❌ UNDEFINED",
-        COMMERCE_LAYER_BASE_URL: environment.server.COMMERCE_LAYER_BASE_URL || "❌ UNDEFINED",
-        COMMERCE_LAYER_MARKET_ID: environment.server.COMMERCE_LAYER_MARKET_ID || "❌ UNDEFINED",
-        COMMERCE_LAYER_STOCK_LOCATION_ID: environment.server.COMMERCE_LAYER_STOCK_LOCATION_ID || "not_set",
-        COMMERCE_LAYER_SCOPE: environment.server.COMMERCE_LAYER_SCOPE || "not_set (auto-generated)",
-      },
-      client: {
-        NEXT_PUBLIC_CL_CLIENT_ID: environment.client.NEXT_PUBLIC_CL_CLIENT_ID
-          ? `${environment.client.NEXT_PUBLIC_CL_CLIENT_ID.substring(0, 20)}...`
-          : "not_set",
-        NEXT_PUBLIC_CL_CLIENT_SECRET: environment.client.NEXT_PUBLIC_CL_CLIENT_SECRET
-          ? "⚠️ SET (SECURITY RISK)"
-          : "✅ not_set",
-        NEXT_PUBLIC_CL_MARKET_ID: environment.client.NEXT_PUBLIC_CL_MARKET_ID || "not_set",
-        NEXT_PUBLIC_CL_SCOPE: environment.client.NEXT_PUBLIC_CL_SCOPE || "not_set",
-        NEXT_PUBLIC_CL_STOCK_LOCATION_ID: environment.client.NEXT_PUBLIC_CL_STOCK_LOCATION_ID || "not_set",
-      },
-    }
-
-    console.log("🔧 Environment analysis:", safeEnvironment)
-
-    // Configuration Analysis
+    // Analysis
     const analysis = {
-      hasServerCredentials: !!(
-        environment.server.COMMERCE_LAYER_CLIENT_ID && environment.server.COMMERCE_LAYER_CLIENT_SECRET
-      ),
-      hasClientCredentials: !!(
-        environment.client.NEXT_PUBLIC_CL_CLIENT_ID && environment.client.NEXT_PUBLIC_CL_CLIENT_SECRET
-      ),
-      hasBaseUrl: !!environment.server.COMMERCE_LAYER_BASE_URL,
-      hasMarketId: !!environment.server.COMMERCE_LAYER_MARKET_ID,
-      hasStockLocationId: !!environment.server.COMMERCE_LAYER_STOCK_LOCATION_ID,
-      conflictingScopes: !!(environment.server.COMMERCE_LAYER_SCOPE && environment.client.NEXT_PUBLIC_CL_SCOPE),
-      duplicateConfigs: !!(environment.server.COMMERCE_LAYER_CLIENT_ID && environment.client.NEXT_PUBLIC_CL_CLIENT_ID),
-      hasClientSecrets: !!environment.client.NEXT_PUBLIC_CL_CLIENT_SECRET, // Security risk
-      expectedAppType: "integration",
+      hasServerCredentials: !!(clClientId && clClientSecret),
+      hasClientCredentials: !!(clClientIdPublic && clClientSecretPublic),
+      hasBaseUrl: !!clBaseUrl,
+      hasMarketId: !!clMarketId,
+      hasStockLocationId: !!clStockLocationId,
+      conflictingScopes: !!(clScope && clScopePublic && clScope !== clScopePublic),
+      duplicateConfigs: !!(clClientId && clClientIdPublic),
+      hasClientSecrets: !!clClientSecretPublic,
+      expectedAppType: clClientId?.startsWith("K0-")
+        ? "integration"
+        : clClientId?.startsWith("Ng-")
+          ? "sales_channel"
+          : "unknown",
     }
 
-    const diagnostics = {
-      timestamp: new Date().toISOString(),
-      environment: safeEnvironment,
-      analysis,
-      appTypeDetected: "unknown",
-      tests: {
-        authentication: { status: "pending", details: null },
-        appTypeDetection: { status: "pending", details: null },
-        marketAccess: { status: "pending", details: null },
-        customerManagement: { status: "pending", details: null },
-        orderManagement: { status: "pending", details: null },
-        productManagement: { status: "pending", details: null },
-        integrationFeatures: { status: "pending", details: null },
-      },
-      recommendations: [] as string[],
-      warnings: [] as string[],
-      securityIssues: [] as string[],
+    let appTypeDetected = "unknown"
+    const tests: any = {}
+
+    if (!analysis.hasServerCredentials || !analysis.hasBaseUrl || !analysis.hasMarketId) {
+      return NextResponse.json({
+        success: false,
+        error: "Missing required Commerce Layer configuration",
+        environment,
+        analysis,
+      })
     }
 
-    // Security Analysis
-    if (analysis.hasClientSecrets) {
-      diagnostics.securityIssues.push("🚨 CRITICAL: Client secrets exposed in NEXT_PUBLIC_ variables")
-      diagnostics.warnings.push("⚠️ Remove NEXT_PUBLIC_CL_CLIENT_SECRET immediately")
-    }
+    const apiBase = `${clBaseUrl}/api`
 
-    if (analysis.duplicateConfigs) {
-      diagnostics.warnings.push("⚠️ Duplicate configurations detected between server and client variables")
-    }
-
-    if (analysis.conflictingScopes) {
-      diagnostics.warnings.push("⚠️ Manual scope configuration detected - auto-generation recommended")
-    }
-
-    // Authentication Test
     try {
-      if (!environment.server.COMMERCE_LAYER_CLIENT_ID || !environment.server.COMMERCE_LAYER_CLIENT_SECRET) {
-        throw new Error("Missing server-side Commerce Layer credentials")
-      }
-
-      if (!environment.server.COMMERCE_LAYER_BASE_URL || !environment.server.COMMERCE_LAYER_MARKET_ID) {
-        throw new Error("Missing Commerce Layer base URL or market ID")
-      }
-
-      console.log("🔑 Testing authentication with Integration app credentials...")
+      // Test 1: Authentication
+      console.log("🔐 Testing authentication...")
       const accessToken = await getCommerceLayerAccessToken(
-        environment.server.COMMERCE_LAYER_CLIENT_ID,
-        environment.server.COMMERCE_LAYER_CLIENT_SECRET,
-        environment.server.COMMERCE_LAYER_MARKET_ID,
-        environment.server.COMMERCE_LAYER_STOCK_LOCATION_ID,
+        clClientId!,
+        clClientSecret!,
+        clMarketId!,
+        clStockLocationId,
       )
 
-      diagnostics.tests.authentication = {
+      tests.authentication = {
         status: "success",
         details: "Access token obtained successfully for Integration app",
       }
 
-      // App Type Detection Test
-      const apiBase = `${environment.server.COMMERCE_LAYER_BASE_URL}/api`
       const headers = {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/vnd.api+json",
       }
 
+      // Test 2: App Type Detection
       console.log("🔍 Detecting app type...")
       try {
-        const customerListResponse = await fetch(`${apiBase}/customers?page[size]=1`, { headers })
+        const customersResponse = await fetch(`${apiBase}/customers?page[limit]=1`, {
+          method: "GET",
+          headers,
+        })
 
-        if (customerListResponse.ok) {
-          diagnostics.appTypeDetected = "integration"
-          diagnostics.tests.appTypeDetection = {
+        if (customersResponse.ok) {
+          appTypeDetected = "integration"
+          tests.appTypeDetection = {
             status: "success",
             details: "✅ Integration app confirmed - has customer listing permissions",
           }
-        } else if (customerListResponse.status === 401) {
-          diagnostics.appTypeDetected = "sales_channel"
-          diagnostics.tests.appTypeDetection = {
-            status: "warning",
-            details: "⚠️ Sales Channel app detected - expected Integration app",
+        } else if (customersResponse.status === 401) {
+          appTypeDetected = "sales_channel"
+          tests.appTypeDetection = {
+            status: "success",
+            details: "✅ Sales Channel app confirmed - customer listing returns 401 as expected",
           }
-          diagnostics.warnings.push("Expected Integration app but detected Sales Channel app")
         } else {
-          diagnostics.tests.appTypeDetection = {
+          tests.appTypeDetection = {
             status: "failed",
-            details: `Unexpected response: ${customerListResponse.status}`,
+            details: `Unexpected response: ${customersResponse.status}`,
           }
         }
-      } catch (appTypeError) {
-        diagnostics.tests.appTypeDetection = {
+      } catch (error) {
+        tests.appTypeDetection = {
           status: "failed",
-          details: appTypeError instanceof Error ? appTypeError.message : "Unknown app type detection error",
+          details: `Error: ${error}`,
         }
       }
 
-      // Market Access Test
+      // Test 3: Market Access
+      console.log("🏪 Testing market access...")
       try {
-        const marketResponse = await fetch(`${apiBase}/markets/${environment.server.COMMERCE_LAYER_MARKET_ID}`, {
+        const marketResponse = await fetch(`${apiBase}/markets/${clMarketId}`, {
+          method: "GET",
           headers,
         })
 
         if (marketResponse.ok) {
           const marketData = await marketResponse.json()
-          diagnostics.tests.marketAccess = {
+          tests.marketAccess = {
             status: "success",
             details: {
               market: {
                 id: marketData.data.id,
                 name: marketData.data.attributes.name,
-                currency: marketData.data.attributes.currency_code,
               },
               message: "Market access confirmed",
             },
           }
         } else {
           const errorText = await marketResponse.text()
-          diagnostics.tests.marketAccess = {
+          tests.marketAccess = {
             status: "failed",
-            details: `Market API access failed: ${marketResponse.status} ${errorText}`,
+            details: `Market access failed: ${marketResponse.status} ${errorText}`,
           }
         }
-      } catch (marketError) {
-        diagnostics.tests.marketAccess = {
+      } catch (error) {
+        tests.marketAccess = {
           status: "failed",
-          details: marketError instanceof Error ? marketError.message : "Unknown market access error",
+          details: `Market access error: ${error}`,
         }
       }
 
-      // Customer Management Test (Integration app feature)
+      // Test 4: Customer Management (Integration apps only)
+      console.log("👤 Testing customer management...")
       const customerTests = []
-      try {
-        // Test customer listing
-        const customerListResponse = await fetch(`${apiBase}/customers?page[size]=2`, { headers })
-        if (customerListResponse.ok) {
-          const customerData = await customerListResponse.json()
-          customerTests.push({
-            feature: "Customer Listing",
-            status: "success",
-            count: customerData.data.length,
-          })
-        } else {
-          const errorText = await customerListResponse.text()
-          customerTests.push({
-            feature: "Customer Listing",
-            status: "failed",
-            error: `${customerListResponse.status}: ${errorText}`,
-          })
-        }
 
-        // Test customer search with corrected filter syntax
-        const customerSearchResponse = await fetch(`${apiBase}/customers?filter[q][email_eq]=test@example.com`, {
+      try {
+        // Customer Listing
+        const customersResponse = await fetch(`${apiBase}/customers?page[limit]=1`, {
+          method: "GET",
           headers,
         })
-        if (customerSearchResponse.ok) {
+
+        if (customersResponse.ok) {
+          const customersData = await customersResponse.json()
+          customerTests.push({
+            feature: "Customer Listing",
+            status: "success",
+            count: customersData.data?.length || 0,
+          })
+        } else {
+          customerTests.push({
+            feature: "Customer Listing",
+            status: "failed",
+            error: customersResponse.status.toString(),
+          })
+        }
+
+        // Customer Search
+        const searchResponse = await fetch(`${apiBase}/customers?filter[q][email_eq]=test@example.com`, {
+          method: "GET",
+          headers,
+        })
+
+        if (searchResponse.ok) {
           customerTests.push({
             feature: "Customer Search",
             status: "success",
           })
         } else {
-          const errorText = await customerSearchResponse.text()
           customerTests.push({
             feature: "Customer Search",
             status: "failed",
-            error: `${customerSearchResponse.status}: ${errorText}`,
+            error: searchResponse.status.toString(),
           })
         }
 
-        // Test customer creation with minimal payload (only email and metadata)
-        const testCustomer = {
+        // Customer Creation Test
+        const testCustomerPayload = {
           data: {
             type: "customers",
             attributes: {
-              email: `full-diagnostic-${Date.now()}@example.com`,
+              email: `test-${Date.now()}@parkpal-diagnostic.com`,
               metadata: {
-                customer_name: "Full Diagnostic",
-                source: "full_diagnostic_test",
+                test: true,
+                created_by: "diagnostic",
               },
             },
           },
         }
 
-        const customerCreateResponse = await fetch(`${apiBase}/customers`, {
+        const createResponse = await fetch(`${apiBase}/customers`, {
           method: "POST",
-          headers: { ...headers, "Content-Type": "application/vnd.api+json" },
-          body: JSON.stringify(testCustomer),
+          headers: {
+            ...headers,
+            "Content-Type": "application/vnd.api+json",
+          },
+          body: JSON.stringify(testCustomerPayload),
         })
 
-        if (customerCreateResponse.ok) {
-          const customerData = await customerCreateResponse.json()
+        if (createResponse.ok) {
+          const createdCustomer = await createResponse.json()
           customerTests.push({
             feature: "Customer Creation",
             status: "success",
-            customerId: customerData.data.id,
+            customerId: createdCustomer.data.id,
           })
 
-          // Clean up
+          // Clean up test customer
           try {
-            await fetch(`${apiBase}/customers/${customerData.data.id}`, {
+            await fetch(`${apiBase}/customers/${createdCustomer.data.id}`, {
               method: "DELETE",
               headers,
             })
@@ -271,221 +244,241 @@ export async function GET() {
             // Ignore cleanup errors
           }
         } else {
-          const errorText = await customerCreateResponse.text()
           customerTests.push({
             feature: "Customer Creation",
             status: "failed",
-            error: `${customerCreateResponse.status}: ${errorText}`,
+            error: createResponse.status.toString(),
           })
         }
 
-        diagnostics.tests.customerManagement = {
-          status: customerTests.every((test) => test.status === "success") ? "success" : "partial",
+        tests.customerManagement = {
+          status: customerTests.every((t) => t.status === "success") ? "success" : "partial",
           details: customerTests,
         }
-      } catch (customerError) {
-        diagnostics.tests.customerManagement = {
+      } catch (error) {
+        tests.customerManagement = {
           status: "failed",
-          details: customerError instanceof Error ? customerError.message : "Unknown customer management error",
+          details: `Customer management error: ${error}`,
         }
       }
 
-      // Order Management Test
+      // Test 5: Order Management
+      console.log("📦 Testing order management...")
       try {
-        const orderResponse = await fetch(`${apiBase}/orders?page[size]=2`, { headers })
-        if (orderResponse.ok) {
-          const orderData = await orderResponse.json()
-          diagnostics.tests.orderManagement = {
+        const ordersResponse = await fetch(`${apiBase}/orders?page[limit]=5`, {
+          method: "GET",
+          headers,
+        })
+
+        if (ordersResponse.ok) {
+          const ordersData = await ordersResponse.json()
+          tests.orderManagement = {
             status: "success",
             details: {
-              count: orderData.data.length,
+              count: ordersData.data?.length || 0,
               message: "Order management access confirmed",
             },
           }
         } else {
-          const errorText = await orderResponse.text()
-          diagnostics.tests.orderManagement = {
+          const errorText = await ordersResponse.text()
+          tests.orderManagement = {
             status: "failed",
-            details: `Order management failed: ${orderResponse.status} ${errorText}`,
+            details: `Order management failed: ${ordersResponse.status} ${errorText}`,
           }
         }
-      } catch (orderError) {
-        diagnostics.tests.orderManagement = {
+      } catch (error) {
+        tests.orderManagement = {
           status: "failed",
-          details: orderError instanceof Error ? orderError.message : "Unknown order management error",
+          details: `Order management error: ${error}`,
         }
       }
 
-      // Product Management Test
+      // Test 6: Product Management
+      console.log("🛍️ Testing product management...")
       try {
-        const skuResponse = await fetch(`${apiBase}/skus?page[size]=3`, { headers })
-        if (skuResponse.ok) {
-          const skuData = await skuResponse.json()
-          diagnostics.tests.productManagement = {
+        const skusResponse = await fetch(`${apiBase}/skus?page[limit]=5`, {
+          method: "GET",
+          headers,
+        })
+
+        if (skusResponse.ok) {
+          const skusData = await skusResponse.json()
+          const sampleSkus = skusData.data?.slice(0, 3).map((sku: any) => sku.attributes.code) || []
+
+          tests.productManagement = {
             status: "success",
             details: {
-              count: skuData.data.length,
+              count: skusData.data?.length || 0,
               message: "Product management access confirmed",
-              samples: skuData.data.map((sku: any) => sku.attributes.code),
+              samples: sampleSkus,
             },
           }
         } else {
-          const errorText = await skuResponse.text()
-          diagnostics.tests.productManagement = {
+          const errorText = await skusResponse.text()
+          tests.productManagement = {
             status: "failed",
-            details: `Product management failed: ${skuResponse.status} ${errorText}`,
+            details: `Product management failed: ${skusResponse.status} ${errorText}`,
           }
         }
-      } catch (productError) {
-        diagnostics.tests.productManagement = {
+      } catch (error) {
+        tests.productManagement = {
           status: "failed",
-          details: productError instanceof Error ? productError.message : "Unknown product management error",
+          details: `Product management error: ${error}`,
         }
       }
 
-      // Integration Features Test
-      const integrationFeatures = []
+      // Test 7: Integration Features
+      console.log("🔧 Testing integration features...")
+      const integrationTests = []
 
-      // Test comprehensive order includes
       try {
-        const orderWithIncludesResponse = await fetch(
-          `${apiBase}/orders?page[size]=1&include=line_items,customer,market`,
-          { headers },
-        )
-        if (orderWithIncludesResponse.ok) {
-          integrationFeatures.push({
+        // Test comprehensive includes
+        const includeResponse = await fetch(`${apiBase}/orders?include=line_items,customer&page[limit]=1`, {
+          method: "GET",
+          headers,
+        })
+
+        if (includeResponse.ok) {
+          integrationTests.push({
             feature: "Comprehensive Includes",
             status: "success",
           })
         } else {
-          integrationFeatures.push({
+          integrationTests.push({
             feature: "Comprehensive Includes",
             status: "failed",
           })
         }
-      } catch {
-        integrationFeatures.push({
-          feature: "Comprehensive Includes",
-          status: "failed",
-        })
-      }
 
-      // Test stock location access (if configured)
-      if (environment.server.COMMERCE_LAYER_STOCK_LOCATION_ID) {
-        try {
-          const stockResponse = await fetch(
-            `${apiBase}/stock_locations/${environment.server.COMMERCE_LAYER_STOCK_LOCATION_ID}`,
-            { headers },
-          )
-          if (stockResponse.ok) {
-            integrationFeatures.push({
+        // Test stock location access
+        if (clStockLocationId) {
+          const stockLocationResponse = await fetch(`${apiBase}/stock_locations/${clStockLocationId}`, {
+            method: "GET",
+            headers,
+          })
+
+          if (stockLocationResponse.ok) {
+            integrationTests.push({
               feature: "Stock Location Access",
               status: "success",
             })
           } else {
-            integrationFeatures.push({
+            integrationTests.push({
               feature: "Stock Location Access",
               status: "failed",
             })
           }
-        } catch {
-          integrationFeatures.push({
-            feature: "Stock Location Access",
-            status: "failed",
-          })
+        }
+
+        tests.integrationFeatures = {
+          status: integrationTests.every((t) => t.status === "success") ? "success" : "partial",
+          details: integrationTests,
+        }
+      } catch (error) {
+        tests.integrationFeatures = {
+          status: "failed",
+          details: `Integration features error: ${error}`,
         }
       }
-
-      diagnostics.tests.integrationFeatures = {
-        status: integrationFeatures.every((test) => test.status === "success") ? "success" : "partial",
-        details: integrationFeatures,
-      }
-    } catch (error) {
-      diagnostics.tests.authentication = {
+    } catch (authError) {
+      tests.authentication = {
         status: "failed",
-        details: error instanceof Error ? error.message : "Unknown authentication error",
+        details: `Authentication failed: ${authError}`,
       }
     }
 
-    // Generate Recommendations
-    if (diagnostics.appTypeDetected === "integration") {
-      diagnostics.recommendations.push(
-        "✅ Integration app confirmed - full API access available",
-        "✅ Customer management features enabled",
-        "✅ Advanced order processing capabilities",
-        "✅ Ready for production use",
-      )
-    } else if (diagnostics.appTypeDetected === "sales_channel") {
-      diagnostics.recommendations.push(
-        "⚠️ Sales Channel app detected - consider upgrading to Integration",
-        "ℹ️ Limited customer management capabilities",
-        "💡 Integration app recommended for full feature set",
-      )
+    // Generate recommendations and warnings
+    const recommendations = []
+    const warnings = []
+    const securityIssues = []
+
+    if (appTypeDetected === "integration") {
+      recommendations.push("✅ Integration app confirmed - full API access available")
+      recommendations.push("✅ Customer management features enabled")
+      recommendations.push("✅ Advanced order processing capabilities")
+      recommendations.push("✅ Ready for production use")
+    } else if (appTypeDetected === "sales_channel") {
+      recommendations.push("⚠️ Sales Channel app detected - limited customer access")
+      recommendations.push("💡 Consider upgrading to Integration app for full features")
+      recommendations.push("✅ Order creation and payment processing available")
     }
 
     if (analysis.hasClientSecrets) {
-      diagnostics.recommendations.push("🚨 URGENT: Remove client secrets from environment variables")
+      securityIssues.push("🚨 SECURITY RISK: Client secret exposed in environment variables")
+      securityIssues.push("🔒 Remove NEXT_PUBLIC_CL_CLIENT_SECRET immediately")
     }
 
     if (analysis.duplicateConfigs) {
-      diagnostics.recommendations.push("🧹 Clean up duplicate Commerce Layer configurations")
+      warnings.push("⚠️ Duplicate configurations detected - clean up unused variables")
     }
 
-    if (analysis.conflictingScopes) {
-      diagnostics.recommendations.push("🔧 Remove manual scope configuration - use auto-generation")
+    // Calculate overall status
+    const testResults = Object.values(tests)
+    const successCount = testResults.filter((t: any) => t.status === "success").length
+    const totalTests = testResults.length
+
+    let overallStatus = "unknown"
+    if (successCount === totalTests) {
+      overallStatus = "fully_operational"
+    } else if (successCount > totalTests / 2) {
+      overallStatus = "mostly_operational"
+    } else if (successCount > 0) {
+      overallStatus = "partially_operational"
+    } else {
+      overallStatus = "not_operational"
     }
 
-    const overallSuccess =
-      diagnostics.tests.authentication.status === "success" &&
-      diagnostics.tests.appTypeDetection.status === "success" &&
-      diagnostics.tests.marketAccess.status === "success" &&
-      (diagnostics.tests.customerManagement.status === "success" ||
-        diagnostics.tests.customerManagement.status === "partial") &&
-      diagnostics.tests.orderManagement.status === "success" &&
-      diagnostics.tests.productManagement.status === "success"
+    const summary = {
+      appType: appTypeDetected,
+      expectedAppType: analysis.expectedAppType,
+      appTypeMatch: appTypeDetected === analysis.expectedAppType,
+      authentication: tests.authentication?.status || "unknown",
+      marketAccess: tests.marketAccess?.status || "unknown",
+      customerManagement: tests.customerManagement?.status || "unknown",
+      orderManagement: tests.orderManagement?.status || "unknown",
+      productManagement: tests.productManagement?.status || "unknown",
+      integrationFeatures: tests.integrationFeatures?.status || "unknown",
+      securityIssuesCount: securityIssues.length,
+      warningsCount: warnings.length,
+      recommendationsCount: recommendations.length,
+      overallStatus,
+    }
+
+    const nextSteps = []
+    if (overallStatus === "fully_operational") {
+      nextSteps.push("✅ Integration app is fully operational")
+      nextSteps.push("✅ All advanced features available")
+      nextSteps.push("✅ Customer search and management enabled")
+      nextSteps.push("✅ Ready for production deployment")
+      nextSteps.push("🚀 Test the complete booking flow at /test-reserve")
+    } else {
+      nextSteps.push("🔧 Review failed tests and fix configuration issues")
+      nextSteps.push("📞 Contact Commerce Layer support if problems persist")
+      nextSteps.push("🔍 Check environment variables and permissions")
+    }
 
     return NextResponse.json({
-      success: overallSuccess,
-      diagnostics,
-      summary: {
-        appType: diagnostics.appTypeDetected,
-        expectedAppType: "integration",
-        appTypeMatch: diagnostics.appTypeDetected === "integration",
-        authentication: diagnostics.tests.authentication.status,
-        marketAccess: diagnostics.tests.marketAccess.status,
-        customerManagement: diagnostics.tests.customerManagement.status,
-        orderManagement: diagnostics.tests.orderManagement.status,
-        productManagement: diagnostics.tests.productManagement.status,
-        integrationFeatures: diagnostics.tests.integrationFeatures.status,
-        securityIssuesCount: diagnostics.securityIssues.length,
-        warningsCount: diagnostics.warnings.length,
-        recommendationsCount: diagnostics.recommendations.length,
-        overallStatus: overallSuccess ? "fully_operational" : "issues_detected",
+      success: true,
+      diagnostics: {
+        timestamp,
+        environment,
+        analysis,
+        appTypeDetected,
+        tests,
+        recommendations,
+        warnings,
+        securityIssues,
       },
-      nextSteps: overallSuccess
-        ? [
-            "✅ Integration app is fully operational",
-            "✅ All advanced features available",
-            "✅ Customer search and management enabled",
-            "✅ Ready for production deployment",
-            "🚀 Test the complete booking flow at /test-reserve",
-          ]
-        : [
-            "❌ Issues detected in Integration app setup",
-            "🔍 Review the diagnostic details above",
-            "🛠️ Address security issues and warnings",
-            "🔄 Re-run diagnostic after making changes",
-          ],
+      summary,
+      nextSteps,
     })
   } catch (error) {
-    console.error("❌ Full Integration app diagnostic failed:", error)
+    console.error("❌ Diagnostic failed:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Full Integration app diagnostic failed",
-        details: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
-        expectedAppType: "integration",
+        error: error instanceof Error ? error.message : "Diagnostic failed",
+        details: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 },
     )

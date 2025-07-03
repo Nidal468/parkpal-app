@@ -1,6 +1,53 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
+// Hardcoded space UUIDs from Supabase
+const SPACE_IDS = {
+  HOURLY: "5a4addb0-e463-49c9-9c18-74a25e29127b",
+  DAILY: "73bef0f1-d91c-49b4-9520-dcf43f976250",
+  MONTHLY: "9aa9af0f-ac4b-4cb0-ae43-49e21bb43ffd",
+}
+
+// SKU to space mapping function
+async function getSpaceIdForSku(sku: string, providedSpaceId?: string): Promise<string | null> {
+  try {
+    // If a valid space ID is provided, validate it first
+    if (providedSpaceId && providedSpaceId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      const validSpaceIds = Object.values(SPACE_IDS)
+      if (validSpaceIds.includes(providedSpaceId)) {
+        console.log("✅ Using provided valid space ID:", providedSpaceId)
+        return providedSpaceId
+      } else {
+        console.warn("⚠️ Provided space ID not in our valid list, using SKU-based mapping")
+      }
+    }
+
+    // Map SKU to appropriate space
+    let selectedSpaceId: string
+
+    if (sku.includes("hour")) {
+      selectedSpaceId = SPACE_IDS.HOURLY
+      console.log(`✅ SKU '${sku}' mapped to hourly space:`, selectedSpaceId)
+    } else if (sku.includes("day")) {
+      selectedSpaceId = SPACE_IDS.DAILY
+      console.log(`✅ SKU '${sku}' mapped to daily space:`, selectedSpaceId)
+    } else if (sku.includes("month")) {
+      selectedSpaceId = SPACE_IDS.MONTHLY
+      console.log(`✅ SKU '${sku}' mapped to monthly space:`, selectedSpaceId)
+    } else {
+      // Default fallback to hourly space
+      selectedSpaceId = SPACE_IDS.HOURLY
+      console.log(`⚠️ Unknown SKU '${sku}', defaulting to hourly space:`, selectedSpaceId)
+    }
+
+    return selectedSpaceId
+  } catch (error) {
+    console.error("❌ Error getting space ID for SKU:", error)
+    // Return hourly space as last resort
+    return SPACE_IDS.HOURLY
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log("🚀 Starting Commerce Layer order creation (Integration app with full permissions)...")
@@ -17,6 +64,17 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
+
+    // Get valid space ID for this SKU
+    const validSpaceId = await getSpaceIdForSku(sku, spaceId)
+    if (!validSpaceId) {
+      return NextResponse.json(
+        { success: false, error: "No valid parking space found for this booking type" },
+        { status: 400 },
+      )
+    }
+
+    console.log(`🅿️ Using space ID: ${validSpaceId} for SKU: ${sku}`)
 
     // Get environment variables
     const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
@@ -85,7 +143,7 @@ export async function POST(request: NextRequest) {
                   booking_start_date: bookingDetails?.startDate || "",
                   booking_start_time: bookingDetails?.startTime || "",
                   special_requests: bookingDetails?.specialRequests || "",
-                  space_id: spaceId || "",
+                  space_id: validSpaceId,
                   phone: customerDetails.phone || "",
                   last_booking_update: new Date().toISOString(),
                 },
@@ -141,7 +199,7 @@ export async function POST(request: NextRequest) {
               booking_start_date: bookingDetails?.startDate || "",
               booking_start_time: bookingDetails?.startTime || "",
               special_requests: bookingDetails?.specialRequests || "",
-              space_id: spaceId || "",
+              space_id: validSpaceId,
               source: "parkpal_integration_app",
               created_at: new Date().toISOString(),
             },
@@ -197,7 +255,7 @@ export async function POST(request: NextRequest) {
             booking_start_date: bookingDetails?.startDate || "",
             booking_start_time: bookingDetails?.startTime || "",
             special_requests: bookingDetails?.specialRequests || "",
-            space_id: spaceId || "",
+            space_id: validSpaceId,
             source: "parkpal_integration_app",
             created_at: new Date().toISOString(),
           },
@@ -260,7 +318,7 @@ export async function POST(request: NextRequest) {
           metadata: {
             vehicle_registration: bookingDetails?.vehicleReg || "",
             booking_duration: sku.includes("hour") ? "1 hour" : sku.includes("day") ? "1 day" : "1 month",
-            space_id: spaceId || "",
+            space_id: validSpaceId,
             customer_id: customer.id,
           },
         },
@@ -356,7 +414,7 @@ export async function POST(request: NextRequest) {
               customer_name: customerDetails.name,
               sku: sku,
               vehicle_reg: bookingDetails?.vehicleReg || "",
-              space_id: spaceId || "",
+              space_id: validSpaceId,
               source: "parkpal_integration_app",
             },
           })
@@ -373,10 +431,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Step 7: Store booking in database
+    // Step 7: Store booking in database with valid space_id
     let bookingId = null
     try {
-      console.log("💾 Storing booking in database...")
+      console.log("💾 Storing booking in database with valid space_id...")
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
       const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -388,7 +446,7 @@ export async function POST(request: NextRequest) {
           .from("bookings")
           .insert({
             user_id: customer.id,
-            space_id: spaceId || "test-space-1",
+            space_id: validSpaceId, // Use the valid UUID space_id
             customer_name: customerDetails.name,
             customer_email: customerDetails.email,
             customer_phone: customerDetails.phone || null,
@@ -429,6 +487,7 @@ export async function POST(request: NextRequest) {
       commerceLayerOrderId: order.id,
       customerId: customer.id,
       customerEmail: customer.attributes.email,
+      spaceId: validSpaceId,
       marketId: clMarketId,
       amount: totalAmountCents / 100,
       currency: "GBP",

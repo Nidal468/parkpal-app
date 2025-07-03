@@ -4,59 +4,65 @@ export async function getCommerceLayerAccessToken(
   marketId: string,
   stockLocationId?: string,
 ): Promise<string> {
-  console.log("🔑 Requesting Commerce Layer access token (Integration app)...")
-  const tokenUrl = "https://auth.commercelayer.io/oauth/token"
+  try {
+    console.log("🔑 Requesting Commerce Layer access token...")
+    console.log("📋 Client ID:", clientId.substring(0, 20) + "...")
+    console.log("🏪 Market ID:", marketId)
+    console.log("📍 Stock Location ID:", stockLocationId || "not provided")
 
-  // Construct scope string safely from raw IDs
-  let scope = `market:id:${marketId}`
-  if (stockLocationId) {
-    scope += ` stock_location:id:${stockLocationId}`
+    // Build scope based on provided parameters
+    let scope = `market:id:${marketId}`
+
+    if (stockLocationId) {
+      // Check if stockLocationId already contains the prefix
+      if (stockLocationId.startsWith("stock_location:id:")) {
+        scope += ` ${stockLocationId}`
+      } else {
+        scope += ` stock_location:id:${stockLocationId}`
+      }
+    }
+
+    console.log("🔧 Using scope:", scope)
+
+    const tokenUrl = "https://mr-peat-worldwide.commercelayer.io/oauth/token"
+    const tokenPayload = {
+      grant_type: "client_credentials",
+      client_id: clientId,
+      client_secret: clientSecret,
+      scope: scope,
+    }
+
+    console.log("📤 Token request payload:", {
+      grant_type: tokenPayload.grant_type,
+      client_id: tokenPayload.client_id.substring(0, 20) + "...",
+      client_secret: "***",
+      scope: tokenPayload.scope,
+    })
+
+    const tokenResponse = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(tokenPayload),
+    })
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text()
+      console.error("❌ Token request failed:", tokenResponse.status, errorText)
+      throw new Error(`Token request failed: ${tokenResponse.status} ${errorText}`)
+    }
+
+    const tokenData = await tokenResponse.json()
+    console.log("✅ Access token obtained successfully")
+    console.log("📊 Token type:", tokenData.token_type)
+    console.log("⏰ Expires in:", tokenData.expires_in, "seconds")
+    console.log("🔑 Token scope:", tokenData.scope)
+
+    return tokenData.access_token
+  } catch (error) {
+    console.error("❌ Commerce Layer authentication failed:", error)
+    throw error
   }
-
-  console.log("🎯 Constructed scope:", scope)
-  console.log("🔧 Token request details:", {
-    tokenUrl,
-    scope,
-    hasClientId: !!clientId,
-    hasClientSecret: !!clientSecret,
-    clientIdPrefix: clientId?.substring(0, 20) + "...",
-    marketId,
-    stockLocationId: stockLocationId || "not_used",
-    grantType: "client_credentials",
-    appType: "Integration",
-  })
-
-  const tokenPayload = {
-    grant_type: "client_credentials",
-    client_id: clientId,
-    client_secret: clientSecret,
-    scope,
-  }
-
-  const response = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(tokenPayload),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    console.error("❌ Commerce Layer Auth Error:", error)
-    throw new Error(`Commerce Layer auth failed: ${error?.errors?.[0]?.detail ?? response.statusText}`)
-  }
-
-  const data = await response.json()
-  console.log("✅ Access token obtained successfully for Integration app")
-  console.log("🔑 Token response data:", {
-    token_type: data.token_type,
-    expires_in: data.expires_in,
-    scope: data.scope,
-    access_token: data.access_token ? `${data.access_token.substring(0, 20)}...` : "missing",
-    appType: "Integration",
-  })
-
-  return data.access_token
 }
