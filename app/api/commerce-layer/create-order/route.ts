@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,11 +27,6 @@ export async function POST(request: NextRequest) {
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
     const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
 
-    // Create correct scope format - FIXED: Remove duplicate prefix
-    const clScope = clStockLocationId
-      ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
-      : `market:id:${clMarketId}`
-
     // Log environment values for debugging
     console.log("🔧 Commerce Layer Environment Values:", {
       clClientId: clClientId ? `${clClientId.substring(0, 10)}...` : "undefined",
@@ -38,7 +34,6 @@ export async function POST(request: NextRequest) {
       clBaseUrl,
       clMarketId,
       clStockLocationId,
-      clScope,
       hasClientId: !!clClientId,
       hasClientSecret: !!clClientSecret,
       clientIdLength: clClientId?.length || 0,
@@ -112,8 +107,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get Commerce Layer access token with correct endpoint and scope format
-    console.log("🔑 Getting access token with correct endpoint and scope format...")
+    // Get Commerce Layer access token using centralized function
+    console.log("🔑 Getting access token using centralized function...")
     let accessToken: string
     try {
       accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clMarketId, clStockLocationId)
@@ -127,7 +122,6 @@ export async function POST(request: NextRequest) {
           debug: {
             baseUrl: clBaseUrl,
             marketId: clMarketId,
-            scope: clScope,
             hasCredentials: !!(clClientId && clClientSecret),
             clientIdPrefix: clClientId?.substring(0, 10) + "...",
             tokenError: tokenError instanceof Error ? tokenError.message : String(tokenError),
@@ -136,7 +130,6 @@ export async function POST(request: NextRequest) {
               clientSecret: clClientSecret ? "set" : "undefined",
               baseUrl: clBaseUrl || "undefined",
               marketId: clMarketId || "undefined",
-              scope: clScope || "undefined",
             },
           },
         },
@@ -515,91 +508,5 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 },
     )
-  }
-}
-
-// Helper function to get Commerce Layer access token with correct endpoint and scope format
-async function getCommerceLayerAccessToken(
-  clientId: string,
-  clientSecret: string,
-  marketId: string,
-  stockLocationId?: string,
-): Promise<string> {
-  console.log("🔑 Requesting Commerce Layer access token with correct endpoint and scope format...")
-
-  // Use correct global auth endpoint
-  const tokenUrl = "https://auth.commercelayer.io/oauth/token"
-
-  // Create correct scope format - FIXED: Ensure no duplicate prefixes
-  const scope = stockLocationId ? `market:id:${marketId} stock_location:id:${stockLocationId}` : `market:id:${marketId}`
-
-  console.log("🔑 Token request details:", {
-    tokenUrl,
-    scope,
-    hasClientId: !!clientId,
-    hasClientSecret: !!clientSecret,
-    clientIdPrefix: clientId?.substring(0, 10) + "...",
-    clientSecretPrefix: clientSecret?.substring(0, 10) + "...",
-    marketId,
-    stockLocationId: stockLocationId || "not_used",
-  })
-
-  const tokenPayload = {
-    grant_type: "client_credentials",
-    client_id: clientId,
-    client_secret: clientSecret,
-    scope: scope,
-  }
-
-  console.log("🔑 Token payload:", {
-    ...tokenPayload,
-    client_secret: "[REDACTED]",
-    client_id: clientId?.substring(0, 10) + "...",
-  })
-
-  try {
-    const response = await fetch(tokenUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(tokenPayload),
-    })
-
-    console.log("🔑 Token response status:", response.status)
-    console.log("🔑 Token response headers:", Object.fromEntries(response.headers.entries()))
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("🔑 Token error response:", errorText)
-
-      let errorDetails = errorText
-      try {
-        const errorJson = JSON.parse(errorText)
-        errorDetails = JSON.stringify(errorJson, null, 2)
-        console.error("🔑 Parsed token error:", errorJson)
-      } catch {
-        // Keep as text if not JSON
-        console.error("🔑 Raw token error:", errorText)
-      }
-
-      throw new Error(`Failed to get access token: ${response.status} ${response.statusText} - ${errorDetails}`)
-    }
-
-    const data = await response.json()
-    console.log("✅ Access token obtained successfully with correct endpoint and scope format")
-    console.log("🔑 Token response data:", {
-      ...data,
-      access_token: data.access_token?.substring(0, 20) + "...",
-      token_type: data.token_type,
-      expires_in: data.expires_in,
-      scope: data.scope,
-    })
-
-    return data.access_token
-  } catch (fetchError) {
-    console.error("🔑 Token request failed:", fetchError)
-    throw new Error(`Token request failed: ${fetchError instanceof Error ? fetchError.message : "Unknown error"}`)
   }
 }

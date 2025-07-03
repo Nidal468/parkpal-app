@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,45 +23,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Commerce Layer not configured" }, { status: 500 })
     }
 
-    // Create correct scope format - FIXED: Ensure no duplicate prefixes
-    const clScope = clStockLocationId
-      ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
-      : `market:id:${clMarketId}`
-
-    // Use correct global auth endpoint
-    const tokenUrl = "https://auth.commercelayer.io/oauth/token"
-
-    // Get access token with correct endpoint and scope format
-    const tokenPayload = {
-      grant_type: "client_credentials",
-      client_id: clClientId,
-      client_secret: clClientSecret,
-      scope: clScope,
-    }
-
-    console.log("🔑 Getting access token for order confirmation with correct endpoint and FIXED scope format...")
-    console.log("🔑 Using endpoint:", tokenUrl)
-    console.log("🔑 Using FIXED scope:", clScope)
-
-    const tokenResponse = await fetch(tokenUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(tokenPayload),
-    })
-
-    if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text()
-      console.error("❌ Token request failed:", tokenResponse.status, errorText)
+    // Get access token using centralized function
+    let accessToken: string
+    try {
+      accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clMarketId, clStockLocationId)
+      console.log("✅ Access token obtained for order confirmation using centralized function")
+    } catch (tokenError) {
+      console.error("❌ Token request failed:", tokenError)
       return NextResponse.json({ error: "Failed to authenticate with Commerce Layer" }, { status: 500 })
     }
-
-    const tokenData = await tokenResponse.json()
-    const accessToken = tokenData.access_token
-
-    console.log("✅ Access token obtained for order confirmation")
 
     // Update order status to confirmed
     const updateOrderPayload = {

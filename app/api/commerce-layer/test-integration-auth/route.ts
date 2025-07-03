@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
 export async function GET() {
   try {
@@ -11,11 +12,6 @@ export async function GET() {
     const clMarketId = process.env.COMMERCE_LAYER_MARKET_ID
     const clStockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID
 
-    // Create correct scope format - FIXED: Ensure no duplicate prefixes
-    const clScope = clStockLocationId
-      ? `market:id:${clMarketId} stock_location:id:${clStockLocationId}`
-      : `market:id:${clMarketId}`
-
     console.log("🔧 Integration App Environment Check:", {
       hasClientId: !!clClientId,
       hasClientSecret: !!clClientSecret,
@@ -26,14 +22,6 @@ export async function GET() {
       baseUrl: clBaseUrl,
       marketId: clMarketId,
       stockLocationId: clStockLocationId,
-      scope: clScope,
-      scopeFormat: clScope?.includes("market:id:") ? "✅ Correct format" : "❌ Incorrect format",
-      scopeCheck: {
-        noDuplicates: !clScope.includes("stock_location:id:stock_location:id:"),
-        marketPart: `market:id:${clMarketId}`,
-        stockLocationPart: clStockLocationId ? `stock_location:id:${clStockLocationId}` : "not_used",
-        bugFixed: "Removed duplicate 'stock_location:id:' prefix",
-      },
     })
 
     if (!clClientId || !clClientSecret || !clBaseUrl || !clMarketId) {
@@ -57,85 +45,33 @@ export async function GET() {
             "COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
             "COMMERCE_LAYER_MARKET_ID=<your_market_id>",
             "COMMERCE_LAYER_STOCK_LOCATION_ID=<your_stock_location_id> (optional)",
-            "",
-            "Scope will auto-generate as (FIXED):",
-            `market:id:${clMarketId || "<your_market_id>"}`,
           ],
         },
         { status: 400 },
       )
     }
 
-    // Use correct global auth endpoint
-    const tokenUrl = "https://auth.commercelayer.io/oauth/token"
-
-    // Test Integration app authentication
-    console.log("🔑 Testing Integration app token request...")
-
-    const tokenPayload = {
-      grant_type: "client_credentials",
-      client_id: clClientId,
-      client_secret: clClientSecret,
-      scope: clScope,
-    }
-
-    console.log("🔑 Token request payload (FIXED scope):", {
-      ...tokenPayload,
-      client_secret: "[REDACTED]",
-    })
-
-    const tokenResponse = await fetch(tokenUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(tokenPayload),
-    })
-
-    console.log("🔑 Token response status:", tokenResponse.status)
-    console.log("🔑 Token response headers:", Object.fromEntries(tokenResponse.headers.entries()))
-
-    const responseText = await tokenResponse.text()
-    console.log("🔑 Raw token response:", responseText)
-
-    if (!tokenResponse.ok) {
-      let errorDetails = responseText
-      try {
-        const errorJson = JSON.parse(responseText)
-        errorDetails = JSON.stringify(errorJson, null, 2)
-      } catch {
-        // Keep as text if not JSON
-      }
-
+    // Test Integration app authentication using centralized function
+    let accessToken: string
+    try {
+      console.log("🔑 Testing Integration app token request using centralized function...")
+      accessToken = await getCommerceLayerAccessToken(clClientId, clClientSecret, clMarketId, clStockLocationId)
+      console.log("✅ Integration app authentication successful using centralized function!")
+    } catch (tokenError) {
+      console.error("❌ Integration app authentication failed:", tokenError)
       return NextResponse.json(
         {
           error: "Integration app authentication failed",
-          status: tokenResponse.status,
-          statusText: tokenResponse.statusText,
-          response: responseText || "Empty response",
-          url: tokenUrl,
-          payload: {
-            ...tokenPayload,
-            client_secret: "[REDACTED]",
-          },
-          endpointUsed: tokenUrl,
-          scopeDetails: {
-            used: clScope,
-            explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
-            isCorrectFormat: clScope.includes("market:id:"),
-            hasStockLocation: !!clStockLocationId,
-            noDuplicates: !clScope.includes("stock_location:id:stock_location:id:"),
-            bugFixed: "✅ Removed duplicate 'stock_location:id:' prefix that was causing 400 Bad Request",
-          },
+          details: tokenError instanceof Error ? tokenError.message : "Unknown authentication error",
           troubleshooting: {
-            status400: tokenResponse.status === 400 ? "Bad Request - scope format was malformed (now fixed)" : null,
-            status403: tokenResponse.status === 403 ? "Invalid credentials or app not configured correctly" : null,
-            status401: tokenResponse.status === 401 ? "Authentication failed - check client ID and secret" : null,
-            status404: tokenResponse.status === 404 ? "Invalid base URL or endpoint" : null,
-            emptyResponse: !responseText ? "Empty response suggests request rejected at API gateway" : null,
-            endpointFixed: "Now using correct global auth endpoint",
-            scopeFixed: "Now using correct scope format with no duplicates",
+            possibleCauses: [
+              "❌ Client ID is incorrect",
+              "❌ Client Secret is incorrect",
+              "❌ Application doesn't have access to the specified market",
+              "❌ Application is not configured for 'Client Credentials' grant type",
+              "❌ Market ID is incorrect",
+              "❌ Stock Location ID is incorrect (if used)",
+            ],
           },
           nextSteps: [
             "1. Verify you created an 'Integration' app (not Sales Channel)",
@@ -145,38 +81,20 @@ export async function GET() {
             `5. Ensure market ID is correct: ${clMarketId}`,
             clStockLocationId ? `6. Verify stock location exists: ${clStockLocationId}` : "6. Stock location not used",
             "7. Try creating a completely new Integration app",
-            "8. The scope format bug has been fixed - no more duplicates!",
           ],
-        },
-        { status: tokenResponse.status },
-      )
-    }
-
-    // Parse successful response
-    let tokenData: any
-    try {
-      tokenData = JSON.parse(responseText)
-    } catch (parseError) {
-      return NextResponse.json(
-        {
-          error: "Invalid JSON response from Commerce Layer",
-          rawResponse: responseText,
-          parseError: parseError instanceof Error ? parseError.message : "Unknown parse error",
         },
         { status: 500 },
       )
     }
 
-    console.log("✅ Integration app authentication successful!")
-
     // Test API access with the token
     let apiTest: any = { status: "not_tested" }
-    if (tokenData.access_token) {
+    if (accessToken) {
       try {
         console.log("🧪 Testing API access...")
         const apiResponse = await fetch(`${clBaseUrl}/api/markets`, {
           headers: {
-            Authorization: `Bearer ${tokenData.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
             Accept: "application/vnd.api+json",
           },
         })
@@ -209,48 +127,32 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: "Integration app authentication successful with correct endpoint and FIXED scope format!",
+      message: "Integration app authentication successful using centralized function!",
       appType: "Integration",
       tokenResponse: {
-        access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 20)}...` : "missing",
-        token_type: tokenData.token_type,
-        expires_in: tokenData.expires_in,
-        scope: tokenData.scope,
+        access_token: accessToken ? `${accessToken.substring(0, 20)}...` : "missing",
+        token_type: "Bearer",
       },
       apiTest,
-      endpointUsed: tokenUrl,
-      scopeDetails: {
-        used: clScope,
-        explanation: "Scope format: market:id:<market_id> [stock_location:id:<stock_location_id>]",
-        isCorrectFormat: clScope.includes("market:id:"),
-        hasStockLocation: !!clStockLocationId,
-        noDuplicates: !clScope.includes("stock_location:id:stock_location:id:"),
-        bugFixed: "✅ Removed duplicate 'stock_location:id:' prefix that was causing 400 Bad Request",
-        wasFixed: "Scope format corrected from previous versions",
-      },
       environmentCheck: {
         clientId: clClientId?.substring(0, 10) + "...",
         clientSecret: "✅ Set",
         baseUrl: clBaseUrl,
         marketId: clMarketId,
         stockLocationId: clStockLocationId || "Not set",
-        scope: clScope,
       },
       integrationAppDetails: {
         appType: "Integration (server-side with full API access)",
         grantType: "client_credentials",
-        tokenUrl: tokenUrl,
+        tokenUrl: "https://auth.commercelayer.io/oauth/token",
         apiBaseUrl: `${clBaseUrl}/api`,
-        scopeUsed: clScope,
-        scopeFormat: "market:id:<market_id> [stock_location:id:<stock_location_id>]",
         permissions: "Full API access for server-side operations",
-        endpointFixed: "Now using correct global auth endpoint",
-        scopeFixed: "Now using correct scope format with no duplicate prefixes",
+        usingCentralizedFunction: true,
       },
       nextSteps: [
-        "✅ Integration app authentication working with correct endpoint and FIXED scope",
+        "✅ Integration app authentication working with centralized function",
         apiTest.status === "success" ? "✅ API access working" : "❌ Check API access",
-        "✅ Endpoint corrected to global auth URL",
+        "✅ Using centralized authentication function",
         "✅ Scope format corrected and duplicates removed",
         "✅ Ready to update main payment flow",
         "Now test the payment flow at /test-reserve",

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
+import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
 export async function GET() {
   try {
     console.log("🔍 FULL Commerce Layer Environment Diagnostic")
-    console.log("🔍 Checking for any local .env interference or hardcoded values...")
+    console.log("🔍 Using centralized authentication function...")
 
     // Get ALL environment variables that could be related
     const allEnvVars = {
@@ -36,13 +37,13 @@ export async function GET() {
       VERCEL_ENV: process.env.VERCEL_ENV,
     }
 
-    // Check what values are actually being used in the create-order logic
+    // Check what values are actually being used
     const actualValues = {
       clientId: process.env.COMMERCE_LAYER_CLIENT_ID,
       clientSecret: process.env.COMMERCE_LAYER_CLIENT_SECRET,
       baseUrl: process.env.COMMERCE_LAYER_BASE_URL,
       marketId: process.env.COMMERCE_LAYER_MARKET_ID,
-      scope: process.env.COMMERCE_LAYER_SCOPE || `market:${process.env.COMMERCE_LAYER_MARKET_ID}`,
+      stockLocationId: process.env.COMMERCE_LAYER_STOCK_LOCATION_ID,
     }
 
     console.log("🔧 Actual values being used:", {
@@ -50,11 +51,11 @@ export async function GET() {
       clientSecret: actualValues.clientSecret ? `${actualValues.clientSecret.substring(0, 10)}...` : "undefined",
       baseUrl: actualValues.baseUrl,
       marketId: actualValues.marketId,
-      scope: actualValues.scope,
+      stockLocationId: actualValues.stockLocationId,
     })
 
-    // Test the EXACT same token request that create-order would make
-    console.log("🧪 Testing EXACT token request from create-order logic...")
+    // Test the centralized authentication function
+    console.log("🧪 Testing centralized authentication function...")
 
     if (!actualValues.clientId || !actualValues.clientSecret || !actualValues.baseUrl || !actualValues.marketId) {
       return NextResponse.json({
@@ -71,7 +72,7 @@ export async function GET() {
           clientSecret: actualValues.clientSecret ? "✅ SET" : "❌ UNDEFINED",
           baseUrl: actualValues.baseUrl || "❌ UNDEFINED",
           marketId: actualValues.marketId || "❌ UNDEFINED",
-          scope: actualValues.scope || "❌ UNDEFINED",
+          stockLocationId: actualValues.stockLocationId || "❌ UNDEFINED",
         },
         interference: {
           hasLegacyPublicVars: !!(
@@ -92,42 +93,34 @@ export async function GET() {
           "COMMERCE_LAYER_CLIENT_SECRET=<your_client_secret>",
           "COMMERCE_LAYER_BASE_URL=https://mr-peat-worldwide.commercelayer.io",
           "COMMERCE_LAYER_MARKET_ID=<your_market_id>",
-          "COMMERCE_LAYER_SCOPE=market:<your_market_id>",
+          "COMMERCE_LAYER_STOCK_LOCATION_ID=<your_stock_location_id> (optional)",
           "",
           "Then redeploy your application",
         ],
       })
     }
 
-    // Make the EXACT same token request as create-order
-    const tokenPayload = {
-      grant_type: "client_credentials",
-      client_id: actualValues.clientId,
-      client_secret: actualValues.clientSecret,
-      scope: actualValues.scope,
+    // Test centralized authentication function
+    let authResult: any
+    try {
+      const accessToken = await getCommerceLayerAccessToken(
+        actualValues.clientId,
+        actualValues.clientSecret,
+        actualValues.marketId,
+        actualValues.stockLocationId,
+      )
+      authResult = {
+        success: true,
+        accessToken: accessToken ? `${accessToken.substring(0, 20)}...` : "missing",
+        usingCentralizedFunction: true,
+      }
+    } catch (authError) {
+      authResult = {
+        success: false,
+        error: authError instanceof Error ? authError.message : "Unknown error",
+        usingCentralizedFunction: true,
+      }
     }
-
-    console.log("🔑 Making EXACT token request with actual environment values...")
-    console.log("🔑 Token payload:", {
-      ...tokenPayload,
-      client_secret: "[REDACTED]",
-      client_id: actualValues.clientId?.substring(0, 10) + "...",
-    })
-
-    const tokenResponse = await fetch(`${actualValues.baseUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(tokenPayload),
-    })
-
-    console.log("🔑 Token response status:", tokenResponse.status)
-    console.log("🔑 Token response headers:", Object.fromEntries(tokenResponse.headers.entries()))
-
-    const responseText = await tokenResponse.text()
-    console.log("🔑 Raw token response:", responseText)
 
     // Comprehensive analysis
     const analysis = {
@@ -148,12 +141,7 @@ export async function GET() {
         isVercel: !!process.env.VERCEL,
         vercelEnv: process.env.VERCEL_ENV,
       },
-      tokenRequest: {
-        status: tokenResponse.status,
-        success: tokenResponse.ok,
-        hasResponse: !!responseText,
-        responseLength: responseText?.length || 0,
-      },
+      authenticationTest: authResult,
       credentialsUsed: {
         clientId: actualValues.clientId?.substring(0, 10) + "...",
         clientIdLength: actualValues.clientId?.length || 0,
@@ -161,16 +149,14 @@ export async function GET() {
         clientSecretLength: actualValues.clientSecret?.length || 0,
         baseUrl: actualValues.baseUrl,
         marketId: actualValues.marketId,
-        scope: actualValues.scope,
-        scopeFormat: actualValues.scope?.startsWith("market:") ? "✅ Correct" : "❌ Incorrect",
+        stockLocationId: actualValues.stockLocationId || "Not set",
       },
     }
 
-    if (!tokenResponse.ok) {
+    if (!authResult.success) {
       return NextResponse.json({
-        error: "Token request failed with actual environment variables",
-        status: tokenResponse.status,
-        rawResponse: responseText || "Empty response",
+        error: "Authentication failed with centralized function",
+        authError: authResult.error,
         analysis,
         allEnvironmentVars: Object.fromEntries(
           Object.entries(allEnvVars).map(([key, value]) => [
@@ -183,7 +169,7 @@ export async function GET() {
           clientSecret: actualValues.clientSecret ? "✅ SET" : "❌ UNDEFINED",
           baseUrl: actualValues.baseUrl,
           marketId: actualValues.marketId,
-          scope: actualValues.scope,
+          stockLocationId: actualValues.stockLocationId,
         },
         interference: {
           legacyPublicVars: {
@@ -198,8 +184,7 @@ export async function GET() {
         },
         diagnosis: {
           issue: "Commerce Layer is rejecting the credentials from Vercel environment",
-          emptyResponse: !responseText,
-          status403: tokenResponse.status === 403,
+          usingCentralizedFunction: true,
           possibleCauses: [
             "❌ Client ID is incorrect in Vercel",
             "❌ Client Secret is incorrect in Vercel",
@@ -231,29 +216,11 @@ export async function GET() {
       })
     }
 
-    // Parse successful response
-    let tokenData: any
-    try {
-      tokenData = JSON.parse(responseText)
-    } catch (parseError) {
-      return NextResponse.json({
-        error: "Invalid JSON response",
-        rawResponse: responseText,
-        analysis,
-        parseError: parseError instanceof Error ? parseError.message : "Unknown parse error",
-      })
-    }
-
     return NextResponse.json({
       success: true,
-      message: "✅ Environment variables are working correctly!",
+      message: "✅ Environment variables are working correctly with centralized function!",
       analysis,
-      tokenResponse: {
-        access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 20)}...` : "missing",
-        token_type: tokenData.token_type,
-        expires_in: tokenData.expires_in,
-        scope: tokenData.scope,
-      },
+      authenticationTest: authResult,
       allEnvironmentVars: Object.fromEntries(
         Object.entries(allEnvVars).map(([key, value]) => [
           key,
@@ -265,7 +232,7 @@ export async function GET() {
         clientSecret: "✅ SET",
         baseUrl: actualValues.baseUrl,
         marketId: actualValues.marketId,
-        scope: actualValues.scope,
+        stockLocationId: actualValues.stockLocationId,
       },
       interference: {
         legacyPublicVars: {
@@ -289,12 +256,14 @@ export async function GET() {
         isVercel: !!process.env.VERCEL,
         vercelEnv: process.env.VERCEL_ENV,
         usingCorrectServerSideVars: true,
+        usingCentralizedFunction: true,
       },
       nextSteps: [
         "✅ Environment variables are correctly configured",
         "✅ No local .env interference detected",
         "✅ Using proper server-side variables",
-        "✅ Token authentication successful",
+        "✅ Token authentication successful with centralized function",
+        "✅ All authentication logic now centralized",
         "Ready to test full payment flow at /test-reserve",
       ],
     })
