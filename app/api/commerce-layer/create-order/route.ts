@@ -137,29 +137,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Initialize Commerce Layer API base URL
+    // FIXED: Construct API base URL correctly from COMMERCE_LAYER_BASE_URL
     const apiBase = `${clBaseUrl}/api`
+    console.log("🔧 Using API base URL:", apiBase)
 
     // Step 1: Create or get customer
     let customer: any
     try {
       console.log("👤 Creating/finding customer...")
 
+      // FIXED: Construct customer search URL with correct base URL
+      const customerSearchUrl = `${apiBase}/customers?filter[email_eq]=${encodeURIComponent(customerDetails.email)}`
+      console.log("👤 Customer search URL:", customerSearchUrl)
+
       // Try to find existing customer by email
-      const customersResponse = await fetch(
-        `${apiBase}/customers?filter[email_eq]=${encodeURIComponent(customerDetails.email)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: "application/vnd.api+json",
-            "Content-Type": "application/vnd.api+json",
-          },
+      const customersResponse = await fetch(customerSearchUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.api+json",
+          "Content-Type": "application/vnd.api+json",
         },
-      )
+      })
+
+      console.log("👤 Customer search response status:", customersResponse.status)
+      console.log("👤 Customer search response headers:", Object.fromEntries(customersResponse.headers.entries()))
 
       if (!customersResponse.ok) {
         const errorText = await customersResponse.text()
         console.error("❌ Customer search failed:", customersResponse.status, errorText)
+        console.error("❌ Customer search URL was:", customerSearchUrl)
+        console.error("❌ API base URL was:", apiBase)
+        console.error("❌ Base URL from env:", clBaseUrl)
         throw new Error(`Customer search failed: ${customersResponse.status} ${errorText}`)
       }
 
@@ -189,7 +197,11 @@ export async function POST(request: NextRequest) {
 
         console.log("👤 Creating customer with payload:", JSON.stringify(customerPayload, null, 2))
 
-        const createCustomerResponse = await fetch(`${apiBase}/customers`, {
+        // FIXED: Use correct API base URL for customer creation
+        const createCustomerUrl = `${apiBase}/customers`
+        console.log("👤 Customer creation URL:", createCustomerUrl)
+
+        const createCustomerResponse = await fetch(createCustomerUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -202,6 +214,8 @@ export async function POST(request: NextRequest) {
         if (!createCustomerResponse.ok) {
           const errorText = await createCustomerResponse.text()
           console.error("❌ Customer creation failed:", createCustomerResponse.status, errorText)
+          console.error("❌ Customer creation URL was:", createCustomerUrl)
+          console.error("❌ API base URL was:", apiBase)
           throw new Error(`Customer creation failed: ${createCustomerResponse.status} ${errorText}`)
         }
 
@@ -217,6 +231,12 @@ export async function POST(request: NextRequest) {
         {
           error: "Failed to create/find customer",
           details: customerError instanceof Error ? customerError.message : "Unknown customer error",
+          debug: {
+            apiBase: apiBase,
+            baseUrl: clBaseUrl,
+            customerEmail: customerDetails.email,
+            searchUrl: `${apiBase}/customers?filter[email_eq]=${encodeURIComponent(customerDetails.email)}`,
+          },
         },
         { status: 500 },
       )
@@ -262,7 +282,11 @@ export async function POST(request: NextRequest) {
 
       console.log("📦 Creating order with payload:", JSON.stringify(orderPayload, null, 2))
 
-      const createOrderResponse = await fetch(`${apiBase}/orders`, {
+      // FIXED: Use correct API base URL for order creation
+      const createOrderUrl = `${apiBase}/orders`
+      console.log("📦 Order creation URL:", createOrderUrl)
+
+      const createOrderResponse = await fetch(createOrderUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -275,6 +299,7 @@ export async function POST(request: NextRequest) {
       if (!createOrderResponse.ok) {
         const errorText = await createOrderResponse.text()
         console.error("❌ Order creation failed:", createOrderResponse.status, errorText)
+        console.error("❌ Order creation URL was:", createOrderUrl)
         throw new Error(`Order creation failed: ${createOrderResponse.status} ${errorText}`)
       }
 
@@ -323,7 +348,11 @@ export async function POST(request: NextRequest) {
 
       console.log("🛒 Line item payload:", JSON.stringify(lineItemPayload, null, 2))
 
-      const createLineItemResponse = await fetch(`${apiBase}/line_items`, {
+      // FIXED: Use correct API base URL for line item creation
+      const createLineItemUrl = `${apiBase}/line_items`
+      console.log("🛒 Line item creation URL:", createLineItemUrl)
+
+      const createLineItemResponse = await fetch(createLineItemUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -336,6 +365,7 @@ export async function POST(request: NextRequest) {
       if (!createLineItemResponse.ok) {
         const errorText = await createLineItemResponse.text()
         console.error("❌ Line item creation failed:", createLineItemResponse.status, errorText)
+        console.error("❌ Line item creation URL was:", createLineItemUrl)
         throw new Error(`Line item creation failed: ${createLineItemResponse.status} ${errorText}`)
       }
 
@@ -361,19 +391,22 @@ export async function POST(request: NextRequest) {
     let updatedOrder: any
     try {
       console.log("🔄 Fetching updated order...")
-      const updatedOrderResponse = await fetch(
-        `${apiBase}/orders/${order.id}?include=line_items,line_items.item,market`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: "application/vnd.api+json",
-          },
+
+      // FIXED: Use correct API base URL for order fetch
+      const fetchOrderUrl = `${apiBase}/orders/${order.id}?include=line_items,line_items.item,market`
+      console.log("🔄 Fetch order URL:", fetchOrderUrl)
+
+      const updatedOrderResponse = await fetch(fetchOrderUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.api+json",
         },
-      )
+      })
 
       if (!updatedOrderResponse.ok) {
         const errorText = await updatedOrderResponse.text()
         console.error("❌ Failed to fetch updated order:", updatedOrderResponse.status, errorText)
+        console.error("❌ Fetch order URL was:", fetchOrderUrl)
         throw new Error(`Failed to fetch updated order: ${updatedOrderResponse.status} ${errorText}`)
       }
 
