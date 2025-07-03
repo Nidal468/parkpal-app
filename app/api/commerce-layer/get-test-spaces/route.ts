@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
 // Hardcoded space UUIDs from Supabase
 const SPACE_IDS = {
@@ -16,7 +17,6 @@ export async function GET() {
       return NextResponse.json({ error: "Supabase configuration missing" }, { status: 500 })
     }
 
-    const { createClient } = await import("@supabase/supabase-js")
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // Get the specific spaces by their UUIDs
