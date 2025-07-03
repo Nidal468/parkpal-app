@@ -8,73 +8,71 @@ const SPACE_IDS = {
   MONTHLY: "9aa9af0f-ac4b-4cb0-ae43-49e21bb43ffd",
 }
 
+const SKU_TO_SPACE_MAP = {
+  "parking-hour": SPACE_IDS.HOURLY,
+  "parking-day": SPACE_IDS.DAILY,
+  "parking-month": SPACE_IDS.MONTHLY,
+}
+
 export async function GET() {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    console.log("🗺️ Fetching test spaces and mappings...")
 
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ error: "Supabase configuration missing" }, { status: 500 })
-    }
+    // Initialize Supabase
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
+    )
 
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    // Get the specific spaces by their UUIDs
-    const { data: spaces, error } = await supabase
+    // Fetch actual space details from Supabase
+    const { data: spaces, error: spacesError } = await supabase
       .from("spaces")
-      .select("id, name, location, hourly_rate, daily_rate, monthly_rate, space_type, description")
+      .select("id, name, location, hourly_rate, daily_rate, monthly_rate, latitude, longitude")
       .in("id", Object.values(SPACE_IDS))
 
-    if (error) {
-      console.error("Database error:", error)
-      return NextResponse.json({ error: "Failed to fetch spaces" }, { status: 500 })
+    if (spacesError) {
+      console.error("❌ Error fetching spaces:", spacesError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: spacesError.message,
+          timestamp: new Date().toISOString(),
+        },
+        { status: 500 },
+      )
     }
 
-    // Create mapping between space IDs and their details
-    const spaceDetails =
-      spaces?.reduce(
-        (acc, space) => {
-          acc[space.id] = space
-          return acc
-        },
-        {} as Record<string, any>,
-      ) || {}
+    // Create mapping with space details
+    const detailedMapping = Object.entries(SKU_TO_SPACE_MAP).map(([sku, spaceId]) => {
+      const spaceDetails = spaces?.find((space) => space.id === spaceId)
+      return {
+        sku,
+        spaceId,
+        spaceDetails: spaceDetails || { error: "Space not found in database" },
+      }
+    })
+
+    console.log("✅ Successfully fetched space mappings")
 
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
       hardcodedSpaceIds: SPACE_IDS,
-      spaces: {
-        all: spaces,
-        hourly: spaceDetails[SPACE_IDS.HOURLY] || null,
-        daily: spaceDetails[SPACE_IDS.DAILY] || null,
-        monthly: spaceDetails[SPACE_IDS.MONTHLY] || null,
-      },
-      skuMapping: {
-        "parking-hour": {
-          spaceId: SPACE_IDS.HOURLY,
-          details: spaceDetails[SPACE_IDS.HOURLY] || null,
-        },
-        "parking-day": {
-          spaceId: SPACE_IDS.DAILY,
-          details: spaceDetails[SPACE_IDS.DAILY] || null,
-        },
-        "parking-month": {
-          spaceId: SPACE_IDS.MONTHLY,
-          details: spaceDetails[SPACE_IDS.MONTHLY] || null,
-        },
-      },
-      usage: {
-        description: "Each Commerce Layer SKU is mapped to a specific parking space",
-        examples: [
-          "parking-hour → " + SPACE_IDS.HOURLY,
-          "parking-day → " + SPACE_IDS.DAILY,
-          "parking-month → " + SPACE_IDS.MONTHLY,
-        ],
-      },
+      skuToSpaceMapping: SKU_TO_SPACE_MAP,
+      detailedMapping,
+      spacesFound: spaces?.length || 0,
+      totalSpacesExpected: Object.keys(SPACE_IDS).length,
+      allSpacesFound: spaces?.length === Object.keys(SPACE_IDS).length,
     })
   } catch (error) {
-    console.error("Error fetching test spaces:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("❌ Get test spaces failed:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to get test spaces",
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 },
+    )
   }
 }

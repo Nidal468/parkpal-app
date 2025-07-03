@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
 // Hardcoded space UUIDs from Supabase
 const SPACE_IDS = {
@@ -8,288 +9,240 @@ const SPACE_IDS = {
   MONTHLY: "9aa9af0f-ac4b-4cb0-ae43-49e21bb43ffd",
 }
 
-// SKU to Space mapping
 const SKU_TO_SPACE_MAP = {
   "parking-hour": SPACE_IDS.HOURLY,
   "parking-day": SPACE_IDS.DAILY,
   "parking-month": SPACE_IDS.MONTHLY,
 }
 
-async function getCommerceLayerToken() {
-  try {
-    const clientId = process.env.COMMERCE_LAYER_CLIENT_ID || process.env.NEXT_PUBLIC_CL_CLIENT_ID
-    const clientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET || process.env.NEXT_PUBLIC_CL_CLIENT_SECRET
-    const baseUrl = process.env.COMMERCE_LAYER_BASE_URL
-    const scope = process.env.COMMERCE_LAYER_SCOPE || process.env.NEXT_PUBLIC_CL_SCOPE
-
-    if (!clientId || !clientSecret || !baseUrl) {
-      throw new Error("Missing Commerce Layer credentials")
-    }
-
-    const authResponse = await fetch(`${baseUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
-        scope: scope,
-      }),
-    })
-
-    if (!authResponse.ok) {
-      throw new Error(`Auth failed: ${authResponse.status}`)
-    }
-
-    const authData = await authResponse.json()
-    return authData.access_token
-  } catch (error) {
-    throw new Error(`Commerce Layer auth failed: ${error instanceof Error ? error.message : "Unknown error"}`)
-  }
-}
-
-async function createTestOrder(sku: string, customerDetails: any, bookingDetails: any) {
-  try {
-    const token = await getCommerceLayerToken()
-    const baseUrl = process.env.COMMERCE_LAYER_BASE_URL
-    const marketId = process.env.NEXT_PUBLIC_CL_MARKET_ID
-    const stockLocationId = process.env.COMMERCE_LAYER_STOCK_LOCATION_ID || process.env.NEXT_PUBLIC_CL_STOCK_LOCATION_ID
-
-    // Get space ID for this SKU
-    const spaceId = SKU_TO_SPACE_MAP[sku as keyof typeof SKU_TO_SPACE_MAP] || SPACE_IDS.HOURLY
-
-    // Create customer
-    const customerResponse = await fetch(`${baseUrl}/api/customers`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/vnd.api+json",
-      },
-      body: JSON.stringify({
-        data: {
-          type: "customers",
-          attributes: {
-            email: customerDetails.email,
-            metadata: {
-              name: customerDetails.name,
-              phone: customerDetails.phone,
-            },
-          },
-        },
-      }),
-    })
-
-    if (!customerResponse.ok) {
-      throw new Error(`Customer creation failed: ${customerResponse.status}`)
-    }
-
-    const customerData = await customerResponse.json()
-    const customerId = customerData.data.id
-
-    // Create order
-    const orderResponse = await fetch(`${baseUrl}/api/orders`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/vnd.api+json",
-      },
-      body: JSON.stringify({
-        data: {
-          type: "orders",
-          attributes: {
-            metadata: {
-              sku: sku,
-              spaceId: spaceId,
-              bookingDetails: bookingDetails,
-            },
-          },
-          relationships: {
-            market: {
-              data: {
-                type: "markets",
-                id: marketId,
-              },
-            },
-            customer: {
-              data: {
-                type: "customers",
-                id: customerId,
-              },
-            },
-          },
-        },
-      }),
-    })
-
-    if (!orderResponse.ok) {
-      throw new Error(`Order creation failed: ${orderResponse.status}`)
-    }
-
-    const orderData = await orderResponse.json()
-    const orderId = orderData.data.id
-
-    // Create booking in database
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Supabase configuration missing")
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    const { data: booking, error: bookingError } = await supabase
-      .from("bookings")
-      .insert({
-        space_id: spaceId,
-        customer_email: customerDetails.email,
-        customer_name: customerDetails.name,
-        customer_phone: customerDetails.phone,
-        vehicle_registration: bookingDetails.vehicleReg,
-        vehicle_type: bookingDetails.vehicleType,
-        start_date: bookingDetails.startDate,
-        start_time: bookingDetails.startTime,
-        special_requests: bookingDetails.specialRequests,
-        status: "confirmed",
-        sku: sku,
-        commerce_layer_order_id: orderId,
-        commerce_layer_customer_id: customerId,
-      })
-      .select()
-      .single()
-
-    if (bookingError) {
-      throw new Error(`Database booking creation failed: ${bookingError.message}`)
-    }
-
-    return {
-      success: true,
-      orderId: orderId,
-      customerId: customerId,
-      spaceId: spaceId,
-      bookingId: booking.id,
-      amount: "10.00", // Default amount for testing
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    }
-  }
-}
-
 export async function GET() {
   try {
-    console.log("🧪 Starting Commerce Layer flow test...")
+    console.log("🧪 Starting Commerce Layer full test suite...")
 
-    // Test 1: Check space mapping
-    console.log("📍 Testing space mapping...")
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    // Initialize Supabase
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
+    )
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Supabase configuration missing")
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    // Get the specific spaces by their UUIDs
-    const { data: spaces, error: spacesError } = await supabase
-      .from("spaces")
-      .select("id, name, location, hourly_rate, daily_rate, monthly_rate, space_type, description")
-      .in("id", Object.values(SPACE_IDS))
-
-    if (spacesError) {
-      throw new Error(`Space mapping test failed: ${spacesError.message}`)
-    }
-
-    console.log("✅ Space mapping test passed")
-
-    // Test 2: Test order creation for each SKU type
-    const testOrders = []
-    const skuTypes = ["parking-hour", "parking-day", "parking-month"]
-
-    for (const sku of skuTypes) {
-      console.log(`📦 Testing order creation for SKU: ${sku}`)
-
-      const customerDetails = {
-        name: `Test Customer ${sku}`,
-        email: `test-${sku}-${Date.now()}@parkpal.com`,
-        phone: "+44 7700 900123",
-      }
-
-      const bookingDetails = {
-        vehicleReg: "TEST123",
-        vehicleType: "car",
-        startDate: new Date().toISOString().split("T")[0],
-        startTime: "09:00",
-        specialRequests: `Test booking for ${sku}`,
-      }
-
-      const orderResult = await createTestOrder(sku, customerDetails, bookingDetails)
-      testOrders.push({
-        sku: sku,
-        ...orderResult,
-      })
-
-      console.log(
-        `${orderResult.success ? "✅" : "❌"} Order test for ${sku}: ${orderResult.success ? "SUCCESS" : "FAILED"}`,
-      )
-    }
-
-    // Test 3: Verify database records
-    console.log("💾 Testing database records...")
-    const { data: recentBookings, error: bookingsError } = await supabase
-      .from("bookings")
-      .select("id, space_id, sku, customer_email, created_at")
-      .gte("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString()) // Last 5 minutes
-      .order("created_at", { ascending: false })
-
-    const databaseTest = {
-      success: !bookingsError,
-      error: bookingsError?.message || null,
-      bookingCount: recentBookings?.length || 0,
-    }
-
-    // Compile test results
-    const testResults = {
+    const results = {
+      success: false,
       timestamp: new Date().toISOString(),
-      overallSuccess: !spacesError && testOrders.every((order) => order.success) && databaseTest.success,
       tests: {
-        spaceMapping: {
-          success: !spacesError,
-          hardcodedSpaceIds: SPACE_IDS,
-          skuMapping: SKU_TO_SPACE_MAP,
-          spacesFound: spaces?.length || 0,
-          spaces: spaces,
-        },
-        orderCreation: {
-          success: testOrders.every((order) => order.success),
-          results: testOrders,
-          successCount: testOrders.filter((order) => order.success).length,
-          totalCount: testOrders.length,
-        },
-        database: databaseTest,
+        spaceMapping: { success: false, details: {} },
+        orderCreation: { success: false, orders: [], errors: [] },
+        databaseInsertion: { success: false, bookings: [], errors: [] },
       },
-      nextSteps: [
-        "Check the browser console for detailed logs",
-        "Try manual order creation via the booking interface",
-        "Check Supabase bookings table for new records",
-        "Verify Commerce Layer dashboard for new orders",
-      ],
+      summary: {},
     }
 
-    console.log("🎯 Test Results:", JSON.stringify(testResults, null, 2))
+    // Test 1: Space Mapping
+    console.log("🗺️ Testing space mapping...")
+    try {
+      const { data: spaces, error: spacesError } = await supabase
+        .from("spaces")
+        .select("id, name, location, hourly_rate, daily_rate, monthly_rate")
+        .in("id", Object.values(SPACE_IDS))
 
-    return NextResponse.json(testResults)
+      if (spacesError) {
+        results.tests.spaceMapping.details = { error: spacesError.message }
+      } else {
+        results.tests.spaceMapping.success = true
+        results.tests.spaceMapping.details = {
+          hardcodedIds: SPACE_IDS,
+          foundSpaces: spaces?.length || 0,
+          spaces: spaces || [],
+          mapping: SKU_TO_SPACE_MAP,
+        }
+      }
+    } catch (error) {
+      results.tests.spaceMapping.details = { error: error instanceof Error ? error.message : "Unknown error" }
+    }
+
+    // Test 2: Order Creation for each SKU - ONLY using NEXT_PUBLIC_CL_ variables
+    console.log("📦 Testing order creation...")
+    const testSKUs = ["parking-hour", "parking-day", "parking-month"]
+
+    for (const sku of testSKUs) {
+      try {
+        console.log(`🔄 Testing SKU: ${sku}`)
+
+        // Get Commerce Layer access token - ONLY using NEXT_PUBLIC_CL_ variables
+        const accessToken = await getCommerceLayerAccessToken(
+          process.env.NEXT_PUBLIC_CL_CLIENT_ID!,
+          process.env.NEXT_PUBLIC_CL_CLIENT_SECRET!,
+          process.env.NEXT_PUBLIC_CL_MARKET_ID!,
+          process.env.NEXT_PUBLIC_CL_STOCK_LOCATION_ID,
+        )
+
+        // Create order payload
+        const orderPayload = {
+          data: {
+            type: "orders",
+            attributes: {
+              customer_email: `test-${sku}@example.com`,
+              language_code: "en",
+              currency_code: "USD",
+            },
+            relationships: {
+              market: {
+                data: {
+                  type: "markets",
+                  id: process.env.NEXT_PUBLIC_CL_MARKET_ID,
+                },
+              },
+            },
+          },
+        }
+
+        // Create order
+        const orderResponse = await fetch(`${process.env.COMMERCE_LAYER_BASE_URL}/api/orders`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/vnd.api+json",
+            Accept: "application/vnd.api+json",
+          },
+          body: JSON.stringify(orderPayload),
+        })
+
+        if (orderResponse.ok) {
+          const orderData = await orderResponse.json()
+          const orderId = orderData.data.id
+
+          // Add line item
+          const lineItemPayload = {
+            data: {
+              type: "line_items",
+              attributes: {
+                quantity: 1,
+                sku_code: sku,
+              },
+              relationships: {
+                order: {
+                  data: {
+                    type: "orders",
+                    id: orderId,
+                  },
+                },
+              },
+            },
+          }
+
+          const lineItemResponse = await fetch(`${process.env.COMMERCE_LAYER_BASE_URL}/api/line_items`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/vnd.api+json",
+              Accept: "application/vnd.api+json",
+            },
+            body: JSON.stringify(lineItemPayload),
+          })
+
+          if (lineItemResponse.ok) {
+            const lineItemData = await lineItemResponse.json()
+
+            results.tests.orderCreation.orders.push({
+              sku,
+              orderId,
+              lineItemId: lineItemData.data.id,
+              success: true,
+            })
+
+            // Test 3: Database insertion
+            console.log(`💾 Testing database insertion for ${sku}...`)
+            try {
+              const spaceId = SKU_TO_SPACE_MAP[sku as keyof typeof SKU_TO_SPACE_MAP]
+
+              const { data: booking, error: bookingError } = await supabase
+                .from("bookings")
+                .insert({
+                  space_id: spaceId,
+                  customer_email: `test-${sku}@example.com`,
+                  customer_name: `Test User ${sku}`,
+                  start_time: new Date().toISOString(),
+                  end_time: new Date(Date.now() + 3600000).toISOString(), // 1 hour later
+                  total_amount: 10.0,
+                  status: "confirmed",
+                  sku: sku,
+                  commerce_layer_order_id: orderId,
+                  commerce_layer_line_item_id: lineItemData.data.id,
+                })
+                .select()
+                .single()
+
+              if (bookingError) {
+                results.tests.databaseInsertion.errors.push({
+                  sku,
+                  error: bookingError.message,
+                })
+              } else {
+                results.tests.databaseInsertion.bookings.push({
+                  sku,
+                  bookingId: booking.id,
+                  spaceId: booking.space_id,
+                  success: true,
+                })
+              }
+            } catch (dbError) {
+              results.tests.databaseInsertion.errors.push({
+                sku,
+                error: dbError instanceof Error ? dbError.message : "Unknown database error",
+              })
+            }
+          } else {
+            const lineItemError = await lineItemResponse.text()
+            results.tests.orderCreation.errors.push({
+              sku,
+              step: "line_item",
+              error: `${lineItemResponse.status}: ${lineItemError}`,
+            })
+          }
+        } else {
+          const orderError = await orderResponse.text()
+          results.tests.orderCreation.errors.push({
+            sku,
+            step: "order",
+            error: `${orderResponse.status}: ${orderError}`,
+          })
+        }
+      } catch (error) {
+        results.tests.orderCreation.errors.push({
+          sku,
+          step: "general",
+          error: error instanceof Error ? error.message : "Unknown error",
+        })
+      }
+    }
+
+    // Set success flags
+    results.tests.orderCreation.success = results.tests.orderCreation.orders.length > 0
+    results.tests.databaseInsertion.success = results.tests.databaseInsertion.bookings.length > 0
+
+    // Overall success
+    results.success =
+      results.tests.spaceMapping.success &&
+      results.tests.orderCreation.success &&
+      results.tests.databaseInsertion.success
+
+    // Summary
+    results.summary = {
+      spaceMappingPassed: results.tests.spaceMapping.success,
+      ordersCreated: results.tests.orderCreation.orders.length,
+      orderErrors: results.tests.orderCreation.errors.length,
+      bookingsCreated: results.tests.databaseInsertion.bookings.length,
+      bookingErrors: results.tests.databaseInsertion.errors.length,
+      overallSuccess: results.success,
+    }
+
+    console.log("✅ Test suite completed")
+    return NextResponse.json(results)
   } catch (error) {
-    console.error("❌ Commerce Layer flow test failed:", error)
+    console.error("❌ Test suite failed:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Test failed",
+        error: error instanceof Error ? error.message : "Test suite failed",
         timestamp: new Date().toISOString(),
       },
       { status: 500 },

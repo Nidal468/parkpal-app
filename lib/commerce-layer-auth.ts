@@ -24,7 +24,7 @@ export async function getCommerceLayerAccessToken(
 
     console.log("🔧 Using scope:", scope)
 
-    const tokenUrl = "https://mr-peat-worldwide.commercelayer.io/oauth/token"
+    const tokenUrl = `${process.env.COMMERCE_LAYER_BASE_URL}/oauth/token`
     const tokenPayload = {
       grant_type: "client_credentials",
       client_id: clientId,

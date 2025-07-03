@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 
 // Hardcoded space UUIDs from Supabase
 const SPACE_IDS = {
@@ -8,47 +9,10 @@ const SPACE_IDS = {
   MONTHLY: "9aa9af0f-ac4b-4cb0-ae43-49e21bb43ffd",
 }
 
-// SKU to Space mapping
 const SKU_TO_SPACE_MAP = {
   "parking-hour": SPACE_IDS.HOURLY,
   "parking-day": SPACE_IDS.DAILY,
   "parking-month": SPACE_IDS.MONTHLY,
-}
-
-async function getCommerceLayerToken() {
-  try {
-    const clientId = process.env.COMMERCE_LAYER_CLIENT_ID || process.env.NEXT_PUBLIC_CL_CLIENT_ID
-    const clientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET || process.env.NEXT_PUBLIC_CL_CLIENT_SECRET
-    const baseUrl = process.env.COMMERCE_LAYER_BASE_URL
-    const scope = process.env.COMMERCE_LAYER_SCOPE || process.env.NEXT_PUBLIC_CL_SCOPE
-
-    if (!clientId || !clientSecret || !baseUrl) {
-      throw new Error("Missing Commerce Layer credentials")
-    }
-
-    const authResponse = await fetch(`${baseUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
-        scope: scope,
-      }),
-    })
-
-    if (!authResponse.ok) {
-      const errorText = await authResponse.text()
-      throw new Error(`Auth failed: ${authResponse.status} - ${errorText}`)
-    }
-
-    const authData = await authResponse.json()
-    return authData.access_token
-  } catch (error) {
-    throw new Error(`Commerce Layer auth failed: ${error instanceof Error ? error.message : "Unknown error"}`)
-  }
 }
 
 export async function POST(request: Request) {
@@ -56,155 +20,185 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { sku = "parking-hour", customerName = "Test User", customerEmail = "test@example.com" } = body
 
-    console.log(`🧪 Manual test order creation for SKU: ${sku}`)
+    console.log(`🧪 Manual test order for SKU: ${sku}`)
 
-    // Get space ID for this SKU
-    const spaceId = SKU_TO_SPACE_MAP[sku as keyof typeof SKU_TO_SPACE_MAP] || SPACE_IDS.HOURLY
+    // Initialize Supabase
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
+    )
 
-    // Get Commerce Layer token
-    const token = await getCommerceLayerToken()
-    const baseUrl = process.env.COMMERCE_LAYER_BASE_URL
-    const marketId = process.env.NEXT_PUBLIC_CL_MARKET_ID
-
-    // Create customer
-    const customerResponse = await fetch(`${baseUrl}/api/customers`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/vnd.api+json",
+    const result = {
+      success: false,
+      timestamp: new Date().toISOString(),
+      input: { sku, customerName, customerEmail },
+      steps: {
+        spaceMapping: { success: false, spaceId: null },
+        commerceLayerAuth: { success: false, hasToken: false },
+        orderCreation: { success: false, orderId: null },
+        lineItemCreation: { success: false, lineItemId: null },
+        databaseInsertion: { success: false, bookingId: null },
       },
-      body: JSON.stringify({
-        data: {
-          type: "customers",
-          attributes: {
-            email: customerEmail,
-            metadata: {
-              name: customerName,
-              phone: "+44 7700 900123",
-            },
-          },
-        },
-      }),
-    })
-
-    if (!customerResponse.ok) {
-      const errorText = await customerResponse.text()
-      throw new Error(`Customer creation failed: ${customerResponse.status} - ${errorText}`)
+      errors: [],
     }
 
-    const customerData = await customerResponse.json()
-    const customerId = customerData.data.id
+    // Step 1: Space Mapping
+    console.log("🗺️ Step 1: Space mapping...")
+    const spaceId = SKU_TO_SPACE_MAP[sku as keyof typeof SKU_TO_SPACE_MAP]
+    if (spaceId) {
+      result.steps.spaceMapping.success = true
+      result.steps.spaceMapping.spaceId = spaceId
+      console.log(`✅ Mapped ${sku} to space ${spaceId}`)
+    } else {
+      result.errors.push(`No space mapping found for SKU: ${sku}`)
+      return NextResponse.json(result, { status: 400 })
+    }
 
-    // Create order
-    const orderResponse = await fetch(`${baseUrl}/api/orders`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/vnd.api+json",
-      },
-      body: JSON.stringify({
+    // Step 2: Commerce Layer Authentication - ONLY using NEXT_PUBLIC_CL_ variables
+    console.log("🔑 Step 2: Commerce Layer authentication...")
+    try {
+      const accessToken = await getCommerceLayerAccessToken(
+        process.env.NEXT_PUBLIC_CL_CLIENT_ID!,
+        process.env.NEXT_PUBLIC_CL_CLIENT_SECRET!,
+        process.env.NEXT_PUBLIC_CL_MARKET_ID!,
+        process.env.NEXT_PUBLIC_CL_STOCK_LOCATION_ID,
+      )
+
+      result.steps.commerceLayerAuth.success = true
+      result.steps.commerceLayerAuth.hasToken = !!accessToken
+      console.log("✅ Commerce Layer authentication successful")
+
+      // Step 3: Create Order
+      console.log("📦 Step 3: Creating order...")
+      const orderPayload = {
         data: {
           type: "orders",
           attributes: {
-            metadata: {
-              sku: sku,
-              spaceId: spaceId,
-              bookingDetails: {
-                vehicleReg: "TEST123",
-                vehicleType: "car",
-                startDate: new Date().toISOString().split("T")[0],
-                startTime: "10:00",
-                specialRequests: `Manual test booking for ${sku} at ${new Date().toISOString()}`,
-              },
-            },
+            customer_email: customerEmail,
+            language_code: "en",
+            currency_code: "USD",
           },
           relationships: {
             market: {
               data: {
                 type: "markets",
-                id: marketId,
-              },
-            },
-            customer: {
-              data: {
-                type: "customers",
-                id: customerId,
+                id: process.env.NEXT_PUBLIC_CL_MARKET_ID,
               },
             },
           },
         },
-      }),
-    })
+      }
 
-    if (!orderResponse.ok) {
-      const errorText = await orderResponse.text()
-      throw new Error(`Order creation failed: ${orderResponse.status} - ${errorText}`)
-    }
-
-    const orderData = await orderResponse.json()
-    const orderId = orderData.data.id
-
-    // Create booking in database
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Supabase configuration missing")
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    const { data: booking, error: bookingError } = await supabase
-      .from("bookings")
-      .insert({
-        space_id: spaceId,
-        customer_email: customerEmail,
-        customer_name: customerName,
-        customer_phone: "+44 7700 900123",
-        vehicle_registration: "TEST123",
-        vehicle_type: "car",
-        start_date: new Date().toISOString().split("T")[0],
-        start_time: "10:00",
-        special_requests: `Manual test booking for ${sku} at ${new Date().toISOString()}`,
-        status: "confirmed",
-        sku: sku,
-        commerce_layer_order_id: orderId,
-        commerce_layer_customer_id: customerId,
+      const orderResponse = await fetch(`${process.env.COMMERCE_LAYER_BASE_URL}/api/orders`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/vnd.api+json",
+          Accept: "application/vnd.api+json",
+        },
+        body: JSON.stringify(orderPayload),
       })
-      .select()
-      .single()
 
-    if (bookingError) {
-      throw new Error(`Database booking creation failed: ${bookingError.message}`)
+      if (orderResponse.ok) {
+        const orderData = await orderResponse.json()
+        const orderId = orderData.data.id
+        result.steps.orderCreation.success = true
+        result.steps.orderCreation.orderId = orderId
+        console.log(`✅ Order created: ${orderId}`)
+
+        // Step 4: Add Line Item
+        console.log("📋 Step 4: Adding line item...")
+        const lineItemPayload = {
+          data: {
+            type: "line_items",
+            attributes: {
+              quantity: 1,
+              sku_code: sku,
+            },
+            relationships: {
+              order: {
+                data: {
+                  type: "orders",
+                  id: orderId,
+                },
+              },
+            },
+          },
+        }
+
+        const lineItemResponse = await fetch(`${process.env.COMMERCE_LAYER_BASE_URL}/api/line_items`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/vnd.api+json",
+            Accept: "application/vnd.api+json",
+          },
+          body: JSON.stringify(lineItemPayload),
+        })
+
+        if (lineItemResponse.ok) {
+          const lineItemData = await lineItemResponse.json()
+          const lineItemId = lineItemData.data.id
+          result.steps.lineItemCreation.success = true
+          result.steps.lineItemCreation.lineItemId = lineItemId
+          console.log(`✅ Line item created: ${lineItemId}`)
+
+          // Step 5: Database Insertion
+          console.log("💾 Step 5: Database insertion...")
+          const { data: booking, error: bookingError } = await supabase
+            .from("bookings")
+            .insert({
+              space_id: spaceId,
+              customer_email: customerEmail,
+              customer_name: customerName,
+              start_time: new Date().toISOString(),
+              end_time: new Date(Date.now() + 3600000).toISOString(), // 1 hour later
+              total_amount: 10.0,
+              status: "confirmed",
+              sku: sku,
+              commerce_layer_order_id: orderId,
+              commerce_layer_line_item_id: lineItemId,
+            })
+            .select()
+            .single()
+
+          if (bookingError) {
+            result.errors.push(`Database insertion failed: ${bookingError.message}`)
+          } else {
+            result.steps.databaseInsertion.success = true
+            result.steps.databaseInsertion.bookingId = booking.id
+            console.log(`✅ Booking created: ${booking.id}`)
+          }
+        } else {
+          const lineItemError = await lineItemResponse.text()
+          result.errors.push(`Line item creation failed: ${lineItemResponse.status} ${lineItemError}`)
+        }
+      } else {
+        const orderError = await orderResponse.text()
+        result.errors.push(`Order creation failed: ${orderResponse.status} ${orderError}`)
+      }
+    } catch (authError) {
+      result.errors.push(
+        `Commerce Layer auth failed: ${authError instanceof Error ? authError.message : "Unknown error"}`,
+      )
     }
 
-    const result = {
-      success: true,
-      status: 200,
-      orderData: {
-        orderId: orderId,
-        spaceId: spaceId,
-        customerId: customerId,
-        amount: "10.00",
-        bookingId: booking.id,
-      },
-      bookingRecord: booking,
-      testPayload: {
-        sku,
-        customerName,
-        customerEmail,
-      },
-      timestamp: new Date().toISOString(),
-      message: `✅ Order created successfully! Order ID: ${orderId}, Space ID: ${spaceId}`,
-    }
+    // Overall success
+    result.success =
+      result.steps.spaceMapping.success &&
+      result.steps.commerceLayerAuth.success &&
+      result.steps.orderCreation.success &&
+      result.steps.lineItemCreation.success &&
+      result.steps.databaseInsertion.success
 
+    console.log(`${result.success ? "✅" : "❌"} Manual test completed`)
     return NextResponse.json(result)
   } catch (error) {
-    console.error("Manual test order failed:", error)
+    console.error("❌ Manual test failed:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Manual test failed",
         timestamp: new Date().toISOString(),
       },
       { status: 500 },
