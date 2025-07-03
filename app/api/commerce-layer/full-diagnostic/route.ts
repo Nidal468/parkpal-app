@@ -207,15 +207,16 @@ export async function GET() {
             count: customerData.data.length,
           })
         } else {
+          const errorText = await customerListResponse.text()
           customerTests.push({
             feature: "Customer Listing",
             status: "failed",
-            error: `${customerListResponse.status}`,
+            error: `${customerListResponse.status}: ${errorText}`,
           })
         }
 
-        // Test customer search
-        const customerSearchResponse = await fetch(`${apiBase}/customers?filter[email_eq]=test@example.com`, {
+        // Test customer search with corrected filter syntax
+        const customerSearchResponse = await fetch(`${apiBase}/customers?filter[q][email_eq]=test@example.com`, {
           headers,
         })
         if (customerSearchResponse.ok) {
@@ -224,14 +225,15 @@ export async function GET() {
             status: "success",
           })
         } else {
+          const errorText = await customerSearchResponse.text()
           customerTests.push({
             feature: "Customer Search",
             status: "failed",
-            error: `${customerSearchResponse.status}`,
+            error: `${customerSearchResponse.status}: ${errorText}`,
           })
         }
 
-        // Test customer creation
+        // Test customer creation with proper payload
         const testCustomer = {
           data: {
             type: "customers",
@@ -239,6 +241,7 @@ export async function GET() {
               email: `full-diagnostic-${Date.now()}@example.com`,
               first_name: "Full",
               last_name: "Diagnostic",
+              phone: null,
               metadata: { source: "full_diagnostic_test" },
             },
           },
@@ -268,10 +271,11 @@ export async function GET() {
             // Ignore cleanup errors
           }
         } else {
+          const errorText = await customerCreateResponse.text()
           customerTests.push({
             feature: "Customer Creation",
             status: "failed",
-            error: `${customerCreateResponse.status}`,
+            error: `${customerCreateResponse.status}: ${errorText}`,
           })
         }
 

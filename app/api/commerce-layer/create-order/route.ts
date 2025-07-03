@@ -45,12 +45,16 @@ export async function POST(request: NextRequest) {
 
     // Step 1: Search for existing customer (Integration app has full permissions)
     console.log("👤 Searching for existing customer (Integration app)...")
-    const customerSearchUrl = `${apiBase}/customers?filter[email_eq]=${encodeURIComponent(customerDetails.email)}`
+    // Fix the filter syntax - use proper Commerce Layer filter format
+    const customerSearchUrl = `${apiBase}/customers?filter[q][email_eq]=${encodeURIComponent(customerDetails.email)}`
     console.log("🔍 Customer search URL:", customerSearchUrl)
 
     const customersResponse = await fetch(customerSearchUrl, {
       method: "GET",
-      headers,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/vnd.api+json",
+      },
     })
 
     let customer = null
@@ -99,7 +103,8 @@ export async function POST(request: NextRequest) {
             customer = updatedCustomerData.data
             console.log("✅ Updated existing customer with latest booking details")
           } else {
-            console.warn("⚠️ Could not update customer, proceeding with existing data")
+            const updateError = await updateResponse.text()
+            console.warn("⚠️ Could not update customer:", updateResponse.status, updateError)
           }
         } catch (updateError) {
           console.warn("⚠️ Customer update failed, proceeding with existing data:", updateError)
@@ -110,7 +115,8 @@ export async function POST(request: NextRequest) {
     } else {
       const errorText = await customersResponse.text()
       console.error("❌ Customer search failed:", customersResponse.status, errorText)
-      throw new Error(`Customer search failed: ${customersResponse.status} ${errorText}`)
+      // Don't throw error, continue to create customer
+      console.log("🔄 Continuing to customer creation despite search failure")
     }
 
     // Step 2: Create customer if not found (Integration app can create customers)
@@ -126,7 +132,7 @@ export async function POST(request: NextRequest) {
             email: customerDetails.email,
             first_name: customerDetails.name?.split(" ")[0] || "Customer",
             last_name: customerDetails.name?.split(" ").slice(1).join(" ") || "",
-            phone: customerDetails.phone || "",
+            phone: customerDetails.phone || null,
             metadata: {
               vehicle_registration: bookingDetails?.vehicleReg || "",
               vehicle_type: bookingDetails?.vehicleType || "car",
@@ -152,6 +158,15 @@ export async function POST(request: NextRequest) {
       if (!customerResponse.ok) {
         const errorText = await customerResponse.text()
         console.error("❌ Customer creation failed:", customerResponse.status, errorText)
+
+        // Try to parse the error for more details
+        try {
+          const errorData = JSON.parse(errorText)
+          console.error("❌ Customer creation error details:", errorData)
+        } catch {
+          // Error text is not JSON
+        }
+
         throw new Error(`Customer creation failed: ${customerResponse.status} ${errorText}`)
       }
 
@@ -213,6 +228,15 @@ export async function POST(request: NextRequest) {
     if (!orderResponse.ok) {
       const errorText = await orderResponse.text()
       console.error("❌ Order creation failed:", orderResponse.status, errorText)
+
+      // Try to parse the error for more details
+      try {
+        const errorData = JSON.parse(errorText)
+        console.error("❌ Order creation error details:", errorData)
+      } catch {
+        // Error text is not JSON
+      }
+
       throw new Error(`Order creation failed: ${orderResponse.status} ${errorText}`)
     }
 
@@ -260,6 +284,15 @@ export async function POST(request: NextRequest) {
     if (!lineItemResponse.ok) {
       const errorText = await lineItemResponse.text()
       console.error("❌ Line item creation failed:", lineItemResponse.status, errorText)
+
+      // Try to parse the error for more details
+      try {
+        const errorData = JSON.parse(errorText)
+        console.error("❌ Line item creation error details:", errorData)
+      } catch {
+        // Error text is not JSON
+      }
+
       throw new Error(`Line item creation failed: ${lineItemResponse.status} ${errorText}`)
     }
 
@@ -273,7 +306,10 @@ export async function POST(request: NextRequest) {
 
     const updatedOrderResponse = await fetch(orderFetchUrl, {
       method: "GET",
-      headers,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/vnd.api+json",
+      },
     })
 
     if (!updatedOrderResponse.ok) {
@@ -427,4 +463,9 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     )
   }
+}
+
+// Ensure GET method returns 405 Method Not Allowed
+export async function GET() {
+  return NextResponse.json({ error: "Method not allowed. Use POST to create orders." }, { status: 405 })
 }
