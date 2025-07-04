@@ -36,10 +36,32 @@ export async function getCommerceLayerAccessToken(
       body: JSON.stringify(tokenPayload),
     })
 
+    console.log("📥 Token response status:", tokenResponse.status)
+    console.log("📥 Token response headers:", Object.fromEntries(tokenResponse.headers.entries()))
+
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
       console.error("❌ Token request failed:", tokenResponse.status, errorText)
-      throw new Error(`Token request failed: ${tokenResponse.status} ${errorText}`)
+
+      // Try to parse error response
+      let errorDetails
+      try {
+        errorDetails = JSON.parse(errorText)
+        console.error("❌ Parsed error details:", JSON.stringify(errorDetails, null, 2))
+      } catch {
+        console.error("❌ Raw error text:", errorText)
+      }
+
+      // Provide specific error messages for common issues
+      if (tokenResponse.status === 403) {
+        throw new Error(
+          `Authentication failed (403): Invalid client credentials or scope. Check your Integration App settings in Commerce Layer dashboard.`,
+        )
+      } else if (tokenResponse.status === 401) {
+        throw new Error(`Unauthorized (401): Invalid client ID or secret.`)
+      } else {
+        throw new Error(`Token request failed: ${tokenResponse.status} ${errorText}`)
+      }
     }
 
     const tokenData = await tokenResponse.json()
