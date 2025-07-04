@@ -3,11 +3,15 @@
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { MapPin, Calendar, Globe, CheckCircle } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { Send, MapPin, Calendar, Clock, ExternalLink, Globe, CheckCircle } from "lucide-react"
+import { DeployedParkpalBookingModal } from "@/components/deployed-parkpal-booking-modal"
+import { DEMO_STORE_CONFIG } from "@/lib/commerce-layer-config"
 import type { ParkingSpace } from "@/lib/supabase-types"
 import { toast } from "@/hooks/use-toast"
 
@@ -73,7 +77,7 @@ I can help you find and book parking spaces. Where would you like to park?`,
       console.log("🔍 Checking deployed backend connection...")
       const response = await fetch("/api/parkpal/verify-deployed-backend")
       const result = await response.json()
-      
+
       setBackendStatus({
         connected: result.deployedBackend?.connected || false,
         verified: result.results?.integrationStatus === "READY",
@@ -255,12 +259,7 @@ I can help you find and book parking spaces. Where would you like to park?`,
               )}
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={checkBackendConnection}
-            className="text-xs bg-transparent"
-          >
+          <Button variant="outline" size="sm" onClick={checkBackendConnection} className="text-xs bg-transparent">
             Test Connection
           </Button>
         </div>
@@ -288,4 +287,118 @@ I can help you find and book parking spaces. Where would you like to park?`,
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
                         <span>
-                          {message.metadata.selectedDates.\
+                          {message.metadata.selectedDates.from?.toLocaleDateString()} -{" "}
+                          {message.metadata.selectedDates.to?.toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {message.metadata?.selectedTime && (
+                    <div className="mt-1 p-2 bg-white/20 rounded text-xs">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        <span>Time: {message.metadata.selectedTime}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 px-1">
+                  {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+
+              <Avatar className={`w-6 h-6 ${message.role === "user" ? "order-1 ml-2" : "order-2 mr-2"}`}>
+                {message.role === "user" ? (
+                  <AvatarFallback className="bg-gray-300 text-gray-700 text-xs">U</AvatarFallback>
+                ) : (
+                  <>
+                    <AvatarImage src="/parkpal-logo-chat.png" alt="Parkpal" />
+                    <AvatarFallback className="bg-[#9ef01a] text-black text-xs">PP</AvatarFallback>
+                  </>
+                )}
+              </Avatar>
+            </div>
+          ))}
+
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-3">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.1s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.2s" }}
+                  ></div>
+                </div>
+                <span className="text-xs text-gray-500">Parkpal is thinking...</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      <Separator />
+
+      {/* Input */}
+      <div className="p-4 bg-white">
+        <div className="flex gap-2">
+          <Input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Ask about parking spaces, dates, or locations..."
+            className="flex-1"
+            disabled={isLoading}
+          />
+          <Button
+            onClick={handleSendMessage}
+            disabled={!input.trim() || isLoading}
+            className="bg-[#9ef01a] hover:bg-[#8ed617] text-black"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Backend Status Footer */}
+        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Globe className="w-3 h-3" />
+            <span>Deployed Backend: {DEMO_STORE_CONFIG.BASE_URL}</span>
+            {backendStatus.verified && (
+              <Badge variant="outline" className="text-xs px-1 py-0">
+                Verified
+              </Badge>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-auto p-1"
+            onClick={() => window.open(DEMO_STORE_CONFIG.BASE_URL, "_blank")}
+          >
+            <ExternalLink className="w-3 h-3 mr-1" />
+            View Backend
+          </Button>
+        </div>
+      </div>
+
+      {/* Booking Modal */}
+      <DeployedParkpalBookingModal
+        space={selectedSpace}
+        isOpen={isBookingModalOpen}
+        onClose={() => {
+          setIsBookingModalOpen(false)
+          setSelectedSpace(null)
+        }}
+        selectedDates={bookingContext.selectedDates}
+        selectedTime={bookingContext.selectedTime}
+      />
+    </div>
+  )
+}
