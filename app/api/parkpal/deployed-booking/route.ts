@@ -4,10 +4,10 @@ import { createClient } from "@supabase/supabase-js"
 
 export async function POST(request: Request) {
   try {
-    const bookingData: ParkpalBookingRequest = await request.json()
-
     console.log("🚗 Processing Parkpal booking via deployed demo-store-core...")
     console.log("🌐 Backend: park-pal-core-website-prnz.vercel.app")
+
+    const bookingData: ParkpalBookingRequest = await request.json()
 
     // Validate required fields
     const requiredFields = [
@@ -21,16 +21,45 @@ export async function POST(request: Request) {
       "endTime",
     ]
 
-    for (const field of requiredFields) {
-      if (!bookingData[field as keyof ParkpalBookingRequest]) {
-        return NextResponse.json({ error: `Missing required field: ${field}` }, { status: 400 })
-      }
+    const missingFields = requiredFields.filter((field) => !bookingData[field as keyof ParkpalBookingRequest])
+
+    if (missingFields.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Missing required fields: ${missingFields.join(", ")}`,
+          missingFields,
+          receivedData: Object.keys(bookingData),
+        },
+        { status: 400 },
+      )
     }
 
     // Initialize deployed demo store integration
     const deployedDemoStore = new DeployedDemoStoreIntegration()
 
-    // Create booking through your deployed demo-store-core
+    // Get integration status first
+    console.log("🔍 Checking integration status...")
+    const status = await deployedDemoStore.getStatus()
+
+    console.log("📊 Integration status:", {
+      backend: status.backend.connected ? "✅ Connected" : "❌ Disconnected",
+      commerceLayer: status.commerceLayer.authenticated ? "✅ Authenticated" : "❌ Failed",
+      skus: status.skus.verified ? "✅ Verified" : "❌ Failed",
+      overall: status.overall,
+    })
+
+    if (status.overall === "FAILED") {
+      return NextResponse.json(
+        {
+          error: "Integration not ready",
+          status,
+          message: "Commerce Layer authentication or SKU verification failed",
+        },
+        { status: 503 },
+      )
+    }
+
+    // Create booking through Commerce Layer (direct approach due to backend issues)
     const order = await deployedDemoStore.createParkingBooking({
       ...bookingData,
       startDate: new Date(bookingData.startDate),
@@ -38,7 +67,7 @@ export async function POST(request: Request) {
       quantity: bookingData.quantity || 1,
     })
 
-    console.log("✅ Deployed demo store order created:", order.id)
+    console.log("✅ Order created:", order.id)
 
     // Store in Supabase for our records (optional)
     let supabaseBookingId = null
@@ -88,10 +117,20 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "Parkpal booking created via deployed demo-store-core",
-      backend: {
-        url: "park-pal-core-website-prnz.vercel.app",
-        connected: true,
+      message: "Parkpal booking created successfully",
+      integration: {
+        backend: {
+          url: "park-pal-core-website-prnz.vercel.app",
+          connected: status.backend.connected,
+          status: status.backend.connected ? "Connected" : "Using fallback",
+        },
+        commerceLayer: {
+          authenticated: status.commerceLayer.authenticated,
+        },
+        skus: {
+          verified: status.skus.verified,
+        },
+        overall: status.overall,
       },
       booking: {
         id: supabaseBookingId,
@@ -107,14 +146,19 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("❌ Deployed demo store booking creation failed:", error)
+
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+    const errorStack = error instanceof Error ? error.stack : undefined
+
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Deployed demo store booking creation failed",
+        error: errorMessage,
         backend: {
           url: "park-pal-core-website-prnz.vercel.app",
           connected: false,
         },
-        stack: error instanceof Error ? error.stack : undefined,
+        details: errorStack,
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )
@@ -129,7 +173,7 @@ export async function GET() {
       url: "park-pal-core-website-prnz.vercel.app",
       repo: "https://github.com/MRPEATWORLWIDE/park-pal-core",
     },
-    integration: "Uses your deployed demo-store-core backend",
+    integration: "Uses your deployed demo-store-core backend with Commerce Layer fallback",
     requiredFields: [
       "customerName",
       "customerEmail",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { DeployedDemoStoreIntegration } from "@/lib/deployed-demo-store-integration"
+import { testCommerceLayerConnection } from "@/lib/commerce-layer-auth"
 import { CL_CONFIG, PARKPAL_SKUS, DEMO_STORE_CONFIG } from "@/lib/commerce-layer-config"
 
 export async function GET() {
@@ -9,68 +10,84 @@ export async function GET() {
 
     const deployedDemoStore = new DeployedDemoStoreIntegration()
 
-    // Test 1: Backend connection
-    console.log("📡 Testing backend connection...")
-    const backendConnected = await deployedDemoStore.testBackendConnection()
+    // Get comprehensive status
+    const status = await deployedDemoStore.getStatus()
 
-    // Test 2: Backend status
-    console.log("📊 Getting backend status...")
-    const backendStatus = await deployedDemoStore.getBackendStatus()
+    // Test Commerce Layer connection separately
+    const clConnectionTest = await testCommerceLayerConnection()
 
-    // Test 3: Verify SKUs exist
-    console.log("📦 Testing SKU verification...")
-    const skusValid = await deployedDemoStore.verifyParkpalSKUs()
+    // Check environment variables
+    const envCheck = {
+      NEXT_PUBLIC_CL_CLIENT_ID: !!process.env.NEXT_PUBLIC_CL_CLIENT_ID,
+      NEXT_PUBLIC_CL_CLIENT_SECRET: !!(
+        process.env.NEXT_PUBLIC_CL_CLIENT_SECRET || process.env.COMMERCE_LAYER_CLIENT_SECRET
+      ),
+      NEXT_PUBLIC_CL_MARKET_ID: !!process.env.NEXT_PUBLIC_CL_MARKET_ID,
+      NEXT_PUBLIC_CL_STOCK_LOCATION_ID: !!process.env.NEXT_PUBLIC_CL_STOCK_LOCATION_ID,
+      COMMERCE_LAYER_BASE_URL: !!process.env.COMMERCE_LAYER_BASE_URL,
+      NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    }
 
-    // Test 4: Check configuration
     const configCheck = {
       baseUrl: CL_CONFIG.BASE_URL,
-      hasClientId: !!CL_CONFIG.CLIENT_ID,
-      hasClientSecret: !!CL_CONFIG.CLIENT_SECRET,
-      hasMarketId: !!CL_CONFIG.MARKET_ID,
+      clientIdPresent: !!CL_CONFIG.CLIENT_ID,
+      clientSecretPresent: !!CL_CONFIG.CLIENT_SECRET,
+      marketIdPresent: !!CL_CONFIG.MARKET_ID,
+      stockLocationIdPresent: !!CL_CONFIG.STOCK_LOCATION_ID,
       scope: CL_CONFIG.SCOPE,
       deployedBackend: DEMO_STORE_CONFIG.BASE_URL,
       deployedApiBase: DEMO_STORE_CONFIG.API_BASE,
     }
 
-    // Test 5: Test access token generation
-    let tokenTest = false
-    try {
-      const integration = new DeployedDemoStoreIntegration()
-      await (integration as any).getAccessToken()
-      tokenTest = true
-      console.log("✅ Access token generation successful")
-    } catch (error) {
-      console.error("❌ Access token generation failed:", error)
+    // Determine next steps
+    const nextSteps = []
+    if (!status.commerceLayer.authenticated) {
+      nextSteps.push("❌ Fix Commerce Layer authentication - check CLIENT_ID and CLIENT_SECRET")
     }
-
-    const integrationStatus = backendConnected && skusValid && tokenTest ? "READY" : "NEEDS_SETUP"
+    if (!status.skus.verified) {
+      nextSteps.push("❌ Verify SKUs exist in Commerce Layer dashboard")
+    }
+    if (!status.backend.connected) {
+      nextSteps.push("⚠️ Backend connection failed - using Commerce Layer fallback")
+    }
+    if (status.overall === "READY") {
+      nextSteps.push("✅ Integration is ready!")
+      nextSteps.push("Test booking via /api/parkpal/deployed-booking")
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Deployed demo-store-core integration verification",
+      message: "Deployed demo-store-core integration verification complete",
+      timestamp: new Date().toISOString(),
       deployedBackend: {
         url: DEMO_STORE_CONFIG.BASE_URL,
         apiBase: DEMO_STORE_CONFIG.API_BASE,
-        connected: backendConnected,
-        status: backendStatus,
+        connected: status.backend.connected,
+        error: status.backend.error,
       },
-      results: {
-        backendConnected,
-        skusValid,
-        tokenTest,
-        configCheck,
+      commerceLayer: {
+        authenticated: status.commerceLayer.authenticated,
+        connectionTest: clConnectionTest,
+        error: status.commerceLayer.error,
+      },
+      skus: {
+        verified: status.skus.verified,
+        results: status.skus.results,
+        errors: status.skus.errors,
         parkpalSKUs: PARKPAL_SKUS,
-        integrationStatus,
       },
-      nextSteps:
-        integrationStatus === "READY"
-          ? ["✅ Integration is ready!", "Test booking via /api/parkpal/deployed-booking"]
-          : [
-              "❌ Setup required:",
-              !backendConnected && "- Check deployed backend is accessible",
-              !skusValid && "- Verify SKUs exist in Commerce Layer",
-              !tokenTest && "- Check Commerce Layer credentials",
-            ].filter(Boolean),
+      environment: {
+        variables: envCheck,
+        config: configCheck,
+      },
+      integration: {
+        status: status.overall,
+        ready: status.overall === "READY",
+        partial: status.overall === "PARTIAL",
+        failed: status.overall === "FAILED",
+      },
+      nextSteps,
     })
   } catch (error) {
     console.error("❌ Deployed demo store verification failed:", error)
@@ -82,6 +99,7 @@ export async function GET() {
           connected: false,
         },
         stack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )

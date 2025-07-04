@@ -49,11 +49,14 @@ export class DeployedDemoStoreIntegration {
 
   private async getAccessToken(): Promise<string> {
     if (!this.accessToken) {
-      this.accessToken = await getCommerceLayerAccessToken(
-        CL_CONFIG.CLIENT_ID,
-        CL_CONFIG.CLIENT_SECRET,
-        CL_CONFIG.SCOPE,
-      )
+      const clientId = process.env.NEXT_PUBLIC_CL_CLIENT_ID
+      const clientSecret = process.env.NEXT_PUBLIC_CL_CLIENT_SECRET || process.env.COMMERCE_LAYER_CLIENT_SECRET
+
+      if (!clientId || !clientSecret) {
+        throw new Error("Missing Commerce Layer credentials in environment variables")
+      }
+
+      this.accessToken = await getCommerceLayerAccessToken(clientId, clientSecret, CL_CONFIG.SCOPE)
     }
     return this.accessToken
   }
@@ -63,102 +66,132 @@ export class DeployedDemoStoreIntegration {
 
     console.log(`🌐 Making request to deployed backend: ${url}`)
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...options.headers,
-      },
-    })
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          // Add CORS headers
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          ...options.headers,
+        },
+      })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`❌ Backend request failed: ${response.status} - ${errorText}`)
-      throw new Error(`Deployed demo store API error: ${response.status} - ${errorText}`)
+      console.log(`📡 Backend response status: ${response.status}`)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`❌ Backend request failed: ${response.status} - ${errorText}`)
+
+        // Handle specific error cases
+        if (response.status === 401) {
+          throw new Error(`Backend authentication failed (401): Check your deployed backend credentials`)
+        } else if (response.status === 404) {
+          throw new Error(`Backend endpoint not found (404): ${endpoint} may not exist in your deployed backend`)
+        } else if (response.status === 500) {
+          throw new Error(`Backend server error (500): Internal error in your deployed backend`)
+        } else {
+          throw new Error(`Backend API error (${response.status}): ${errorText}`)
+        }
+      }
+
+      const data = await response.json()
+      console.log("✅ Backend request successful")
+      return data
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error(`❌ Backend request error: ${error.message}`)
+        throw error
+      } else {
+        console.error(`❌ Unknown backend error:`, error)
+        throw new Error(`Backend request failed: ${String(error)}`)
+      }
     }
-
-    return response.json()
   }
 
   private async makeCommerceLayerRequest(endpoint: string, options: RequestInit = {}) {
-    const token = await this.getAccessToken()
+    try {
+      const token = await this.getAccessToken()
 
-    const response = await fetch(`${CL_CONFIG.BASE_URL}/api${endpoint}`, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/vnd.api+json",
-        Accept: "application/vnd.api+json",
-        ...options.headers,
-      },
-    })
+      const response = await fetch(`${CL_CONFIG.BASE_URL}/api${endpoint}`, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/vnd.api+json",
+          Accept: "application/vnd.api+json",
+          ...options.headers,
+        },
+      })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Commerce Layer API error: ${response.status} - ${errorText}`)
+      console.log(`📡 Commerce Layer response status: ${response.status}`)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`❌ Commerce Layer request failed: ${response.status} - ${errorText}`)
+        throw new Error(`Commerce Layer API error (${response.status}): ${errorText}`)
+      }
+
+      return response.json()
+    } catch (error) {
+      console.error("❌ Commerce Layer request error:", error)
+      throw error
     }
-
-    return response.json()
   }
 
   // Test connection to your deployed backend
-  async testBackendConnection(): Promise<boolean> {
+  async testBackendConnection(): Promise<{
+    connected: boolean
+    status?: any
+    error?: string
+  }> {
     try {
       console.log("🔍 Testing connection to deployed demo-store-core...")
+      console.log("🌐 Backend URL:", DEMO_STORE_CONFIG.BASE_URL)
 
-      // Try to fetch the homepage or a health check endpoint
-      const response = await fetch(DEMO_STORE_CONFIG.BASE_URL)
+      // Try to fetch the homepage first
+      const response = await fetch(DEMO_STORE_CONFIG.BASE_URL, {
+        method: "GET",
+        headers: {
+          Accept: "text/html,application/json",
+        },
+      })
+
+      console.log(`📡 Homepage response: ${response.status}`)
 
       if (response.ok) {
         console.log("✅ Successfully connected to deployed backend")
-        return true
+        return {
+          connected: true,
+          status: {
+            url: DEMO_STORE_CONFIG.BASE_URL,
+            status: response.status,
+            statusText: response.statusText,
+          },
+        }
       } else {
         console.error("❌ Backend connection failed:", response.status)
-        return false
+        return {
+          connected: false,
+          error: `HTTP ${response.status}: ${response.statusText}`,
+        }
       }
     } catch (error) {
       console.error("❌ Backend connection error:", error)
-      return false
+      return {
+        connected: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
     }
   }
 
-  // Create customer via your deployed backend
-  async createCustomerViaBackend(bookingData: ParkpalBookingRequest): Promise<string> {
-    console.log("👤 Creating customer via deployed demo-store-core...")
+  // Create customer via Commerce Layer (direct approach due to backend issues)
+  async createCustomerDirect(bookingData: ParkpalBookingRequest): Promise<string> {
+    console.log("👤 Creating customer via Commerce Layer directly...")
 
     try {
-      // First try using your backend's customer creation endpoint
-      const customerPayload = {
-        email: bookingData.customerEmail,
-        firstName: bookingData.customerName.split(" ")[0] || bookingData.customerName,
-        lastName: bookingData.customerName.split(" ").slice(1).join(" ") || "",
-        metadata: {
-          source: "parkpal_booking",
-          vehicleRegistration: bookingData.vehicleRegistration,
-          vehicleType: bookingData.vehicleType,
-          phone: bookingData.customerPhone,
-          bookingStartDate: bookingData.startDate.toISOString(),
-          bookingEndDate: bookingData.endDate.toISOString(),
-          bookingStartTime: bookingData.startTime,
-          bookingEndTime: bookingData.endTime,
-          specialRequests: bookingData.specialRequests || "",
-          spaceId: bookingData.spaceId,
-          location: bookingData.location,
-        },
-      }
-
-      const response = await this.makeBackendRequest(DEMO_STORE_ENDPOINTS.CUSTOMERS, {
-        method: "POST",
-        body: JSON.stringify(customerPayload),
-      })
-
-      console.log("✅ Customer created via backend:", response.id || response.data?.id)
-      return response.id || response.data?.id
-    } catch (backendError) {
-      console.warn("⚠️ Backend customer creation failed, falling back to direct Commerce Layer...")
-
-      // Fallback to direct Commerce Layer API
       const customerPayload = {
         data: {
           type: "customers",
@@ -167,17 +200,17 @@ export class DeployedDemoStoreIntegration {
             first_name: bookingData.customerName.split(" ")[0] || bookingData.customerName,
             last_name: bookingData.customerName.split(" ").slice(1).join(" ") || "",
             metadata: {
-              source: "parkpal_booking_fallback",
+              source: "parkpal_booking",
               vehicle_registration: bookingData.vehicleRegistration,
               vehicle_type: bookingData.vehicleType,
-              phone: bookingData.customerPhone,
+              phone: bookingData.customerPhone || "",
               booking_start_date: bookingData.startDate.toISOString(),
               booking_end_date: bookingData.endDate.toISOString(),
               booking_start_time: bookingData.startTime,
               booking_end_time: bookingData.endTime,
               special_requests: bookingData.specialRequests || "",
-              space_id: bookingData.spaceId,
-              location: bookingData.location,
+              space_id: bookingData.spaceId || "",
+              location: bookingData.location || "",
             },
           },
         },
@@ -188,79 +221,22 @@ export class DeployedDemoStoreIntegration {
         body: JSON.stringify(customerPayload),
       })
 
-      console.log("✅ Customer created via Commerce Layer fallback:", response.data.id)
+      console.log("✅ Customer created via Commerce Layer:", response.data.id)
       return response.data.id
+    } catch (error) {
+      console.error("❌ Customer creation failed:", error)
+      throw error
     }
   }
 
-  // Create order via your deployed backend
-  async createOrderViaBackend(customerId: string, bookingData: ParkpalBookingRequest): Promise<DeployedDemoStoreOrder> {
-    console.log("📦 Creating order via deployed demo-store-core...")
+  // Create order via Commerce Layer (direct approach)
+  async createOrderDirect(customerId: string, bookingData: ParkpalBookingRequest): Promise<DeployedDemoStoreOrder> {
+    console.log("📦 Creating order via Commerce Layer directly...")
 
     const skuData = PARKPAL_SKUS[bookingData.sku]
 
     try {
-      // Try using your backend's order creation endpoint
-      const orderPayload = {
-        customerId: customerId,
-        marketId: CL_CONFIG.MARKET_ID,
-        currencyCode: "USD",
-        languageCode: "en",
-        lineItems: [
-          {
-            skuCode: skuData.code,
-            quantity: bookingData.quantity,
-          },
-        ],
-        metadata: {
-          bookingType: "parking",
-          sku: bookingData.sku,
-          skuCode: skuData.code,
-          vehicleRegistration: bookingData.vehicleRegistration,
-          vehicleType: bookingData.vehicleType,
-          startDate: bookingData.startDate.toISOString(),
-          endDate: bookingData.endDate.toISOString(),
-          startTime: bookingData.startTime,
-          endTime: bookingData.endTime,
-          spaceId: bookingData.spaceId,
-          location: bookingData.location,
-          specialRequests: bookingData.specialRequests || "",
-          source: "parkpal_chat_booking",
-        },
-      }
-
-      const response = await this.makeBackendRequest(DEMO_STORE_ENDPOINTS.ORDERS, {
-        method: "POST",
-        body: JSON.stringify(orderPayload),
-      })
-
-      const orderId = response.id || response.data?.id
-      console.log("✅ Order created via backend:", orderId)
-
-      // Generate checkout URL using your deployed backend
-      const checkoutUrl = `${DEMO_STORE_CONFIG.BASE_URL}/checkout/${orderId}`
-
-      return {
-        id: orderId,
-        customerId: customerId,
-        status: response.status || response.data?.attributes?.status || "pending",
-        total: (response.total || response.data?.attributes?.total_amount_cents || 0) / 100,
-        currency: response.currency || response.data?.attributes?.currency_code || "USD",
-        checkoutUrl: checkoutUrl,
-        paymentUrl: checkoutUrl,
-        lineItems: [
-          {
-            id: response.lineItems?.[0]?.id || "line-item-1",
-            skuCode: skuData.code,
-            quantity: bookingData.quantity,
-            unitAmount: skuData.price,
-          },
-        ],
-      }
-    } catch (backendError) {
-      console.warn("⚠️ Backend order creation failed, falling back to direct Commerce Layer...")
-
-      // Fallback to direct Commerce Layer API
+      // Step 1: Create order
       const orderPayload = {
         data: {
           type: "orders",
@@ -277,10 +253,10 @@ export class DeployedDemoStoreIntegration {
               end_date: bookingData.endDate.toISOString(),
               start_time: bookingData.startTime,
               end_time: bookingData.endTime,
-              space_id: bookingData.spaceId,
-              location: bookingData.location,
+              space_id: bookingData.spaceId || "",
+              location: bookingData.location || "",
               special_requests: bookingData.specialRequests || "",
-              source: "parkpal_chat_booking_fallback",
+              source: "parkpal_chat_booking",
             },
           },
           relationships: {
@@ -306,8 +282,9 @@ export class DeployedDemoStoreIntegration {
       })
 
       const orderId = orderResponse.data.id
+      console.log("✅ Order created:", orderId)
 
-      // Add line item
+      // Step 2: Add line item
       const lineItemPayload = {
         data: {
           type: "line_items",
@@ -331,7 +308,11 @@ export class DeployedDemoStoreIntegration {
         body: JSON.stringify(lineItemPayload),
       })
 
-      console.log("✅ Order created via Commerce Layer fallback:", orderId)
+      console.log("✅ Line item added:", lineItemResponse.data.id)
+
+      // Generate checkout URLs
+      const deployedCheckoutUrl = `${DEMO_STORE_CONFIG.BASE_URL}/checkout/${orderId}`
+      const commerceLayerCheckoutUrl = `${CL_CONFIG.BASE_URL.replace("/api", "")}/checkout/${orderId}`
 
       return {
         id: orderId,
@@ -339,8 +320,8 @@ export class DeployedDemoStoreIntegration {
         status: orderResponse.data.attributes.status,
         total: orderResponse.data.attributes.total_amount_cents / 100,
         currency: orderResponse.data.attributes.currency_code,
-        checkoutUrl: `${DEMO_STORE_CONFIG.BASE_URL}/checkout/${orderId}`,
-        paymentUrl: `${CL_CONFIG.BASE_URL.replace("/api", "")}/checkout/${orderId}`,
+        checkoutUrl: deployedCheckoutUrl,
+        paymentUrl: commerceLayerCheckoutUrl,
         lineItems: [
           {
             id: lineItemResponse.data.id,
@@ -350,13 +331,16 @@ export class DeployedDemoStoreIntegration {
           },
         ],
       }
+    } catch (error) {
+      console.error("❌ Order creation failed:", error)
+      throw error
     }
   }
 
-  // Main booking creation method using your deployed backend
+  // Main booking creation method
   async createParkingBooking(bookingData: ParkpalBookingRequest): Promise<DeployedDemoStoreOrder> {
-    console.log("🚗 Creating Parkpal booking via deployed demo-store-core...")
-    console.log(`🌐 Backend URL: ${DEMO_STORE_CONFIG.BASE_URL}`)
+    console.log("🚗 Creating Parkpal booking...")
+    console.log(`🌐 Target backend: ${DEMO_STORE_CONFIG.BASE_URL}`)
     console.log("📋 Booking data:", {
       sku: bookingData.sku,
       customer: bookingData.customerEmail,
@@ -367,18 +351,19 @@ export class DeployedDemoStoreIntegration {
 
     try {
       // Test backend connection first
-      const backendConnected = await this.testBackendConnection()
-      if (!backendConnected) {
-        console.warn("⚠️ Backend connection failed, will use fallback methods")
+      const backendTest = await this.testBackendConnection()
+      if (!backendTest.connected) {
+        console.warn("⚠️ Backend connection failed, using direct Commerce Layer approach")
+        console.warn("Backend error:", backendTest.error)
       }
 
-      // Step 1: Create customer
-      const customerId = await this.createCustomerViaBackend(bookingData)
+      // Step 1: Create customer (using direct Commerce Layer due to backend issues)
+      const customerId = await this.createCustomerDirect(bookingData)
 
-      // Step 2: Create order with line items
-      const order = await this.createOrderViaBackend(customerId, bookingData)
+      // Step 2: Create order (using direct Commerce Layer)
+      const order = await this.createOrderDirect(customerId, bookingData)
 
-      console.log("✅ Parkpal booking created successfully via deployed backend!")
+      console.log("✅ Parkpal booking created successfully!")
       console.log("🔗 Checkout URL:", order.checkoutUrl)
 
       return order
@@ -389,42 +374,110 @@ export class DeployedDemoStoreIntegration {
   }
 
   // Verify SKUs exist in Commerce Layer
-  async verifyParkpalSKUs(): Promise<boolean> {
+  async verifyParkpalSKUs(): Promise<{
+    success: boolean
+    results: Record<string, any>
+    errors: string[]
+  }> {
     console.log("🔍 Verifying Parkpal SKUs in Commerce Layer...")
+
+    const results: Record<string, any> = {}
+    const errors: string[] = []
 
     try {
       for (const [key, sku] of Object.entries(PARKPAL_SKUS)) {
-        const response = await this.makeCommerceLayerRequest(`/skus/${sku.id}`)
-        console.log(`✅ SKU ${key} (${sku.code}) verified:`, response.data.attributes.name)
+        try {
+          const response = await this.makeCommerceLayerRequest(`/skus/${sku.id}`)
+          results[key] = {
+            id: sku.id,
+            code: sku.code,
+            name: response.data.attributes.name,
+            verified: true,
+          }
+          console.log(`✅ SKU ${key} (${sku.code}) verified:`, response.data.attributes.name)
+        } catch (error) {
+          const errorMsg = `SKU ${key} (${sku.id}) verification failed: ${error instanceof Error ? error.message : String(error)}`
+          errors.push(errorMsg)
+          results[key] = {
+            id: sku.id,
+            code: sku.code,
+            verified: false,
+            error: errorMsg,
+          }
+          console.error(`❌ ${errorMsg}`)
+        }
       }
-      return true
+
+      return {
+        success: errors.length === 0,
+        results,
+        errors,
+      }
     } catch (error) {
       console.error("❌ SKU verification failed:", error)
-      return false
+      return {
+        success: false,
+        results,
+        errors: [error instanceof Error ? error.message : String(error)],
+      }
     }
   }
 
-  // Get backend status and info
-  async getBackendStatus(): Promise<any> {
+  // Get comprehensive status
+  async getStatus(): Promise<{
+    backend: {
+      connected: boolean
+      url: string
+      error?: string
+    }
+    commerceLayer: {
+      authenticated: boolean
+      error?: string
+    }
+    skus: {
+      verified: boolean
+      results: Record<string, any>
+      errors: string[]
+    }
+    overall: "READY" | "PARTIAL" | "FAILED"
+  }> {
+    console.log("📊 Getting comprehensive integration status...")
+
+    // Test backend
+    const backendTest = await this.testBackendConnection()
+
+    // Test Commerce Layer authentication
+    let commerceLayerTest = { authenticated: false, error: "" }
     try {
-      console.log("📊 Getting deployed backend status...")
-
-      // Try to get backend info
-      const response = await this.makeBackendRequest("/health", {
-        method: "GET",
-      })
-
-      return {
-        connected: true,
-        url: DEMO_STORE_CONFIG.BASE_URL,
-        status: response,
-      }
+      await this.getAccessToken()
+      commerceLayerTest = { authenticated: true, error: "" }
     } catch (error) {
-      return {
-        connected: false,
-        url: DEMO_STORE_CONFIG.BASE_URL,
-        error: error instanceof Error ? error.message : "Unknown error",
+      commerceLayerTest = {
+        authenticated: false,
+        error: error instanceof Error ? error.message : String(error),
       }
+    }
+
+    // Test SKUs
+    const skuTest = await this.verifyParkpalSKUs()
+
+    // Determine overall status
+    let overall: "READY" | "PARTIAL" | "FAILED" = "FAILED"
+    if (commerceLayerTest.authenticated && skuTest.success) {
+      overall = backendTest.connected ? "READY" : "PARTIAL"
+    } else if (commerceLayerTest.authenticated || skuTest.success) {
+      overall = "PARTIAL"
+    }
+
+    return {
+      backend: {
+        connected: backendTest.connected,
+        url: DEMO_STORE_CONFIG.BASE_URL,
+        error: backendTest.error,
+      },
+      commerceLayer: commerceLayerTest,
+      skus: skuTest,
+      overall: overall,
     }
   }
 }
