@@ -1,9 +1,15 @@
-import { supabaseServer } from "./supabase-server"
+import { supabaseServer, isSupabaseConfigured } from "./supabase-server"
 import type { ParkingSpaceDisplay, SearchParams } from "./supabase-types"
 
 export async function searchParkingSpaces(params: SearchParams): Promise<ParkingSpaceDisplay[]> {
   try {
     console.log("🔍 Searching with params:", params)
+
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured()) {
+      console.warn("⚠️ Supabase not configured, returning empty results")
+      return []
+    }
 
     // Build the query with host information
     let query = supabaseServer
@@ -238,6 +244,10 @@ function parseDate(dateStr: string): string {
 // User management functions
 export async function getUserById(userId: string) {
   try {
+    if (!isSupabaseConfigured()) {
+      return null
+    }
+
     const { data, error } = await supabaseServer.from("users").select("*").eq("id", userId).single()
 
     if (error) {
@@ -254,6 +264,10 @@ export async function getUserById(userId: string) {
 
 export async function getUserVehicles(userId: string) {
   try {
+    if (!isSupabaseConfigured()) {
+      return []
+    }
+
     const { data, error } = await supabaseServer
       .from("vehicles")
       .select("*")
@@ -274,6 +288,10 @@ export async function getUserVehicles(userId: string) {
 
 export async function getUserSpaces(hostId: string) {
   try {
+    if (!isSupabaseConfigured()) {
+      return []
+    }
+
     const { data, error } = await supabaseServer
       .from("spaces")
       .select("*")
