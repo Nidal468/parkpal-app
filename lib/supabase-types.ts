@@ -14,6 +14,31 @@ export interface ParkingSpace {
   longitude?: number
   created_at: string
   updated_at: string
+  host_id?: string
+  is_available?: boolean
+  address?: string
+  what3words?: string
+  available_from?: string
+  available_to?: string
+}
+
+export interface ParkingSpaceDisplay extends ParkingSpace {
+  features: string[]
+  host?: {
+    id: string
+    name?: string
+    email: string
+  }
+}
+
+export interface SearchParams {
+  location?: string
+  postcode?: string
+  what3words?: string
+  maxPrice?: number
+  startDate?: string
+  endDate?: string
+  features?: string[]
 }
 
 export interface Review {
