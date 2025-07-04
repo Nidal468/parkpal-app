@@ -1,307 +1,273 @@
-"use client"
-
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { CheckCircle, AlertCircle, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, AlertCircle, Copy, ExternalLink } from "lucide-react"
-import { useState } from "react"
 
-export default function CommerceLayerSetup() {
-  const [copied, setCopied] = useState("")
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(label)
-    setTimeout(() => setCopied(""), 2000)
-  }
-
-  const envVars = [
-    {
-      name: "COMMERCE_LAYER_CLIENT_ID",
-      description: "Your Commerce Layer Sales Channel Client ID",
-      required: true,
-      example: "your_sales_channel_client_id_here",
-      serverOnly: true,
-    },
-    {
-      name: "COMMERCE_LAYER_CLIENT_SECRET",
-      description: "Your Commerce Layer Sales Channel Client Secret",
-      required: true,
-      example: "your_sales_channel_client_secret_here",
-      serverOnly: true,
-    },
-    {
-      name: "COMMERCE_LAYER_BASE_URL",
-      description: "Your Commerce Layer domain (e.g., https://yourdomain.commercelayer.io)",
-      required: true,
-      example: "https://yourdomain.commercelayer.io",
-      serverOnly: true,
-    },
-    {
-      name: "COMMERCE_LAYER_MARKET_ID",
-      description: "Your Parkpal UK Market ID",
-      required: true,
-      example: "vjkaZhNPnl",
-      serverOnly: true,
-    },
-    {
-      name: "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
-      description: "Stripe Publishable Key (should start with pk_test_)",
-      required: true,
-      example: "pk_test_...",
-      serverOnly: false,
-    },
-    {
-      name: "STRIPE_SECRET_KEY",
-      description: "Stripe Secret Key (should start with sk_test_)",
-      required: true,
-      example: "sk_test_...",
-      serverOnly: true,
-    },
-  ]
-
-  const skus = [
-    {
-      name: "parking-hour",
-      id: "nOpOSOOmjP",
-      description: "Hourly parking rate",
-    },
-    {
-      name: "parking-day",
-      id: "nzPQSQQljQ",
-      description: "Daily parking rate",
-    },
-    {
-      name: "parking-month",
-      id: "ZrxeSjjmvm",
-      description: "Monthly parking rate",
-    },
-  ]
-
-  const setupSteps = [
-    "Set all environment variables in Vercel (server-side only)",
-    "Run the SQL script to add Commerce Layer fields to your database",
-    "Ensure your SKUs exist in the Parkpal UK market with proper pricing",
-    "Configure Stripe as payment gateway in Commerce Layer",
-    "Use TEST Stripe credentials (pk_test_, sk_test_)",
-    "Test the integration at /test-reserve",
-  ]
-
+export default function CommerceLayerSetupPage() {
   return (
-    <div className="container mx-auto py-8 space-y-8">
-      <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold">Commerce Layer Setup</h1>
-        <p className="text-muted-foreground">Configuration guide for Parkpal Commerce Layer integration</p>
-      </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold mb-2">🏪 Commerce Layer Setup Guide</h1>
+          <p className="text-gray-600">Complete integration guide for your Commerce Layer backend</p>
+        </div>
 
-      {/* Important Notice */}
-      <Card className="border-orange-200 bg-orange-50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-orange-800">
-            <AlertCircle className="h-5 w-5" />
-            Important: Server-Side Environment Variables
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-orange-700 text-sm">
-            Commerce Layer credentials should be server-side only (no NEXT_PUBLIC_ prefix). Only the Stripe publishable
-            key should be client-side accessible.
-          </p>
-        </CardContent>
-      </Card>
+        <div className="space-y-6">
+          {/* Step 1: Environment Variables */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
+                  1
+                </span>
+                Environment Variables
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-gray-600">Add these environment variables to your Vercel deployment:</p>
 
-      {/* Environment Variables */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5" />
-            Environment Variables
-          </CardTitle>
-          <CardDescription>Required environment variables for Commerce Layer integration</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {envVars.map((envVar) => (
-            <div key={envVar.name} className="border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{envVar.name}</code>
-                  {envVar.required && (
-                    <Badge variant="destructive" className="text-xs">
-                      Required
-                    </Badge>
-                  )}
-                  {envVar.serverOnly && (
-                    <Badge variant="secondary" className="text-xs">
-                      Server Only
-                    </Badge>
-                  )}
+              <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm">
+                <div className="space-y-1">
+                  <div>COMMERCE_LAYER_CLIENT_ID=your_client_id_here</div>
+                  <div>COMMERCE_LAYER_CLIENT_SECRET=your_client_secret_here</div>
+                  <div>COMMERCE_LAYER_BASE_URL=https://yourdomain.commercelayer.io</div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyToClipboard(`${envVar.name}=${envVar.example}`, envVar.name)}
-                >
-                  {copied === envVar.name ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </div>
+
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-yellow-800">Where to find these:</p>
+                    <ul className="text-sm text-yellow-700 mt-1 space-y-1">
+                      <li>• Log into your Commerce Layer dashboard</li>
+                      <li>• Go to Settings → Applications</li>
+                      <li>• Create or select an application</li>
+                      <li>• Copy the Client ID and Client Secret</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Step 2: SKU Setup */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
+                  2
+                </span>
+                Create SKUs in Commerce Layer
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-gray-600">Create these SKUs in your Commerce Layer catalog:</p>
+
+              <div className="grid gap-4">
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium">Hourly Parking</h3>
+                    <Badge variant="outline">Required</Badge>
+                  </div>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <p>
+                      <strong>SKU Code:</strong> PARKING_HOUR_DOWNTOWN
+                    </p>
+                    <p>
+                      <strong>Name:</strong> Hourly Parking - Downtown
+                    </p>
+                    <p>
+                      <strong>Description:</strong> Perfect for short visits
+                    </p>
+                    <p>
+                      <strong>Price:</strong> Set your desired hourly rate
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium">Daily Parking</h3>
+                    <Badge variant="outline">Required</Badge>
+                  </div>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <p>
+                      <strong>SKU Code:</strong> PARKING_DAY_DOWNTOWN
+                    </p>
+                    <p>
+                      <strong>Name:</strong> Daily Parking - Downtown
+                    </p>
+                    <p>
+                      <strong>Description:</strong> All-day parking solution
+                    </p>
+                    <p>
+                      <strong>Price:</strong> Set your desired daily rate
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium">Monthly Parking</h3>
+                    <Badge variant="outline">Required</Badge>
+                  </div>
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <p>
+                      <strong>SKU Code:</strong> PARKING_MONTH_DOWNTOWN
+                    </p>
+                    <p>
+                      <strong>Name:</strong> Monthly Parking - Downtown
+                    </p>
+                    <p>
+                      <strong>Description:</strong> Long-term parking option
+                    </p>
+                    <p>
+                      <strong>Price:</strong> Set your desired monthly rate
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-blue-800">SKU Creation Steps:</p>
+                    <ol className="text-sm text-blue-700 mt-1 space-y-1 list-decimal list-inside">
+                      <li>Go to Catalog → SKUs in your Commerce Layer dashboard</li>
+                      <li>Click "New SKU" for each parking option</li>
+                      <li>Enter the exact SKU codes shown above</li>
+                      <li>Set prices in your preferred currency (GBP recommended)</li>
+                      <li>Make sure SKUs are active and available</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Step 3: Payment Gateway */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
+                  3
+                </span>
+                Payment Gateway Setup
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-gray-600">Configure your payment processing in Commerce Layer:</p>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 border rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <div>
+                    <p className="font-medium">Stripe Integration</p>
+                    <p className="text-sm text-gray-600">Connect your Stripe account in Commerce Layer settings</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 border rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <div>
+                    <p className="font-medium">Payment Methods</p>
+                    <p className="text-sm text-gray-600">Enable credit cards, digital wallets, etc.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 border rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <div>
+                    <p className="font-medium">Webhooks</p>
+                    <p className="text-sm text-gray-600">Set up webhooks for order status updates</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Step 4: Testing */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
+                  4
+                </span>
+                Test Your Integration
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-gray-600">Once everything is set up, test your integration:</p>
+
+              <div className="grid gap-3">
+                <Button variant="outline" className="justify-start bg-transparent" asChild>
+                  <a href="/test-reserve">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Test Commerce Layer Integration
+                  </a>
+                </Button>
+
+                <Button variant="outline" className="justify-start bg-transparent" asChild>
+                  <a href="/api/commerce-layer/create-order" target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Test API Endpoint
+                  </a>
                 </Button>
               </div>
-              <p className="text-sm text-muted-foreground mb-2">{envVar.description}</p>
-              <code className="text-xs bg-gray-100 px-2 py-1 rounded block">
-                {envVar.name}={envVar.example}
-              </code>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
 
-      {/* SKU Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Parkpal SKUs</CardTitle>
-          <CardDescription>Available SKUs in your Commerce Layer catalog</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {skus.map((sku) => (
-            <div key={sku.name} className="flex items-center justify-between p-4 border rounded-lg">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{sku.name}</code>
-                  <Badge variant="outline" className="text-xs">
-                    {sku.id}
-                  </Badge>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-green-800">What to expect:</p>
+                    <ul className="text-sm text-green-700 mt-1 space-y-1">
+                      <li>✅ Customer creation in Commerce Layer</li>
+                      <li>✅ Order creation with line items</li>
+                      <li>✅ SKU validation and pricing</li>
+                      <li>✅ Payment processing through your gateway</li>
+                      <li>✅ Order confirmation and status updates</li>
+                    </ul>
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground">{sku.description}</p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => copyToClipboard(sku.name, `sku-${sku.name}`)}>
-                {copied === `sku-${sku.name}` ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      {/* Market Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Market Configuration</CardTitle>
-          <CardDescription>Your Commerce Layer market and stock location details</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 border rounded-lg bg-blue-50">
-              <h3 className="font-semibold mb-2">Market</h3>
-              <p className="text-sm">Name: Parkpal UK</p>
-              <p className="text-sm font-mono">ID: vjkaZhNPnl</p>
-              <p className="text-sm">Currency: GBP</p>
-            </div>
-            <div className="p-4 border rounded-lg bg-green-50">
-              <h3 className="font-semibold mb-2">Stock Location</h3>
-              <p className="text-sm">Name: Parkpal HQ</p>
-              <p className="text-sm font-mono">ID: okJbPuNbjk</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          {/* Troubleshooting */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-orange-600" />
+                Troubleshooting
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="border-l-4 border-red-500 pl-4">
+                  <p className="font-medium text-red-800">SKU not found error</p>
+                  <p className="text-sm text-red-600">
+                    Make sure the SKU codes match exactly and are active in Commerce Layer
+                  </p>
+                </div>
 
-      {/* Setup Instructions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Setup Instructions</CardTitle>
-          <CardDescription>Step-by-step guide to configure Commerce Layer</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <ol className="list-decimal list-inside space-y-2 text-sm">
-            {setupSteps.map((step, index) => (
-              <li key={index} className="flex items-start gap-2">
-                <span className="font-medium">{index + 1}.</span>
-                <span>{step}</span>
-              </li>
-            ))}
-          </ol>
-        </CardContent>
-      </Card>
+                <div className="border-l-4 border-yellow-500 pl-4">
+                  <p className="font-medium text-yellow-800">Authentication failed</p>
+                  <p className="text-sm text-yellow-600">Check your Client ID and Client Secret are correct</p>
+                </div>
 
-      {/* Database Setup */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Database Setup</CardTitle>
-          <CardDescription>SQL script to add Commerce Layer fields</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Run this SQL script in your database to add the required Commerce Layer fields:
-          </p>
-          <div className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
-            <pre className="text-sm">
-              <code>{`-- Add Commerce Layer fields to bookings table
-ALTER TABLE bookings 
-ADD COLUMN IF NOT EXISTS commerce_layer_order_id TEXT,
-ADD COLUMN IF NOT EXISTS commerce_layer_customer_id TEXT,
-ADD COLUMN IF NOT EXISTS commerce_layer_market_id TEXT,
-ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT,
-ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'pending',
-ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP;
-
--- Add indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_bookings_cl_order_id ON bookings(commerce_layer_order_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_cl_customer_id ON bookings(commerce_layer_customer_id);`}</code>
-            </pre>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() =>
-              copyToClipboard(
-                `-- Add Commerce Layer fields to bookings table
-ALTER TABLE bookings 
-ADD COLUMN IF NOT EXISTS commerce_layer_order_id TEXT,
-ADD COLUMN IF NOT EXISTS commerce_layer_customer_id TEXT,
-ADD COLUMN IF NOT EXISTS commerce_layer_market_id TEXT,
-ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT,
-ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'pending',
-ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP;
-
--- Add indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_bookings_cl_order_id ON bookings(commerce_layer_order_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_cl_customer_id ON bookings(commerce_layer_customer_id);`,
-                "sql",
-              )
-            }
-          >
-            {copied === "sql" ? <CheckCircle className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-            Copy SQL Script
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Test Integration */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Test Integration</CardTitle>
-          <CardDescription>Test your Commerce Layer setup</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-4">
-            <Button asChild>
-              <a href="/test-reserve" className="flex items-center gap-2">
-                <ExternalLink className="h-4 w-4" />
-                Test Reserve Page
-              </a>
-            </Button>
-            <Button variant="outline" asChild>
-              <a href="/reserve" className="flex items-center gap-2">
-                <ExternalLink className="h-4 w-4" />
-                Production Reserve Page
-              </a>
-            </Button>
-          </div>
-          <div className="p-4 bg-blue-50 rounded-lg">
-            <h4 className="font-medium mb-2">Test Card Details</h4>
-            <p className="text-sm">Card Number: 4242 4242 4242 4242</p>
-            <p className="text-sm">Expiry: Any future date</p>
-            <p className="text-sm">CVC: Any 3 digits</p>
-            <p className="text-sm">ZIP: Any 5 digits</p>
-          </div>
-        </CardContent>
-      </Card>
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <p className="font-medium text-blue-800">Payment processing issues</p>
+                  <p className="text-sm text-blue-600">
+                    Verify your payment gateway is properly configured in Commerce Layer
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }

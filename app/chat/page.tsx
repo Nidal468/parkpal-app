@@ -1,9 +1,14 @@
-import { DeployedParkpalChatInterface } from "./deployed-parkpal-chat-interface"
+import { Suspense } from "react"
+import AirlineChatInterface from "./airline-chat-interface"
+
+function ChatPageContent() {
+  return <AirlineChatInterface />
+}
 
 export default function ChatPage() {
   return (
-    <div className="h-screen flex flex-col">
-      <DeployedParkpalChatInterface />
-    </div>
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <ChatPageContent />
+    </Suspense>
   )
 }

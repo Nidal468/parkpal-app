@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@commercelayer/sdk':
+        specifier: latest
+        version: 6.44.0
       '@hookform/resolvers':
         specifier: ^3.9.1
         version: 3.9.1(react-hook-form@7.59.0(react@19.0.0))
@@ -160,7 +163,7 @@ importers:
         version: 3.0.2(@types/react@19.0.0)(react-dom@19.0.0(react@19.0.0))(react-is@18.3.1)(react@19.0.0)(redux@5.0.1)
       sonner:
         specifier: latest
-        version: 2.0.5(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+        version: 2.0.6(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       tailwind-merge:
         specifier: ^2.5.5
         version: 2.5.5
@@ -227,6 +230,10 @@ packages:
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
+
+  '@commercelayer/sdk@6.44.0':
+    resolution: {integrity: sha512-bhQNg89olVVIZa1d01B0QmG4IoFZMuXxIWUfhlX5nHskYuk3sjHGsKenhqnt3bYqzQiBFAFoI2GsY9NV4UsKxg==}
+    engines: {node: '>=20'}
 
   '@date-fns/tz@1.2.0':
     resolution: {integrity: sha512-LBrd7MiJZ9McsOgxqWX7AaxrDjcFVjWH/tIKJd7pnR7McaslGYOP1QmmiBXdJH/H/yLCT+rcQ7FaPBUxRGUtrg==}
@@ -1953,8 +1960,8 @@ packages:
   simple-swizzle@0.2.2:
     resolution: {integrity: sha512-JA//kQgZtbuY83m+xT+tXJkmJncGMTFT+C+g2h2R9uxkYIrE2yy9sgmcLhCnw57/WSD+Eh3J97FPEDFnbXnDUg==}
 
-  sonner@2.0.5:
-    resolution: {integrity: sha512-YwbHQO6cSso3HBXlbCkgrgzDNIhws14r4MO87Ofy+cV2X7ES4pOoAK3+veSmVTvqNx1BWUxlhPmZzP00Crk2aQ==}
+  sonner@2.0.6:
+    resolution: {integrity: sha512-yHFhk8T/DK3YxjFQXIrcHT1rGEeTLliVzWbO0xN8GberVun2RiBnxAjXAYpZrqwEVHBG9asI/Li8TAAhN9m59Q==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -2191,6 +2198,8 @@ snapshots:
       zod-to-json-schema: 3.24.5(zod@3.24.1)
 
   '@alloc/quick-lru@5.2.0': {}
+
+  '@commercelayer/sdk@6.44.0': {}
 
   '@date-fns/tz@1.2.0': {}
 
@@ -3901,7 +3910,7 @@ snapshots:
       is-arrayish: 0.3.2
     optional: true
 
-  sonner@2.0.5(react-dom@19.0.0(react@19.0.0))(react@19.0.0):
+  sonner@2.0.6(react-dom@19.0.0(react@19.0.0))(react@19.0.0):
     dependencies:
       react: 19.0.0
       react-dom: 19.0.0(react@19.0.0)

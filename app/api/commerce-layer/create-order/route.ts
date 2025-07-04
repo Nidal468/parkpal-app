@@ -1,280 +1,225 @@
-import { NextResponse } from "next/server"
-import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
-import { createClient } from "@supabase/supabase-js"
+import { type NextRequest, NextResponse } from "next/server"
 
-// Hardcoded space UUIDs from Supabase
-const SPACE_IDS = {
-  HOURLY: "5a4addb0-e463-49c9-9c18-74a25e29127b",
-  DAILY: "73bef0f1-d91c-49b4-9520-dcf43f976250",
-  MONTHLY: "9aa9af0f-ac4b-4cb0-ae43-49e21bb43ffd",
-}
-
-// SKU to Space mapping
-const SKU_TO_SPACE_MAP = {
-  "parking-hour": SPACE_IDS.HOURLY,
-  "parking-day": SPACE_IDS.DAILY,
-  "parking-month": SPACE_IDS.MONTHLY,
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sku, customerName, customerEmail, quantity = 1 } = body
+    console.log("🚀 Commerce Layer - Create order request:", body)
 
-    console.log("🛒 Creating Commerce Layer order...")
-    console.log("📋 Order details:", { sku, customerName, customerEmail, quantity })
+    const { sku, quantity = 1, customerDetails, bookingDetails } = body
 
     // Validate required fields
-    if (!sku || !customerName || !customerEmail) {
-      return NextResponse.json({ error: "Missing required fields: sku, customerName, customerEmail" }, { status: 400 })
+    if (!sku) {
+      return NextResponse.json({ error: "SKU is required" }, { status: 400 })
     }
 
-    // Get space ID for this SKU
-    const spaceId = SKU_TO_SPACE_MAP[sku as keyof typeof SKU_TO_SPACE_MAP]
-    if (!spaceId) {
-      return NextResponse.json({ error: `Invalid SKU: ${sku}` }, { status: 400 })
+    if (!customerDetails?.name || !customerDetails?.email) {
+      return NextResponse.json({ error: "Customer name and email are required" }, { status: 400 })
     }
 
-    console.log("📍 Mapped to space:", spaceId)
+    // Check Commerce Layer environment variables
+    const clClientId = process.env.COMMERCE_LAYER_CLIENT_ID
+    const clClientSecret = process.env.COMMERCE_LAYER_CLIENT_SECRET
+    const clBaseUrl = process.env.COMMERCE_LAYER_BASE_URL || "https://yourdomain.commercelayer.io"
 
-    // Get environment variables
-    const clientId = process.env.NEXT_PUBLIC_CL_CLIENT_ID
-    const clientSecret = process.env.NEXT_PUBLIC_CL_CLIENT_SECRET
-    const baseUrl = process.env.COMMERCE_LAYER_BASE_URL
-    const marketId = "vjkaZhNPnl"
-
-    // Validate environment variables
-    if (!clientId || !clientSecret || !baseUrl) {
-      console.error("❌ Missing environment variables")
+    if (!clClientId || !clClientSecret) {
       return NextResponse.json(
         {
-          error: "Missing required environment variables",
-          missing: {
-            clientId: !clientId,
-            clientSecret: !clientSecret,
-            baseUrl: !baseUrl,
-          },
+          error: "Commerce Layer not configured",
+          details: "Missing COMMERCE_LAYER_CLIENT_ID or COMMERCE_LAYER_CLIENT_SECRET",
         },
         { status: 500 },
       )
     }
 
-    console.log("🔑 Getting access token with simplified scope...")
-    // Use simplified scope for Integration Apps
-    const accessToken = await getCommerceLayerAccessToken(clientId, clientSecret, "market:all")
+    // Import Commerce Layer SDK dynamically
+    const { CommerceLayer, Order, LineItem, Customer } = await import("@commercelayer/sdk")
 
-    // Create customer
-    console.log("👤 Creating customer...")
-    const customerPayload = {
-      data: {
-        type: "customers",
-        attributes: {
-          email: customerEmail,
-          first_name: customerName.split(" ")[0] || customerName,
-          last_name: customerName.split(" ").slice(1).join(" ") || "",
-        },
-      },
-    }
-
-    const customerResponse = await fetch(`${baseUrl}/api/customers`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/vnd.api+json",
-        Accept: "application/vnd.api+json",
-      },
-      body: JSON.stringify(customerPayload),
+    // Initialize Commerce Layer client
+    const cl = CommerceLayer({
+      organization: clBaseUrl.replace("https://", "").replace(".commercelayer.io", ""),
+      accessToken: await getAccessToken(clClientId, clClientSecret, clBaseUrl),
     })
 
-    if (!customerResponse.ok) {
-      const errorText = await customerResponse.text()
-      console.error("❌ Customer creation failed:", customerResponse.status, errorText)
+    console.log("✅ Commerce Layer client initialized")
+
+    // Step 1: Create or get customer
+    let customer
+    try {
+      // Try to find existing customer by email
+      const existingCustomers = await cl.customers.list({
+        filters: { email_eq: customerDetails.email },
+      })
+
+      if (existingCustomers.length > 0) {
+        customer = existingCustomers[0]
+        console.log("✅ Found existing customer:", customer.id)
+      } else {
+        // Create new customer
+        customer = await cl.customers.create({
+          email: customerDetails.email,
+          first_name: customerDetails.name.split(" ")[0] || customerDetails.name,
+          last_name: customerDetails.name.split(" ").slice(1).join(" ") || "",
+          metadata: {
+            vehicle_registration: bookingDetails?.vehicleReg || "",
+            source: "parkpal_booking",
+          },
+        })
+        console.log("✅ Created new customer:", customer.id)
+      }
+    } catch (customerError) {
+      console.error("❌ Customer creation error:", customerError)
+      return NextResponse.json({ error: "Failed to create/find customer", details: customerError }, { status: 500 })
+    }
+
+    // Step 2: Create order
+    let order
+    try {
+      order = await cl.orders.create({
+        customer: cl.customers.relationship(customer.id),
+        currency_code: "GBP",
+        language_code: "en",
+        metadata: {
+          booking_type: "parking",
+          vehicle_registration: bookingDetails?.vehicleReg || "",
+          start_date: bookingDetails?.startDate || new Date().toISOString().split("T")[0],
+          start_time: bookingDetails?.startTime || "09:00",
+          customer_name: customerDetails.name,
+          source: "parkpal_test",
+        },
+      })
+      console.log("✅ Created order:", order.id)
+    } catch (orderError) {
+      console.error("❌ Order creation error:", orderError)
+      return NextResponse.json({ error: "Failed to create order", details: orderError }, { status: 500 })
+    }
+
+    // Step 3: Add line item (SKU) to order
+    try {
+      const lineItem = await cl.line_items.create({
+        order: cl.orders.relationship(order.id),
+        sku_code: sku,
+        quantity: quantity,
+        metadata: {
+          vehicle_registration: bookingDetails?.vehicleReg || "",
+          booking_duration: sku.includes("hour") ? "1 hour" : sku.includes("day") ? "1 day" : "1 month",
+        },
+      })
+      console.log("✅ Added line item:", lineItem.id, "SKU:", sku)
+    } catch (lineItemError) {
+      console.error("❌ Line item creation error:", lineItemError)
       return NextResponse.json(
         {
-          error: `Customer creation failed: ${customerResponse.status}`,
-          details: errorText,
+          error: "Failed to add SKU to order",
+          details: lineItemError,
+          sku: sku,
+          message: "Make sure this SKU exists in your Commerce Layer catalog",
         },
         { status: 500 },
       )
     }
 
-    const customerData = await customerResponse.json()
-    const customerId = customerData.data.id
-    console.log("✅ Customer created:", customerId)
-
-    // Create order
-    console.log("📦 Creating order...")
-    const orderPayload = {
-      data: {
-        type: "orders",
-        attributes: {
-          currency_code: "USD",
-          language_code: "en",
-        },
-        relationships: {
-          market: {
-            data: {
-              type: "markets",
-              id: marketId,
-            },
-          },
-          customer: {
-            data: {
-              type: "customers",
-              id: customerId,
-            },
-          },
-        },
-      },
-    }
-
-    const orderResponse = await fetch(`${baseUrl}/api/orders`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/vnd.api+json",
-        Accept: "application/vnd.api+json",
-      },
-      body: JSON.stringify(orderPayload),
+    // Step 4: Get updated order with totals
+    const updatedOrder = await cl.orders.retrieve(order.id, {
+      include: ["line_items", "line_items.item"],
     })
 
-    if (!orderResponse.ok) {
-      const errorText = await orderResponse.text()
-      console.error("❌ Order creation failed:", orderResponse.status, errorText)
-      return NextResponse.json(
-        {
-          error: `Order creation failed: ${orderResponse.status}`,
-          details: errorText,
-        },
-        { status: 500 },
-      )
-    }
-
-    const orderData = await orderResponse.json()
-    const orderId = orderData.data.id
-    console.log("✅ Order created:", orderId)
-
-    // Add line item
-    console.log("📝 Adding line item...")
-    const lineItemPayload = {
-      data: {
-        type: "line_items",
-        attributes: {
-          sku_code: sku,
-          quantity: quantity,
-        },
-        relationships: {
-          order: {
-            data: {
-              type: "orders",
-              id: orderId,
-            },
-          },
-        },
-      },
-    }
-
-    const lineItemResponse = await fetch(`${baseUrl}/api/line_items`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/vnd.api+json",
-        Accept: "application/vnd.api+json",
-      },
-      body: JSON.stringify(lineItemPayload),
-    })
-
-    if (!lineItemResponse.ok) {
-      const errorText = await lineItemResponse.text()
-      console.error("❌ Line item creation failed:", lineItemResponse.status, errorText)
-      return NextResponse.json(
-        {
-          error: `Line item creation failed: ${lineItemResponse.status}`,
-          details: errorText,
-        },
-        { status: 500 },
-      )
-    }
-
-    const lineItemData = await lineItemResponse.json()
-    console.log("✅ Line item added:", lineItemData.data.id)
-
-    // Store booking in Supabase (only if environment variables are available)
+    // Step 5: Store booking in database
     let bookingId = null
     try {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
       if (supabaseUrl && supabaseKey) {
-        console.log("💾 Storing booking in database...")
+        const { createClient } = await import("@supabase/supabase-js")
         const supabase = createClient(supabaseUrl, supabaseKey)
 
-        const { data: booking, error: bookingError } = await supabase
+        const { data, error } = await supabase
           .from("bookings")
           .insert({
-            space_id: spaceId,
-            customer_name: customerName,
-            customer_email: customerEmail,
-            sku: sku,
-            quantity: quantity,
-            commerce_layer_order_id: orderId,
-            commerce_layer_customer_id: customerId,
-            commerce_layer_market_id: marketId,
+            user_id: customer.id,
+            space_id: "test-space-1",
+            customer_name: customerDetails.name,
+            customer_email: customerDetails.email,
+            customer_phone: customerDetails.phone || null,
+            vehicle_registration: bookingDetails?.vehicleReg || null,
+            vehicle_type: bookingDetails?.vehicleType || "car",
+            total_price: Number.parseFloat(updatedOrder.total_amount_cents) / 100,
             status: "pending",
+            commerce_layer_order_id: order.id,
+            sku: sku,
+            duration_type: sku.includes("hour") ? "hour" : sku.includes("day") ? "day" : "month",
+            start_time: new Date().toISOString(),
+            end_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             created_at: new Date().toISOString(),
           })
           .select()
           .single()
 
-        if (bookingError) {
-          console.error("❌ Database booking creation failed:", bookingError)
+        if (error) {
+          console.error("❌ Database error:", error)
         } else {
-          console.log("✅ Booking stored in database:", booking?.id)
-          bookingId = booking?.id
+          bookingId = data?.id
+          console.log("✅ Booking stored in database:", bookingId)
         }
-      } else {
-        console.log("⚠️ Supabase not configured, skipping database storage")
       }
     } catch (dbError) {
-      console.error("❌ Database error (non-fatal):", dbError)
+      console.error("❌ Database connection error:", dbError)
     }
 
-    return NextResponse.json({
+    const response = {
       success: true,
-      message: "Order created successfully",
-      orderId: orderId,
-      customerId: customerId,
-      lineItemId: lineItemData.data.id,
+      orderId: order.id,
       bookingId: bookingId,
-      spaceId: spaceId,
-      marketId: marketId,
-      scope: "market:all",
-    })
+      commerceLayerOrderId: order.id,
+      customerId: customer.id,
+      amount: Number.parseFloat(updatedOrder.total_amount_cents) / 100,
+      currency: updatedOrder.currency_code,
+      sku: sku,
+      status: updatedOrder.status,
+      paymentRequired: updatedOrder.total_amount_cents > 0,
+      // For Stripe integration, we'll need to create payment intent in next step
+      clientSecret: null, // Will be set when payment method is added
+    }
+
+    console.log("✅ Commerce Layer order created successfully:", response)
+    return NextResponse.json(response)
   } catch (error) {
-    console.error("❌ Order creation error:", error)
+    console.error("❌ Commerce Layer create order error:", error)
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Order creation failed",
-        stack: error instanceof Error ? error.stack : undefined,
+        error: "Failed to create Commerce Layer order",
+        details: error instanceof Error ? error.message : "Unknown error",
+        success: false,
       },
       { status: 500 },
     )
   }
 }
 
-export async function GET() {
-  return NextResponse.json({
-    message: "Commerce Layer order creation endpoint",
-    usage: "POST /api/commerce-layer/create-order",
-    requiredFields: ["sku", "customerName", "customerEmail"],
-    optionalFields: ["quantity"],
-    supportedSKUs: ["parking-hour", "parking-day", "parking-month"],
-    scope: "market:all (simplified for Integration Apps)",
-    example: {
-      sku: "parking-hour",
-      customerName: "John Doe",
-      customerEmail: "john@example.com",
-      quantity: 1,
-    },
-  })
+// Helper function to get Commerce Layer access token
+async function getAccessToken(clientId: string, clientSecret: string, baseUrl: string): Promise<string> {
+  try {
+    const response = await fetch(`${baseUrl}/oauth/token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    console.log("✅ Commerce Layer access token obtained")
+    return data.access_token
+  } catch (error) {
+    console.error("❌ Failed to get Commerce Layer access token:", error)
+    throw error
+  }
 }
