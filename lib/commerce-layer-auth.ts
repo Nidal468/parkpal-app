@@ -1,35 +1,23 @@
 export async function getCommerceLayerAccessToken(
   clientId: string,
   clientSecret: string,
-  marketId: string,
-  stockLocationId?: string,
+  scope?: string,
 ): Promise<string> {
   try {
     console.log("🔑 Requesting Commerce Layer access token...")
     console.log("📋 Client ID:", clientId.substring(0, 20) + "...")
-    console.log("🏪 Market ID:", marketId)
-    console.log("📍 Stock Location ID:", stockLocationId || "not provided")
 
-    // Build scope based on provided parameters
-    let scope = `market:id:${marketId}`
+    // Use provided scope or fall back to environment variable
+    const tokenScope = scope || process.env.NEXT_PUBLIC_CL_SCOPE || `market:id:${process.env.NEXT_PUBLIC_CL_MARKET_ID}`
 
-    if (stockLocationId) {
-      // Check if stockLocationId already contains the prefix
-      if (stockLocationId.startsWith("stock_location:id:")) {
-        scope += ` ${stockLocationId}`
-      } else {
-        scope += ` stock_location:id:${stockLocationId}`
-      }
-    }
-
-    console.log("🔧 Using scope:", scope)
+    console.log("🔧 Using scope:", tokenScope)
 
     const tokenUrl = `${process.env.COMMERCE_LAYER_BASE_URL}/oauth/token`
     const tokenPayload = {
       grant_type: "client_credentials",
       client_id: clientId,
       client_secret: clientSecret,
-      scope: scope,
+      scope: tokenScope,
     }
 
     console.log("📤 Token request payload:", {

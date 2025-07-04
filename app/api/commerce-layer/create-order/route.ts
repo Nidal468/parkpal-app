@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
+import { createClient } from "@supabase/supabase-js"
 
-// Hardcoded space IDs from Supabase
+// Hardcoded space UUIDs from Supabase
 const SPACE_IDS = {
   HOURLY: "5a4addb0-e463-49c9-9c18-74a25e29127b",
   DAILY: "73bef0f1-d91c-49b4-9520-dcf43f976250",
@@ -9,43 +9,10 @@ const SPACE_IDS = {
 }
 
 // SKU to Space mapping
-const SKU_TO_SPACE: Record<string, string> = {
+const SKU_TO_SPACE_MAP = {
   "parking-hour": SPACE_IDS.HOURLY,
   "parking-day": SPACE_IDS.DAILY,
   "parking-month": SPACE_IDS.MONTHLY,
-}
-
-function validateUUID(uuid: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  return uuidRegex.test(uuid)
-}
-
-function getSpaceIdForSku(sku: string, providedSpaceId?: string): string {
-  console.log("🎯 Getting space ID for SKU:", sku)
-  console.log("📍 Provided space ID:", providedSpaceId)
-
-  // If a space ID is provided and it's valid, use it
-  if (providedSpaceId && validateUUID(providedSpaceId)) {
-    // Check if it's one of our known valid UUIDs
-    const validSpaceIds = Object.values(SPACE_IDS)
-    if (validSpaceIds.includes(providedSpaceId)) {
-      console.log("✅ Using provided valid space ID:", providedSpaceId)
-      return providedSpaceId
-    } else {
-      console.log("⚠️ Provided space ID not in our valid list, falling back to SKU mapping")
-    }
-  }
-
-  // Fall back to SKU-based mapping
-  const mappedSpaceId = SKU_TO_SPACE[sku]
-  if (mappedSpaceId) {
-    console.log("✅ Mapped SKU to space ID:", mappedSpaceId)
-    return mappedSpaceId
-  }
-
-  // Default fallback
-  console.log("⚠️ No mapping found, using default hourly space")
-  return SPACE_IDS.HOURLY
 }
 
 export async function POST(request: Request) {
@@ -53,37 +20,43 @@ export async function POST(request: Request) {
     console.log("🛒 Creating Commerce Layer order...")
 
     const body = await request.json()
-    console.log("📋 Request body:", body)
+    const { sku, customerName, customerEmail, quantity = 1 } = body
 
-    const {
-      sku = "parking-hour",
-      quantity = 1,
-      customerName = "Test Customer",
-      customerEmail = "test@example.com",
-      spaceId: providedSpaceId,
-    } = body
+    if (!sku || !customerName || !customerEmail) {
+      return NextResponse.json({ error: "Missing required fields: sku, customerName, customerEmail" }, { status: 400 })
+    }
 
-    // Get the correct space ID
-    const spaceId = getSpaceIdForSku(sku, providedSpaceId)
-    console.log("🎯 Final space ID:", spaceId)
+    console.log("📋 Order details:", { sku, customerName, customerEmail, quantity })
 
-    // Get environment variables
+    // Get space ID for this SKU
+    const spaceId = SKU_TO_SPACE_MAP[sku as keyof typeof SKU_TO_SPACE_MAP]
+    if (!spaceId) {
+      return NextResponse.json({ error: `Invalid SKU: ${sku}` }, { status: 400 })
+    }
+
+    console.log("📍 Mapped to space:", spaceId)
+
+    // Get environment variables - using your confirmed setup
     const clientId = process.env.NEXT_PUBLIC_CL_CLIENT_ID!
     const clientSecret = process.env.NEXT_PUBLIC_CL_CLIENT_SECRET!
-    const marketId = process.env.NEXT_PUBLIC_CL_MARKET_ID!
-    const stockLocationId = process.env.NEXT_PUBLIC_CL_STOCK_LOCATION_ID!
+    const scope = process.env.NEXT_PUBLIC_CL_SCOPE!
+    const marketId = "vjkaZhNPnl" // Your confirmed market ID
     const baseUrl = process.env.COMMERCE_LAYER_BASE_URL!
 
-    console.log("🔧 Using Commerce Layer config:")
+    console.log("🔧 Using environment configuration:")
+    console.log("- Client ID:", clientId.substring(0, 20) + "...")
     console.log("- Market ID:", marketId)
-    console.log("- Stock Location ID:", stockLocationId)
+    console.log("- Scope:", scope)
     console.log("- Base URL:", baseUrl)
 
-    // Get access token
-    console.log("🔑 Getting access token...")
-    const accessToken = await getCommerceLayerAccessToken(clientId, clientSecret, marketId, stockLocationId)
+    // Get access token with Integration App credentials
+    console.log("🔑 Getting access token with Integration App credentials...")
+    const { getCommerceLayerAccessToken } = await import("@/lib/commerce-layer-auth")
+    const accessToken = await getCommerceLayerAccessToken(clientId, clientSecret, scope)
 
-    // Create customer first
+    console.log("✅ Access token obtained")
+
+    // Create customer
     console.log("👤 Creating customer...")
     const customerResponse = await fetch(`${baseUrl}/api/customers`, {
       method: "POST",
@@ -99,7 +72,9 @@ export async function POST(request: Request) {
             email: customerEmail,
             metadata: {
               name: customerName,
-              source: "parkpal",
+              source: "parkpal_booking",
+              space_id: spaceId,
+              sku: sku,
             },
           },
         },
@@ -107,9 +82,12 @@ export async function POST(request: Request) {
     })
 
     if (!customerResponse.ok) {
-      const customerError = await customerResponse.text()
-      console.error("❌ Customer creation failed:", customerResponse.status, customerError)
-      throw new Error(`Customer creation failed: ${customerResponse.status} ${customerError}`)
+      const errorText = await customerResponse.text()
+      console.error("❌ Customer creation failed:", customerResponse.status, errorText)
+      return NextResponse.json(
+        { error: `Customer creation failed: ${customerResponse.status} ${errorText}` },
+        { status: 500 },
+      )
     }
 
     const customerData = await customerResponse.json()
@@ -133,7 +111,8 @@ export async function POST(request: Request) {
               sku: sku,
               customer_name: customerName,
               space_id: spaceId,
-              source: "parkpal",
+              quantity: quantity,
+              source: "parkpal_booking",
             },
           },
           relationships: {
@@ -155,9 +134,12 @@ export async function POST(request: Request) {
     })
 
     if (!orderResponse.ok) {
-      const orderError = await orderResponse.text()
-      console.error("❌ Order creation failed:", orderResponse.status, orderError)
-      throw new Error(`Order creation failed: ${orderResponse.status} ${orderError}`)
+      const errorText = await orderResponse.text()
+      console.error("❌ Order creation failed:", orderResponse.status, errorText)
+      return NextResponse.json(
+        { error: `Order creation failed: ${orderResponse.status} ${errorText}` },
+        { status: 500 },
+      )
     }
 
     const orderData = await orderResponse.json()
@@ -165,8 +147,7 @@ export async function POST(request: Request) {
     console.log("✅ Order created:", orderId)
 
     // Store booking in Supabase
-    console.log("💾 Storing booking in Supabase...")
-    const { createClient } = await import("@supabase/supabase-js")
+    console.log("💾 Storing booking in database...")
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
@@ -183,9 +164,12 @@ export async function POST(request: Request) {
         status: "pending",
         commerce_layer_order_id: orderId,
         commerce_layer_customer_id: customerId,
+        commerce_layer_market_id: marketId,
         metadata: {
-          source: "api_test",
-          created_via: "commerce_layer_integration",
+          source: "commerce_layer_integration",
+          created_via: "api_endpoint",
+          payment_gateway_id: "PxpOwsDWKk",
+          payment_method_id: "KkqYWsPzjk",
         },
       })
       .select()
@@ -193,33 +177,43 @@ export async function POST(request: Request) {
 
     if (bookingError) {
       console.error("❌ Booking storage failed:", bookingError)
-      throw new Error(`Booking storage failed: ${bookingError.message}`)
+      return NextResponse.json({ error: `Booking storage failed: ${bookingError.message}` }, { status: 500 })
     }
 
     console.log("✅ Booking stored:", bookingData.id)
 
     return NextResponse.json({
       success: true,
-      timestamp: new Date().toISOString(),
-      data: {
-        orderId: orderId,
-        customerId: customerId,
-        bookingId: bookingData.id,
-        spaceId: spaceId,
-        sku: sku,
-        customerEmail: customerEmail,
-      },
-      message: "Order created and booking stored successfully",
+      orderId,
+      customerId,
+      bookingId: bookingData.id,
+      spaceId,
+      marketId,
+      message: "Order created successfully with linked payment method",
     })
   } catch (error) {
     console.error("❌ Order creation failed:", error)
     return NextResponse.json(
       {
-        success: false,
         error: error instanceof Error ? error.message : "Order creation failed",
-        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )
   }
+}
+
+export async function GET() {
+  return NextResponse.json({
+    message: "Commerce Layer order creation endpoint",
+    usage: "POST /api/commerce-layer/create-order",
+    requiredFields: ["sku", "customerName", "customerEmail"],
+    optionalFields: ["quantity"],
+    supportedSKUs: ["parking-hour", "parking-day", "parking-month"],
+    example: {
+      sku: "parking-hour",
+      customerName: "John Doe",
+      customerEmail: "john@example.com",
+      quantity: 1,
+    },
+  })
 }

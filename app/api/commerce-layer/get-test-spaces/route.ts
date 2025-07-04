@@ -1,54 +1,78 @@
 import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
+
+// Hardcoded space UUIDs from Supabase
+const SPACE_IDS = {
+  HOURLY: "5a4addb0-e463-49c9-9c18-74a25e29127b",
+  DAILY: "73bef0f1-d91c-49b4-9520-dcf43f976250",
+  MONTHLY: "9aa9af0f-ac4b-4cb0-ae43-49e21bb43ffd",
+}
+
+// SKU to Space mapping
+const SKU_TO_SPACE_MAP = {
+  "parking-hour": SPACE_IDS.HOURLY,
+  "parking-day": SPACE_IDS.DAILY,
+  "parking-month": SPACE_IDS.MONTHLY,
+}
 
 export async function GET() {
   try {
-    console.log("🔍 Getting test spaces and mappings...")
+    console.log("🗺️ Getting test spaces and mappings...")
 
-    // Hardcoded space IDs from Supabase
-    const SPACE_IDS = {
-      HOURLY: "5a4addb0-e463-49c9-9c18-74a25e29127b",
-      DAILY: "73bef0f1-d91c-49b4-9520-dcf43f976250",
-      MONTHLY: "9aa9af0f-ac4b-4cb0-ae43-49e21bb43ffd",
+    // Initialize Supabase
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Supabase configuration missing",
+          hardcodedSpaceIds: SPACE_IDS,
+          skuMapping: SKU_TO_SPACE_MAP,
+        },
+        { status: 500 },
+      )
     }
 
-    // SKU to Space mapping
-    const SKU_TO_SPACE = {
-      "parking-hour": SPACE_IDS.HOURLY,
-      "parking-day": SPACE_IDS.DAILY,
-      "parking-month": SPACE_IDS.MONTHLY,
-    }
+    const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Get actual space details from Supabase
-    const { createClient } = await import("@supabase/supabase-js")
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
-    )
-
+    // Get the specific spaces by their UUIDs
     const spaceIds = Object.values(SPACE_IDS)
-    const { data: spaces, error } = await supabase.from("spaces").select("*").in("id", spaceIds)
+    const { data: spaces, error: spacesError } = await supabase
+      .from("spaces")
+      .select("id, name, location, hourly_rate, daily_rate, monthly_rate, space_type, description")
+      .in("id", spaceIds)
 
-    if (error) {
-      console.error("❌ Failed to fetch spaces:", error)
-      throw new Error(`Failed to fetch spaces: ${error.message}`)
+    if (spacesError) {
+      console.error("❌ Error fetching spaces:", spacesError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: spacesError.message,
+          hardcodedSpaceIds: SPACE_IDS,
+          skuMapping: SKU_TO_SPACE_MAP,
+        },
+        { status: 500 },
+      )
     }
 
-    console.log("✅ Fetched spaces:", spaces?.length || 0)
+    console.log(`✅ Found ${spaces?.length || 0} spaces`)
 
-    // Create mapping with space details
-    const mappingWithDetails = Object.entries(SKU_TO_SPACE).map(([sku, spaceId]) => {
-      const spaceDetails = spaces?.find((space) => space.id === spaceId)
+    // Create detailed mapping information
+    const detailedMapping = Object.entries(SKU_TO_SPACE_MAP).map(([sku, spaceId]) => {
+      const space = spaces?.find((s) => s.id === spaceId)
       return {
         sku,
         spaceId,
-        spaceExists: !!spaceDetails,
-        spaceDetails: spaceDetails
+        spaceExists: !!space,
+        spaceName: space?.name || "Not found",
+        spaceLocation: space?.location || "Unknown",
+        rates: space
           ? {
-              name: spaceDetails.name,
-              location: spaceDetails.location,
-              hourly_rate: spaceDetails.hourly_rate,
-              daily_rate: spaceDetails.daily_rate,
-              monthly_rate: spaceDetails.monthly_rate,
+              hourly: space.hourly_rate,
+              daily: space.daily_rate,
+              monthly: space.monthly_rate,
             }
           : null,
       }
@@ -58,19 +82,25 @@ export async function GET() {
       success: true,
       timestamp: new Date().toISOString(),
       hardcodedSpaceIds: SPACE_IDS,
-      skuToSpaceMapping: SKU_TO_SPACE,
-      mappingWithDetails,
-      totalSpacesFound: spaces?.length || 0,
-      allSpacesExist: mappingWithDetails.every((m) => m.spaceExists),
-      message: "Space mapping and details retrieved successfully",
+      skuMapping: SKU_TO_SPACE_MAP,
+      detailedMapping,
+      spacesFound: spaces?.length || 0,
+      totalSpacesExpected: Object.keys(SPACE_IDS).length,
+      allSpacesExist: spaces?.length === Object.keys(SPACE_IDS).length,
+      spaces: spaces || [],
+      message:
+        spaces?.length === Object.keys(SPACE_IDS).length
+          ? "All hardcoded space UUIDs exist in database"
+          : "Some hardcoded space UUIDs are missing from database",
     })
   } catch (error) {
-    console.error("❌ Failed to get test spaces:", error)
+    console.error("❌ Error in get-test-spaces:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to get test spaces",
-        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "Unknown error",
+        hardcodedSpaceIds: SPACE_IDS,
+        skuMapping: SKU_TO_SPACE_MAP,
       },
       { status: 500 },
     )
