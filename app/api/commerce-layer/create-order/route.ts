@@ -2,7 +2,19 @@ import { NextResponse } from "next/server"
 import { getCommerceLayerAccessToken } from "@/lib/commerce-layer-auth"
 import { createClient } from "@supabase/supabase-js"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+// Hardcoded space UUIDs from Supabase
+const SPACE_IDS = {
+  HOURLY: "5a4addb0-e463-49c9-9c18-74a25e29127b",
+  DAILY: "73bef0f1-d91c-49b4-9520-dcf43f976250",
+  MONTHLY: "9aa9af0f-ac4b-4cb0-ae43-49e21bb43ffd",
+}
+
+// SKU to Space mapping
+const SKU_TO_SPACE_MAP = {
+  "parking-hour": SPACE_IDS.HOURLY,
+  "parking-day": SPACE_IDS.DAILY,
+  "parking-month": SPACE_IDS.MONTHLY,
+}
 
 export async function POST(request: Request) {
   try {
@@ -17,13 +29,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required fields: sku, customerName, customerEmail" }, { status: 400 })
     }
 
+    // Get space ID for this SKU
+    const spaceId = SKU_TO_SPACE_MAP[sku as keyof typeof SKU_TO_SPACE_MAP]
+    if (!spaceId) {
+      return NextResponse.json({ error: `Invalid SKU: ${sku}` }, { status: 400 })
+    }
+
+    console.log("📍 Mapped to space:", spaceId)
+
     // Get environment variables
     const clientId = process.env.NEXT_PUBLIC_CL_CLIENT_ID
     const clientSecret = process.env.NEXT_PUBLIC_CL_CLIENT_SECRET
     const scope = process.env.NEXT_PUBLIC_CL_SCOPE
     const baseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const marketId = "vjkaZhNPnl"
-    const stockLocationId = "okJbPuNbjk"
 
     // Validate environment variables
     if (!clientId || !clientSecret || !scope || !baseUrl) {
@@ -72,7 +91,10 @@ export async function POST(request: Request) {
       const errorText = await customerResponse.text()
       console.error("❌ Customer creation failed:", customerResponse.status, errorText)
       return NextResponse.json(
-        { error: `Customer creation failed: ${customerResponse.status}`, details: errorText },
+        {
+          error: `Customer creation failed: ${customerResponse.status}`,
+          details: errorText,
+        },
         { status: 500 },
       )
     }
@@ -121,7 +143,10 @@ export async function POST(request: Request) {
       const errorText = await orderResponse.text()
       console.error("❌ Order creation failed:", orderResponse.status, errorText)
       return NextResponse.json(
-        { error: `Order creation failed: ${orderResponse.status}`, details: errorText },
+        {
+          error: `Order creation failed: ${orderResponse.status}`,
+          details: errorText,
+        },
         { status: 500 },
       )
     }
@@ -164,7 +189,10 @@ export async function POST(request: Request) {
       const errorText = await lineItemResponse.text()
       console.error("❌ Line item creation failed:", lineItemResponse.status, errorText)
       return NextResponse.json(
-        { error: `Line item creation failed: ${lineItemResponse.status}`, details: errorText },
+        {
+          error: `Line item creation failed: ${lineItemResponse.status}`,
+          details: errorText,
+        },
         { status: 500 },
       )
     }
@@ -172,28 +200,44 @@ export async function POST(request: Request) {
     const lineItemData = await lineItemResponse.json()
     console.log("✅ Line item added:", lineItemData.data.id)
 
-    // Store booking in Supabase
-    console.log("💾 Storing booking in database...")
-    const { data: booking, error: bookingError } = await supabase
-      .from("bookings")
-      .insert({
-        customer_name: customerName,
-        customer_email: customerEmail,
-        sku: sku,
-        quantity: quantity,
-        commerce_layer_order_id: orderId,
-        commerce_layer_customer_id: customerId,
-        status: "pending",
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
+    // Store booking in Supabase (only if environment variables are available)
+    let bookingId = null
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    if (bookingError) {
-      console.error("❌ Database booking creation failed:", bookingError)
-      // Don't fail the entire request, just log the error
-    } else {
-      console.log("✅ Booking stored in database:", booking?.id)
+      if (supabaseUrl && supabaseKey) {
+        console.log("💾 Storing booking in database...")
+        const supabase = createClient(supabaseUrl, supabaseKey)
+
+        const { data: booking, error: bookingError } = await supabase
+          .from("bookings")
+          .insert({
+            space_id: spaceId,
+            customer_name: customerName,
+            customer_email: customerEmail,
+            sku: sku,
+            quantity: quantity,
+            commerce_layer_order_id: orderId,
+            commerce_layer_customer_id: customerId,
+            commerce_layer_market_id: marketId,
+            status: "pending",
+            created_at: new Date().toISOString(),
+          })
+          .select()
+          .single()
+
+        if (bookingError) {
+          console.error("❌ Database booking creation failed:", bookingError)
+        } else {
+          console.log("✅ Booking stored in database:", booking?.id)
+          bookingId = booking?.id
+        }
+      } else {
+        console.log("⚠️ Supabase not configured, skipping database storage")
+      }
+    } catch (dbError) {
+      console.error("❌ Database error (non-fatal):", dbError)
     }
 
     return NextResponse.json({
@@ -202,8 +246,9 @@ export async function POST(request: Request) {
       orderId: orderId,
       customerId: customerId,
       lineItemId: lineItemData.data.id,
-      bookingId: booking?.id,
-      checkoutUrl: `${baseUrl}/checkout/${orderId}`,
+      bookingId: bookingId,
+      spaceId: spaceId,
+      marketId: marketId,
     })
   } catch (error) {
     console.error("❌ Order creation error:", error)

@@ -10,17 +10,20 @@ export async function POST() {
     const clientSecret = process.env.NEXT_PUBLIC_CL_CLIENT_SECRET
     const scope = process.env.NEXT_PUBLIC_CL_SCOPE
     const baseUrl = process.env.COMMERCE_LAYER_BASE_URL
+
+    // Configuration
     const marketId = "vjkaZhNPnl"
     const paymentMethodId = "KkqYWsPzjk"
+    const paymentGatewayId = "PxpOwsDWKk"
+
+    console.log("📋 Configuration:")
+    console.log("- Market ID:", marketId)
+    console.log("- Payment Method ID:", paymentMethodId)
+    console.log("- Payment Gateway ID:", paymentGatewayId)
 
     // Validate environment variables
     if (!clientId || !clientSecret || !scope || !baseUrl) {
-      console.error("❌ Missing environment variables:")
-      console.error("- NEXT_PUBLIC_CL_CLIENT_ID:", !!clientId)
-      console.error("- NEXT_PUBLIC_CL_CLIENT_SECRET:", !!clientSecret)
-      console.error("- NEXT_PUBLIC_CL_SCOPE:", !!scope)
-      console.error("- COMMERCE_LAYER_BASE_URL:", !!baseUrl)
-
+      console.error("❌ Missing environment variables")
       return NextResponse.json(
         {
           error: "Missing required environment variables",
@@ -35,15 +38,7 @@ export async function POST() {
       )
     }
 
-    console.log("📋 Configuration:")
-    console.log("- Market ID:", marketId)
-    console.log("- Payment Method ID:", paymentMethodId)
-    console.log("- Base URL:", baseUrl)
-    console.log("- Scope:", scope)
-    console.log("- Client ID:", clientId.substring(0, 20) + "...")
-
-    // Get access token with Integration App credentials
-    console.log("🔑 Getting access token with Integration App credentials...")
+    console.log("🔑 Getting access token...")
     const accessToken = await getCommerceLayerAccessToken(clientId, clientSecret, scope)
 
     // Link payment method to market
@@ -65,8 +60,7 @@ export async function POST() {
       },
     }
 
-    console.log("📤 PATCH payload:", JSON.stringify(linkPayload, null, 2))
-
+    console.log("📤 Sending PATCH request to link payment method...")
     const linkResponse = await fetch(`${baseUrl}/api/markets/${marketId}`, {
       method: "PATCH",
       headers: {
@@ -77,47 +71,31 @@ export async function POST() {
       body: JSON.stringify(linkPayload),
     })
 
-    console.log("📥 Response status:", linkResponse.status)
-    console.log("📥 Response headers:", Object.fromEntries(linkResponse.headers.entries()))
+    console.log("📡 Link response status:", linkResponse.status)
 
     if (!linkResponse.ok) {
       const errorText = await linkResponse.text()
       console.error("❌ Payment method linking failed:", linkResponse.status, errorText)
-
-      let errorDetails
-      try {
-        errorDetails = JSON.parse(errorText)
-        console.error("❌ Parsed error:", JSON.stringify(errorDetails, null, 2))
-      } catch {
-        console.error("❌ Raw error text:", errorText)
-        errorDetails = { rawError: errorText }
-      }
-
       return NextResponse.json(
         {
           error: `Payment method linking failed: ${linkResponse.status}`,
-          details: errorDetails,
-          status: linkResponse.status,
-          request: {
-            url: `${baseUrl}/api/markets/${marketId}`,
-            method: "PATCH",
-            payload: linkPayload,
-          },
+          details: errorText,
+          request: linkPayload,
         },
         { status: 500 },
       )
     }
 
     const linkData = await linkResponse.json()
-    console.log("✅ Payment method linked successfully!")
-    console.log("📊 Response data:", JSON.stringify(linkData, null, 2))
+    console.log("✅ Payment method linked successfully")
 
     return NextResponse.json({
       success: true,
       message: "Payment method linked to market successfully",
       marketId: marketId,
       paymentMethodId: paymentMethodId,
-      data: linkData,
+      paymentGatewayId: paymentGatewayId,
+      response: linkData,
     })
   } catch (error) {
     console.error("❌ Payment method linking error:", error)
