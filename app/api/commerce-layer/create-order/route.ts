@@ -40,12 +40,11 @@ export async function POST(request: Request) {
     // Get environment variables
     const clientId = process.env.NEXT_PUBLIC_CL_CLIENT_ID
     const clientSecret = process.env.NEXT_PUBLIC_CL_CLIENT_SECRET
-    const scope = process.env.NEXT_PUBLIC_CL_SCOPE
     const baseUrl = process.env.COMMERCE_LAYER_BASE_URL
     const marketId = "vjkaZhNPnl"
 
     // Validate environment variables
-    if (!clientId || !clientSecret || !scope || !baseUrl) {
+    if (!clientId || !clientSecret || !baseUrl) {
       console.error("❌ Missing environment variables")
       return NextResponse.json(
         {
@@ -53,7 +52,6 @@ export async function POST(request: Request) {
           missing: {
             clientId: !clientId,
             clientSecret: !clientSecret,
-            scope: !scope,
             baseUrl: !baseUrl,
           },
         },
@@ -61,8 +59,9 @@ export async function POST(request: Request) {
       )
     }
 
-    console.log("🔑 Getting access token...")
-    const accessToken = await getCommerceLayerAccessToken(clientId, clientSecret, scope)
+    console.log("🔑 Getting access token with simplified scope...")
+    // Use simplified scope for Integration Apps
+    const accessToken = await getCommerceLayerAccessToken(clientId, clientSecret, "market:all")
 
     // Create customer
     console.log("👤 Creating customer...")
@@ -249,6 +248,7 @@ export async function POST(request: Request) {
       bookingId: bookingId,
       spaceId: spaceId,
       marketId: marketId,
+      scope: "market:all",
     })
   } catch (error) {
     console.error("❌ Order creation error:", error)
@@ -269,6 +269,7 @@ export async function GET() {
     requiredFields: ["sku", "customerName", "customerEmail"],
     optionalFields: ["quantity"],
     supportedSKUs: ["parking-hour", "parking-day", "parking-month"],
+    scope: "market:all (simplified for Integration Apps)",
     example: {
       sku: "parking-hour",
       customerName: "John Doe",

@@ -4,44 +4,51 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { CheckCircle, XCircle, Loader2, AlertCircle } from "lucide-react"
+
+interface ApiResponse {
+  success?: boolean
+  error?: string
+  [key: string]: any
+}
 
 export default function TestPaymentLinking() {
-  const [linkingStatus, setLinkingStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
-  const [orderStatus, setOrderStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
-  const [linkingResult, setLinkingResult] = useState<any>(null)
-  const [orderResult, setOrderResult] = useState<any>(null)
+  const [debugResult, setDebugResult] = useState<ApiResponse | null>(null)
+  const [linkResult, setLinkResult] = useState<ApiResponse | null>(null)
+  const [orderResult, setOrderResult] = useState<ApiResponse | null>(null)
+  const [loading, setLoading] = useState<string | null>(null)
 
-  const handleLinkPaymentMethod = async () => {
-    setLinkingStatus("loading")
-    setLinkingResult(null)
-
+  const runDebugToken = async () => {
+    setLoading("debug")
     try {
-      const response = await fetch("/api/commerce-layer/link-payment-method", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
+      const response = await fetch("/api/commerce-layer/debug-token")
       const data = await response.json()
-      setLinkingResult(data)
-
-      if (response.ok) {
-        setLinkingStatus("success")
-      } else {
-        setLinkingStatus("error")
-      }
+      setDebugResult(data)
     } catch (error) {
-      setLinkingStatus("error")
-      setLinkingResult({ error: error instanceof Error ? error.message : "Unknown error" })
+      setDebugResult({ error: error instanceof Error ? error.message : "Debug failed" })
+    } finally {
+      setLoading(null)
     }
   }
 
-  const handleCreateTestOrder = async () => {
-    setOrderStatus("loading")
-    setOrderResult(null)
+  const runLinkPaymentMethod = async () => {
+    setLoading("link")
+    try {
+      const response = await fetch("/api/commerce-layer/link-payment-method", {
+        method: "POST",
+      })
+      const data = await response.json()
+      setLinkResult(data)
+    } catch (error) {
+      setLinkResult({ error: error instanceof Error ? error.message : "Linking failed" })
+    } finally {
+      setLoading(null)
+    }
+  }
 
+  const runCreateOrder = async () => {
+    setLoading("order")
     try {
       const response = await fetch("/api/commerce-layer/create-order", {
         method: "POST",
@@ -50,68 +57,40 @@ export default function TestPaymentLinking() {
         },
         body: JSON.stringify({
           sku: "parking-hour",
-          customerName: "Test Customer",
+          customerName: "Test User",
           customerEmail: "test@example.com",
           quantity: 1,
         }),
       })
-
       const data = await response.json()
       setOrderResult(data)
-
-      if (response.ok) {
-        setOrderStatus("success")
-      } else {
-        setOrderStatus("error")
-      }
     } catch (error) {
-      setOrderStatus("error")
-      setOrderResult({ error: error instanceof Error ? error.message : "Unknown error" })
+      setOrderResult({ error: error instanceof Error ? error.message : "Order creation failed" })
+    } finally {
+      setLoading(null)
     }
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "loading":
-        return <Loader2 className="h-4 w-4 animate-spin" />
-      case "success":
-        return <CheckCircle className="h-4 w-4 text-green-500" />
-      case "error":
-        return <XCircle className="h-4 w-4 text-red-500" />
-      default:
-        return null
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "loading":
-        return <Badge variant="secondary">Loading...</Badge>
-      case "success":
-        return (
-          <Badge variant="default" className="bg-green-500">
-            Success
-          </Badge>
-        )
-      case "error":
-        return <Badge variant="destructive">Error</Badge>
-      default:
-        return <Badge variant="outline">Ready</Badge>
-    }
+  const StatusIcon = ({ success }: { success?: boolean }) => {
+    if (success === true) return <CheckCircle className="h-5 w-5 text-green-500" />
+    if (success === false) return <XCircle className="h-5 w-5 text-red-500" />
+    return <AlertCircle className="h-5 w-5 text-yellow-500" />
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold">Commerce Layer Payment Testing</h1>
-        <p className="text-muted-foreground">Test payment method linking and order creation</p>
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Commerce Layer Payment Integration Test</h1>
+        <p className="text-muted-foreground">
+          Test the Commerce Layer integration with simplified scope for Integration Apps
+        </p>
       </div>
 
-      {/* Configuration Display */}
-      <Card>
+      {/* Configuration Info */}
+      <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Current Configuration</CardTitle>
-          <CardDescription>Commerce Layer integration settings</CardDescription>
+          <CardTitle>Configuration</CardTitle>
+          <CardDescription>Current Commerce Layer setup</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -125,25 +104,65 @@ export default function TestPaymentLinking() {
               <strong>Payment Gateway ID:</strong> PxpOwsDWKk
             </div>
             <div>
-              <strong>Stripe Key:</strong> sk_test_51RXh8D...
+              <strong>Scope:</strong> <Badge variant="secondary">market:all</Badge>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Step 1: Link Payment Method */}
-      <Card>
+      {/* Step 1: Debug Token */}
+      <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            Step 1: Link Payment Method
-            {getStatusIcon(linkingStatus)}
-            {getStatusBadge(linkingStatus)}
+            <span>Step 1: Debug Token Request</span>
+            {debugResult && <StatusIcon success={debugResult.success} />}
+          </CardTitle>
+          <CardDescription>Test token generation with simplified scope</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={runDebugToken} disabled={loading === "debug"} className="mb-4">
+            {loading === "debug" ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Testing Token...
+              </>
+            ) : (
+              "Test Token Generation"
+            )}
+          </Button>
+
+          {debugResult && (
+            <div className="mt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <StatusIcon success={debugResult.success} />
+                <span className="font-medium">
+                  {debugResult.success ? "Token Generated Successfully" : "Token Generation Failed"}
+                </span>
+              </div>
+              <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-64">
+                {JSON.stringify(debugResult, null, 2)}
+              </pre>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Step 2: Link Payment Method */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <span>Step 2: Link Payment Method</span>
+            {linkResult && <StatusIcon success={linkResult.success} />}
           </CardTitle>
           <CardDescription>Link payment method KkqYWsPzjk to market vjkaZhNPnl</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Button onClick={handleLinkPaymentMethod} disabled={linkingStatus === "loading"} className="w-full">
-            {linkingStatus === "loading" ? (
+        <CardContent>
+          <Button
+            onClick={runLinkPaymentMethod}
+            disabled={loading === "link" || !debugResult?.success}
+            className="mb-4"
+          >
+            {loading === "link" ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Linking Payment Method...
@@ -153,51 +172,60 @@ export default function TestPaymentLinking() {
             )}
           </Button>
 
-          {linkingResult && (
+          {!debugResult?.success && (
+            <p className="text-sm text-muted-foreground mb-4">⚠️ Complete Step 1 successfully before proceeding</p>
+          )}
+
+          {linkResult && (
             <div className="mt-4">
-              <h4 className="font-semibold mb-2">Result:</h4>
-              <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-40">
-                {JSON.stringify(linkingResult, null, 2)}
+              <div className="flex items-center gap-2 mb-2">
+                <StatusIcon success={linkResult.success} />
+                <span className="font-medium">
+                  {linkResult.success ? "Payment Method Linked Successfully" : "Payment Method Linking Failed"}
+                </span>
+              </div>
+              <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-64">
+                {JSON.stringify(linkResult, null, 2)}
               </pre>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Step 2: Create Test Order */}
-      <Card>
+      {/* Step 3: Create Test Order */}
+      <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            Step 2: Create Test Order
-            {getStatusIcon(orderStatus)}
-            {getStatusBadge(orderStatus)}
+            <span>Step 3: Create Test Order</span>
+            {orderResult && <StatusIcon success={orderResult.success} />}
           </CardTitle>
-          <CardDescription>Create a test order with the linked payment method</CardDescription>
+          <CardDescription>Test order creation with linked payment method</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Button
-            onClick={handleCreateTestOrder}
-            disabled={orderStatus === "loading" || linkingStatus !== "success"}
-            className="w-full"
-          >
-            {orderStatus === "loading" ? (
+        <CardContent>
+          <Button onClick={runCreateOrder} disabled={loading === "order" || !linkResult?.success} className="mb-4">
+            {loading === "order" ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating Test Order...
+                Creating Order...
               </>
             ) : (
               "Create Test Order"
             )}
           </Button>
 
-          {linkingStatus !== "success" && (
-            <p className="text-sm text-muted-foreground">Complete step 1 successfully before proceeding to step 2.</p>
+          {!linkResult?.success && (
+            <p className="text-sm text-muted-foreground mb-4">⚠️ Complete Step 2 successfully before proceeding</p>
           )}
 
           {orderResult && (
             <div className="mt-4">
-              <h4 className="font-semibold mb-2">Result:</h4>
-              <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-40">
+              <div className="flex items-center gap-2 mb-2">
+                <StatusIcon success={orderResult.success} />
+                <span className="font-medium">
+                  {orderResult.success ? "Order Created Successfully" : "Order Creation Failed"}
+                </span>
+              </div>
+              <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-64">
                 {JSON.stringify(orderResult, null, 2)}
               </pre>
             </div>
@@ -205,38 +233,36 @@ export default function TestPaymentLinking() {
         </CardContent>
       </Card>
 
-      {/* Debug Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Debug Information</CardTitle>
-          <CardDescription>Additional debugging endpoints</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open("/api/commerce-layer/debug-token", "_blank")}
-            >
-              Debug Token
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open("/api/commerce-layer/link-payment-method", "_blank")}
-            >
-              View Link Endpoint
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open("/api/commerce-layer/create-order", "_blank")}
-            >
-              View Order Endpoint
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Summary */}
+      {debugResult && linkResult && orderResult && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Integration Test Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <StatusIcon success={debugResult.success} />
+                <span>Token Generation: {debugResult.success ? "✅ Success" : "❌ Failed"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusIcon success={linkResult.success} />
+                <span>Payment Method Linking: {linkResult.success ? "✅ Success" : "❌ Failed"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusIcon success={orderResult.success} />
+                <span>Order Creation: {orderResult.success ? "✅ Success" : "❌ Failed"}</span>
+              </div>
+              <Separator className="my-4" />
+              <p className="text-sm text-muted-foreground">
+                {debugResult.success && linkResult.success && orderResult.success
+                  ? "🎉 All tests passed! Your Commerce Layer integration is working correctly."
+                  : "❌ Some tests failed. Check the error details above and verify your Commerce Layer configuration."}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

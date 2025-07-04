@@ -1,12 +1,15 @@
 export async function getCommerceLayerAccessToken(
   clientId: string,
   clientSecret: string,
-  scope: string,
+  scope?: string,
 ): Promise<string> {
   try {
     console.log("🔑 Requesting Commerce Layer access token...")
     console.log("- Client ID:", clientId.substring(0, 20) + "...")
-    console.log("- Scope:", scope)
+
+    // Use simplified scope for Integration Apps
+    const tokenScope = scope || "market:all"
+    console.log("- Scope:", tokenScope)
 
     const baseUrl = process.env.COMMERCE_LAYER_BASE_URL
     if (!baseUrl) {
@@ -26,7 +29,7 @@ export async function getCommerceLayerAccessToken(
         grant_type: "client_credentials",
         client_id: clientId,
         client_secret: clientSecret,
-        scope: scope,
+        scope: tokenScope,
       }),
     })
 
@@ -40,6 +43,9 @@ export async function getCommerceLayerAccessToken(
 
     const data = await response.json()
     console.log("✅ Token obtained successfully")
+    console.log("- Token type:", data.token_type)
+    console.log("- Expires in:", data.expires_in, "seconds")
+    console.log("- Scope:", data.scope)
 
     return data.access_token
   } catch (error) {

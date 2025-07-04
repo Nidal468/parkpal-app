@@ -7,23 +7,20 @@ export async function GET() {
     // Get environment variables
     const clientId = process.env.NEXT_PUBLIC_CL_CLIENT_ID
     const clientSecret = process.env.NEXT_PUBLIC_CL_CLIENT_SECRET
-    const scope = process.env.NEXT_PUBLIC_CL_SCOPE
     const baseUrl = process.env.COMMERCE_LAYER_BASE_URL
 
     console.log("📋 Environment variables check:")
     console.log("- Client ID:", clientId ? `${clientId.substring(0, 20)}...` : "❌ MISSING")
     console.log("- Client Secret:", clientSecret ? `${clientSecret.substring(0, 10)}...` : "❌ MISSING")
-    console.log("- Scope:", scope || "❌ MISSING")
     console.log("- Base URL:", baseUrl || "❌ MISSING")
 
-    if (!clientId || !clientSecret || !scope || !baseUrl) {
+    if (!clientId || !clientSecret || !baseUrl) {
       return NextResponse.json(
         {
           error: "Missing environment variables",
           missing: {
             clientId: !clientId,
             clientSecret: !clientSecret,
-            scope: !scope,
             baseUrl: !baseUrl,
           },
         },
@@ -33,6 +30,10 @@ export async function GET() {
 
     const tokenUrl = `${baseUrl}/oauth/token`
     console.log("🔗 Token URL:", tokenUrl)
+
+    // Use simplified scope for Integration Apps
+    const scope = "market:all"
+    console.log("🔧 Using simplified scope:", scope)
 
     const requestBody = new URLSearchParams({
       grant_type: "client_credentials",
@@ -76,6 +77,7 @@ export async function GET() {
           Accept: "application/json",
         },
         body: requestBody.toString(),
+        scope: scope,
       },
       response: {
         status: response.status,
@@ -85,8 +87,8 @@ export async function GET() {
       environment: {
         clientId: clientId ? `${clientId.substring(0, 20)}...` : null,
         clientSecret: clientSecret ? `${clientSecret.substring(0, 10)}...` : null,
-        scope: scope,
         baseUrl: baseUrl,
+        scopeUsed: scope,
       },
     })
   } catch (error) {
