@@ -1,45 +1,41 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabaseServer } from "@/lib/supabase-server"
+import { supabaseServer, isSupabaseConfigured } from "@/lib/supabase-server"
 
 export async function GET(request: NextRequest) {
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const spaceId = searchParams.get("space_id")
 
-    console.log("🔍 Reviews API called for space:", spaceId)
-
     if (!spaceId) {
-      return NextResponse.json({ error: "space_id is required" }, { status: 400 })
+      return NextResponse.json({ error: "space_id parameter is required" }, { status: 400 })
     }
 
-    // First check if reviews table exists
     const { data: reviews, error } = await supabaseServer
       .from("reviews")
       .select("*")
       .eq("space_id", spaceId)
       .order("created_at", { ascending: false })
 
-    console.log("📊 Reviews query result:", { reviews, error })
-
     if (error) {
-      console.error("❌ Supabase error:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error("Error fetching reviews:", error)
+      return NextResponse.json({ error: "Failed to fetch reviews" }, { status: 500 })
     }
 
     // Calculate average rating
-    let averageRating = 0
-    if (reviews && reviews.length > 0) {
-      const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0)
-      averageRating = totalRating / reviews.length
-    }
+    const averageRating =
+      reviews.length > 0 ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0
 
     return NextResponse.json({
-      reviews: reviews || [],
-      averageRating,
-      totalReviews: reviews?.length || 0,
+      reviews,
+      averageRating: Math.round(averageRating * 10) / 10,
+      totalReviews: reviews.length,
     })
   } catch (error) {
-    console.error("❌ Reviews API error:", error)
-    return NextResponse.json({ error: "Failed to fetch reviews" }, { status: 500 })
+    console.error("Reviews API error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

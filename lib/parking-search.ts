@@ -1,92 +1,33 @@
 import { supabaseServer, isSupabaseConfigured } from "./supabase-server"
-import type { ParkingSpaceDisplay, SearchParams } from "./supabase-types"
+import type { SearchParams } from "./supabase-types"
+import type { ParkingSpace } from "./supabase-types"
 
-export async function searchParkingSpaces(params: SearchParams): Promise<ParkingSpaceDisplay[]> {
+export async function searchParkingSpaces(query: string): Promise<ParkingSpace[]> {
+  if (!isSupabaseConfigured()) {
+    console.warn("Supabase not configured, returning empty results")
+    return []
+  }
+
   try {
-    console.log("🔍 Searching with params:", params)
+    const searchTerm = `%${query}%`
 
-    // Check if Supabase is configured
-    if (!isSupabaseConfigured()) {
-      console.warn("⚠️ Supabase not configured, returning empty results")
-      return []
-    }
-
-    // Build the query with host information
-    let query = supabaseServer
+    const { data: spaces, error } = await supabaseServer
       .from("spaces")
-      .select(`
-        *,
-        host:users!fk_host(
-          id,
-          name,
-          email
-        )
-      `)
+      .select("*")
       .eq("is_available", true)
-
-    // Filter by location (search in title, location, address, postcode)
-    if (params.location) {
-      const locationTerm = `%${params.location}%`
-      query = query.or(
-        `title.ilike.${locationTerm},location.ilike.${locationTerm},address.ilike.${locationTerm},postcode.ilike.${locationTerm}`,
+      .or(
+        `title.ilike.${searchTerm},location.ilike.${searchTerm},address.ilike.${searchTerm},postcode.ilike.${searchTerm}`,
       )
-    }
-
-    // Filter by specific postcode
-    if (params.postcode) {
-      query = query.ilike("postcode", `%${params.postcode}%`)
-    }
-
-    // Filter by what3words
-    if (params.what3words) {
-      query = query.ilike("what3words", `%${params.what3words}%`)
-    }
-
-    // Filter by price
-    if (params.maxPrice) {
-      console.log(`💰 Adding price filter: <= £${params.maxPrice}`)
-      query = query.lte("price_per_day", params.maxPrice)
-    }
-
-    // Filter by date availability
-    if (params.startDate && params.endDate) {
-      console.log(`📅 Adding date filter: ${params.startDate} to ${params.endDate}`)
-      query = query
-        .or(`available_from.is.null,available_from.lte.${params.startDate}`)
-        .or(`available_to.is.null,available_to.gte.${params.endDate}`)
-    }
-
-    // Filter by features
-    if (params.features && params.features.length > 0) {
-      console.log(`🏷️ Adding features filter: ${params.features.join(", ")}`)
-      // Search for any of the requested features in the features string
-      const featureQueries = params.features.map((feature) => `features.ilike.%${feature}%`)
-      query = query.or(featureQueries.join(","))
-    }
-
-    const { data, error } = await query.order("price_per_day", { ascending: true }).limit(6)
+      .limit(10)
 
     if (error) {
-      console.error("Supabase query error:", error)
+      console.error("Error searching parking spaces:", error)
       return []
     }
 
-    // Transform data for frontend (parse features string to array)
-    const transformedData: ParkingSpaceDisplay[] = (data || []).map((space: any) => ({
-      ...space,
-      features: space.features
-        ? space.features
-            .split(",")
-            .map((f: string) => f.trim())
-            .filter((f: string) => f.length > 0)
-        : [],
-      host: space.host || undefined,
-    }))
-
-    console.log(`✅ Found ${transformedData.length} spaces`)
-    return transformedData
+    return spaces || []
   } catch (error) {
-    console.error("Search error:", error)
+    console.error("Error in searchParkingSpaces:", error)
     return []
   }
 }

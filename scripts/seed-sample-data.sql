@@ -20,3 +20,21 @@ INSERT INTO spaces (id, host_id, title, location, features, description, price_p
   ('770e8400-e29b-41d4-a716-446655440005', '550e8400-e29b-41d4-a716-446655440001', 'Premium Parking Garage', 'Vauxhall', 'Valet Service,Car Wash,Premium,Indoor', 'High-end parking facility with valet service and car wash options. Premium location.', 25, '2024-01-01', '2024-12-31', '654 Vauxhall Bridge Road', 'SE11 5IJ', 51.4857, -0.124, '///premium.valet.service'),
   ('770e8400-e29b-41d4-a716-446655440006', '550e8400-e29b-41d4-a716-446655440002', 'Waterloo Station Parking', 'Waterloo', 'Near Station,Commuter Friendly,Central Location', 'Convenient parking near Waterloo station. Perfect for commuters and visitors to central London.', 20, '2024-01-01', '2024-12-31', '987 Waterloo Road', 'SE1 8KL', 51.5045, -0.1097, '///station.commuter.central')
 ON CONFLICT (id) DO NOTHING;
+
+-- Insert sample parking spaces (only if none exist)
+INSERT INTO spaces (
+  title, location, address, postcode, description, features, 
+  price_per_day, price_per_month, is_available, latitude, longitude
+) 
+SELECT * FROM (VALUES
+  ('Secure Parking - London Bridge', 'London Bridge, London', 'London Bridge Street', 'SE1 9RT', 
+   'Secure underground parking near London Bridge station', 'Underground,Secure,24/7 Access', 
+   25.00, 650.00, true, 51.5045, -0.0865),
+  ('Private Driveway - Elephant & Castle', 'Elephant & Castle, London', 'New Kent Road', 'SE17 1LB', 
+   'Private driveway space near Elephant & Castle', 'Private,Easy Access,CCTV', 
+   18.50, 480.00, true, 51.4948, -0.0877),
+  ('Business Parking - Canary Wharf', 'Canary Wharf, London', 'Canada Square', 'E14 5AB', 
+   'Premium business district parking', 'Business Hours,Secure,Electric Charging', 
+   45.00, 1200.00, true, 51.5054, -0.0235)
+) AS sample_data
+WHERE NOT EXISTS (SELECT 1 FROM spaces LIMIT 1);
