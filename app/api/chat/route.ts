@@ -1,118 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import OpenAI from "openai"
-import { supabaseServer } from "@/lib/supabase-server"
-import { searchMockParkingSpaces } from "@/lib/mock-data"
+import { supabaseServer, isSupabaseConfigured } from "@/lib/supabase-server"
+import { searchParkingSpaces } from "@/lib/parking-search"
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
-
-// Check if Supabase is configured
-const isSupabaseConfigured = () => {
-  return !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
-}
-
-// Enhanced search function with availability checking
-async function searchParkingSpaces(searchParams: any) {
-  try {
-    console.log("🔍 Starting parking space search with params:", searchParams)
-
-    if (isSupabaseConfigured()) {
-      console.log("📊 Searching your actual database spaces...")
-
-      // Get spaces that are available AND have capacity
-      const { data: allAvailable, error: allError } = await supabaseServer
-        .from("spaces")
-        .select("*")
-        .eq("is_available", true)
-        .order("price_per_day", { ascending: true })
-
-      if (allError) {
-        console.error("❌ Error getting available spaces:", allError)
-        return searchMockParkingSpaces(searchParams).slice(0, 3)
-      }
-
-      console.log(`✅ Found ${allAvailable?.length || 0} available spaces in database`)
-
-      if (!allAvailable || allAvailable.length === 0) {
-        console.log("📭 No available spaces found, using mock data")
-        return searchMockParkingSpaces(searchParams).slice(0, 3)
-      }
-
-      // Filter out spaces that are fully booked
-      const spacesWithCapacity = allAvailable.filter((space) => {
-        const totalSpaces = space.total_spaces || 1
-        const bookedSpaces = space.booked_spaces || 0
-        const availableSpaces = totalSpaces - bookedSpaces
-
-        console.log(`Space "${space.title}": ${availableSpaces}/${totalSpaces} available`)
-        return availableSpaces > 0
-      })
-
-      console.log(`🎯 ${spacesWithCapacity.length} spaces have available capacity`)
-
-      if (spacesWithCapacity.length === 0) {
-        console.log("🚫 All spaces are fully booked")
-        return []
-      }
-
-      // Apply location filtering if specified
-      let filteredSpaces = spacesWithCapacity
-      if (searchParams.location) {
-        const locationTerm = searchParams.location.toLowerCase()
-        filteredSpaces = spacesWithCapacity.filter(
-          (space) =>
-            (space.location && space.location.toLowerCase().includes(locationTerm)) ||
-            (space.address && space.address.toLowerCase().includes(locationTerm)) ||
-            (space.postcode && space.postcode.toLowerCase().includes(locationTerm)) ||
-            (space.title && space.title.toLowerCase().includes(locationTerm)),
-        )
-
-        // If no location matches, return all available spaces
-        if (filteredSpaces.length === 0) {
-          console.log("📍 No location matches, showing all available spaces")
-          filteredSpaces = spacesWithCapacity
-        }
-      }
-
-      // Transform the data with availability info
-      const transformedSpaces = filteredSpaces.map((space) => {
-        const totalSpaces = space.total_spaces || 1
-        const bookedSpaces = space.booked_spaces || 0
-        const availableSpaces = totalSpaces - bookedSpaces
-
-        return {
-          ...space,
-          available_spaces: availableSpaces,
-          features:
-            typeof space.features === "string"
-              ? space.features
-                  .split(",")
-                  .map((f) => f.trim())
-                  .filter((f) => f.length > 0)
-              : space.features || [],
-          host: {
-            id: space.host_id || "host-1",
-            name: "Space Owner",
-            email: "owner@example.com",
-          },
-        }
-      })
-
-      console.log(`🎯 Returning ${transformedSpaces.length} spaces with available capacity`)
-      return transformedSpaces.slice(0, 3)
-    }
-
-    // Fallback to mock data
-    console.log("🎭 Using mock data (Supabase not configured)")
-    return searchMockParkingSpaces(searchParams).slice(0, 3)
-  } catch (error) {
-    console.error("💥 Search function error:", error)
-    console.log("🎭 Falling back to mock data due to error")
-    return searchMockParkingSpaces(searchParams).slice(0, 3)
-  }
-}
 
 // Enhanced search parameter extraction
 function extractSearchParams(message: string) {
@@ -127,7 +21,8 @@ function extractSearchParams(message: string) {
     /([a-zA-Z0-9\s]+)\s+parking/i,
     /(?:find|book|need)\s+(?:parking\s+)?(?:in|at|near)\s+([a-zA-Z0-9\s]+)/i,
     /park\s+me\s+(?:in|near)\s+([a-zA-Z0-9\s]+)/i,
-    /park\s+me\s+asap/i, // Handle "park me asap"
+    /spaces\s+(?:in|near|at|around)\s+([a-zA-Z0-9\s]+)/i,
+    /spaces\s+near\s+me/i, // Handle "spaces near me"
   ]
 
   for (const pattern of locationPatterns) {
@@ -137,6 +32,12 @@ function extractSearchParams(message: string) {
       console.log(`📍 Extracted location: "${location}"`)
       break
     }
+  }
+
+  // Handle "spaces near me" or "near me" - show all available spaces
+  if (lowerMessage.includes("near me") || lowerMessage.includes("spaces near me")) {
+    location = null // Show all available spaces
+    console.log("📍 'Near me' request - showing all available spaces")
   }
 
   // Handle "park me asap" - no specific location
@@ -194,7 +95,8 @@ export async function POST(request: NextRequest) {
       searchParams.location ||
       message.toLowerCase().includes("parking") ||
       message.toLowerCase().includes("space") ||
-      message.toLowerCase().includes("park")
+      message.toLowerCase().includes("park") ||
+      message.toLowerCase().includes("near me")
 
     if (isParkingQuery) {
       console.log("🎯 This is a parking query, starting search...")
@@ -279,7 +181,7 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
 
     const botResponse = completion.choices[0]?.message?.content || "Sorry, I couldn't process that request."
 
-    // Determine if we should add follow-up message - MUST be before the response
+    // Determine if we should add follow-up message
     const shouldAddFollowUp = hasSearchResults && parkingSpaces.length > 0
     console.log("🔄 Should add follow-up message:", shouldAddFollowUp, "Spaces found:", parkingSpaces.length)
 
@@ -315,10 +217,6 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
       console.log("⚠️ Supabase not configured - message not stored")
     }
 
-    // Determine if we should add follow-up message
-    // const shouldAddFollowUp = hasSearchResults && parkingSpaces.length > 0
-    // console.log("🔄 Should add follow-up message:", shouldAddFollowUp, "Spaces found:", parkingSpaces.length)
-
     // Return response with parking spaces data if available
     const response = {
       message: botResponse,
@@ -334,6 +232,7 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
       spacesCount: parkingSpaces.length,
       hasFollowUp: !!response.followUpMessage,
       followUpText: response.followUpMessage,
+      supabaseConfigured: isSupabaseConfigured(),
     })
 
     return NextResponse.json(response)
