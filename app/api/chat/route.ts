@@ -3,16 +3,16 @@ import OpenAI from "openai"
 import { supabaseServer, isSupabaseConfigured } from "@/lib/supabase-server"
 import { searchParkingSpaces, extractSearchParams } from "@/lib/parking-search"
 
-// Initialize OpenAI client
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENROUTER_API_KEY || "", // Rename your env var if needed
+  baseURL: "https://openrouter.ai/api/v1", // <- Required for OpenRouter
 })
 
 export async function POST(request: NextRequest) {
   try {
     const { message, conversation } = await request.json()
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (!process.env.OPENROUTER_API_KEY) {
       return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 })
     }
 
@@ -118,7 +118,7 @@ IMPORTANT: Always be helpful and suggest alternatives if no spaces with capacity
 
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "deepseek/deepseek-r1-0528-qwen3-8b:free",
       messages: messages,
       max_tokens: 800,
       temperature: 0.7,

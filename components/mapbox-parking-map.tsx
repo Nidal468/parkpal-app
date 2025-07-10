@@ -1,25 +1,26 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import type { ParkingSpace } from "@/lib/supabase-types"
 import { getMapboxToken } from "@/lib/mapbox-config"
 import { SpaceDetailsModal } from "./space-details-modal"
+import { ISpaces } from "@/model/spaces"
 
 interface MapboxParkingMapProps {
-  spaces: ParkingSpace[]
-  onSpaceSelect?: (space: ParkingSpace) => void
-  selectedSpaceId?: string
+  spaces: ISpaces[]
+  onSpaceSelect: (space: ISpaces | null) => void
+  selectedSpace: ISpaces | null
+  userLocation?: { latitude: number; longitude: number } | null
 }
 
-function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxParkingMapProps) {
+
+function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpace, userLocation }: MapboxParkingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<any>(null)
   const [mapboxgl, setMapboxgl] = useState<any>(null)
   const [mapboxToken, setMapboxToken] = useState<string>("")
-  const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [mapLoaded, setMapLoaded] = useState(false)
   const markersRef = useRef<any[]>([])
+  const userMarkerRef = useRef<any>(null);
 
   // Debug: Log spaces data
   useEffect(() => {
@@ -73,8 +74,9 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
     // Set Mapbox access token
     mapboxgl.accessToken = mapboxToken
 
-    // Default center (London SE17 area)
-    const center = [-0.0877, 51.4948] // SE17 coordinates
+    const center = userLocation
+      ? [userLocation.longitude, userLocation.latitude]
+      : [-0.0877, 51.4948] // fallback to SE17
 
     try {
       map.current = new mapboxgl.Map({
@@ -109,6 +111,41 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
       }
     }
   }, [mapboxgl, mapboxToken])
+
+  useEffect(() => {
+    console.log("Adding user marker, mapboxgl:", mapboxgl, "userLocation:", userLocation, "mapLoaded:", mapLoaded);
+    if (!mapboxgl || !map.current || !mapLoaded) return;
+
+    // Remove previous user marker if exists
+    if (userMarkerRef.current) {
+      userMarkerRef.current.remove();
+      userMarkerRef.current = null;
+    }
+
+    if (userLocation) {
+      const el = document.createElement("div");
+      el.style.width = "12px";
+      el.style.height = "12px";
+      el.style.backgroundColor = "#1d4ed8";
+      el.style.border = "2px solid white";
+      el.style.borderRadius = "9999px";
+      el.style.boxShadow = "0 0 0 2px rgba(29, 78, 216, 0.5)";
+      el.style.position = "relative";
+      el.style.zIndex = "10";
+
+      const marker = new mapboxgl.Marker(el)
+        .setLngLat([userLocation.longitude, userLocation.latitude])
+        .addTo(map.current);
+
+      userMarkerRef.current = marker;
+
+      map.current.flyTo({
+        center: [userLocation.longitude, userLocation.latitude],
+        zoom: 14,
+      });
+    }
+  }, [userLocation, mapboxgl, mapLoaded]);
+
 
   // Clear existing markers
   const clearMarkers = () => {
@@ -170,8 +207,7 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
 
       // Click event to open modal (no color change)
       markerElement.addEventListener("click", () => {
-        setSelectedSpace(space)
-        setIsModalOpen(true)
+        onSpaceSelect(space)
         onSpaceSelect?.(space)
       })
 
@@ -184,10 +220,9 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
       console.log(`🗺️ Marker ${index + 1} added successfully`)
     })
 
-    // Fit map to show all markers if we have multiple spaces
-    if (spacesWithCoords.length > 1) {
+    if (spacesWithCoords.length > 1 && !userLocation) {
+      // Fit to bounds only if userLocation is not provided
       const coordinates = spacesWithCoords.map((space) => [space.longitude!, space.latitude!])
-
       try {
         const bounds = coordinates.reduce((bounds, coord) => {
           return bounds.extend(coord)
@@ -201,13 +236,14 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
       } catch (error) {
         console.error("🗺️ Failed to fit bounds:", error)
       }
-    } else if (spacesWithCoords.length === 1) {
-      // Center on single space
+    } else if (spacesWithCoords.length === 1 && !userLocation) {
+      // Only center on single space if no user location
       const space = spacesWithCoords[0]
       map.current.setCenter([space.longitude!, space.latitude!])
       map.current.setZoom(15)
     }
-  }, [mapLoaded, spaces, selectedSpaceId])
+
+  }, [mapLoaded, spaces, selectedSpace])
 
   // Show loading state while token is being fetched
   if (!mapboxToken) {
@@ -238,7 +274,7 @@ function MapboxParkingMap({ spaces, onSpaceSelect, selectedSpaceId }: MapboxPark
       </div>
 
       {/* Space Details Modal */}
-      <SpaceDetailsModal space={selectedSpace} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      {selectedSpace && <SpaceDetailsModal space={selectedSpace} onClose={() => onSpaceSelect(null)} />}
     </>
   )
 }

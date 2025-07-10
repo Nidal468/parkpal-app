@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react"
 import { X, Star } from "lucide-react"
 import { useRouter } from "next/navigation"
-import type { ParkingSpace, Review } from "@/lib/supabase-types"
+import { ISpaces } from "@/model/spaces"
+import { IReview } from "@/model/review"
 
 interface SpaceDetailsModalProps {
-  space: ParkingSpace | null
-  isOpen: boolean
+  space: ISpaces | null
   onClose: () => void
   selectedDates?: {
     from: Date | undefined
@@ -15,27 +15,20 @@ interface SpaceDetailsModalProps {
   }
 }
 
-export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: SpaceDetailsModalProps) {
+export function SpaceDetailsModal({ space, onClose, selectedDates }: SpaceDetailsModalProps) {
   const router = useRouter()
   const [isMonthly, setIsMonthly] = useState(false)
-  const [reviews, setReviews] = useState<Review[]>([])
+  const [reviews, setReviews] = useState<IReview[]>([])
   const [loading, setLoading] = useState(false)
   const [averageRating, setAverageRating] = useState(0)
   const [totalReviews, setTotalReviews] = useState(0)
 
-  // Reset to daily when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setIsMonthly(false)
-    }
-  }, [isOpen])
-
   // Fetch reviews when modal opens
   useEffect(() => {
-    if (isOpen && space?.id) {
+    if (space?.id) {
       fetchReviews()
     }
-  }, [isOpen, space?.id])
+  }, [space?.id])
 
   const fetchReviews = async () => {
     try {
@@ -60,14 +53,14 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
       } else {
         console.log("⚠️ No reviews found, using mock data")
         // Fallback to mock data
-        const mockReviews: Review[] = [
+        const mockReviews: any[] = [
           {
             id: "mock-1",
             space_id: space!.id,
             user_id: "user1",
             rating: 5,
             comment: "Excellent parking space! Very secure and convenient location.",
-            created_at: "2024-01-20T10:30:00Z",
+            createdAt: "2024-01-20T10:30:00Z",
             updated_at: "2024-01-20T10:30:00Z",
           },
           {
@@ -76,7 +69,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
             user_id: "user2",
             rating: 4,
             comment: "Good value for money. Easy access and well-lit area.",
-            created_at: "2024-01-18T14:20:00Z",
+            createdAt: "2024-01-18T14:20:00Z",
             updated_at: "2024-01-18T14:20:00Z",
           },
           {
@@ -85,7 +78,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
             user_id: "user3",
             rating: 5,
             comment: "Perfect for daily commuting. Highly recommend!",
-            created_at: "2024-01-15T09:15:00Z",
+            createdAt: "2024-01-15T09:15:00Z",
             updated_at: "2024-01-15T09:15:00Z",
           },
           {
@@ -94,7 +87,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
             user_id: "user4",
             rating: 4,
             comment: "Great location, close to transport links.",
-            created_at: "2024-01-12T16:45:00Z",
+            createdAt: "2024-01-12T16:45:00Z",
             updated_at: "2024-01-12T16:45:00Z",
           },
           {
@@ -103,7 +96,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
             user_id: "user5",
             rating: 5,
             comment: "Outstanding service and very reliable.",
-            created_at: "2024-01-10T11:30:00Z",
+            createdAt: "2024-01-10T11:30:00Z",
             updated_at: "2024-01-10T11:30:00Z",
           },
           {
@@ -112,7 +105,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
             user_id: "user6",
             rating: 4,
             comment: "Clean, safe, and well-maintained parking area.",
-            created_at: "2024-01-08T13:20:00Z",
+            createdAt: "2024-01-08T13:20:00Z",
             updated_at: "2024-01-08T13:20:00Z",
           },
         ]
@@ -124,14 +117,14 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
     } catch (error) {
       console.error("❌ Error fetching reviews:", error)
       // Fallback to mock data on error
-      const mockReviews: Review[] = [
+      const mockReviews: any[] = [
         {
           id: "fallback-1",
           space_id: space!.id,
           user_id: "user1",
           rating: 4,
           comment: "Great parking space with easy access and good security.",
-          created_at: "2024-01-20T10:30:00Z",
+          createdAt: "2024-01-20T10:30:00Z",
           updated_at: "2024-01-20T10:30:00Z",
         },
         {
@@ -140,7 +133,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
           user_id: "user2",
           rating: 5,
           comment: "Very convenient location and secure. Highly recommended!",
-          created_at: "2024-01-18T14:20:00Z",
+          createdAt: "2024-01-18T14:20:00Z",
           updated_at: "2024-01-18T14:20:00Z",
         },
         {
@@ -149,7 +142,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
           user_id: "user3",
           rating: 4,
           comment: "Good value for money. Easy booking process.",
-          created_at: "2024-01-15T09:15:00Z",
+          createdAt: "2024-01-15T09:15:00Z",
           updated_at: "2024-01-15T09:15:00Z",
         },
         {
@@ -158,7 +151,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
           user_id: "user4",
           rating: 5,
           comment: "Perfect for daily use. Clean and well-maintained.",
-          created_at: "2024-01-12T16:45:00Z",
+          createdAt: "2024-01-12T16:45:00Z",
           updated_at: "2024-01-12T16:45:00Z",
         },
         {
@@ -167,7 +160,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
           user_id: "user5",
           rating: 4,
           comment: "Reliable and safe parking. Would use again.",
-          created_at: "2024-01-10T11:30:00Z",
+          createdAt: "2024-01-10T11:30:00Z",
           updated_at: "2024-01-10T11:30:00Z",
         },
         {
@@ -176,7 +169,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
           user_id: "user6",
           rating: 5,
           comment: "Excellent location with great transport links nearby.",
-          created_at: "2024-01-08T13:20:00Z",
+          createdAt: "2024-01-08T13:20:00Z",
           updated_at: "2024-01-08T13:20:00Z",
         },
       ]
@@ -199,7 +192,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
 
     // Create URL with booking details
     const bookingParams = new URLSearchParams({
-      spaceId: space.id,
+      spaceId: space._id as string,
       spaceTitle: space.title || "Parking Space",
       spaceLocation: `${space.location || ""}, ${space.postcode}`.trim().replace(/^,\s*/, ""),
       price: currentPrice.toString(),
@@ -231,7 +224,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
     )
   }
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: Date) => {
     return new Date(dateString).toLocaleDateString("en-GB", {
       day: "numeric",
       month: "short",
@@ -239,7 +232,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
     })
   }
 
-  if (!isOpen || !space) return null
+  if (!space) return null
 
   // Calculate prices
   const dailyPrice = space.price_per_day ? Number.parseFloat(space.price_per_day.toString()) : 0
@@ -289,17 +282,15 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
             <div className="flex bg-gray-100 rounded-lg p-1 w-fit">
               <button
                 onClick={() => setIsMonthly(false)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  !isMonthly ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
-                }`}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${!isMonthly ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                  }`}
               >
                 Daily
               </button>
               <button
                 onClick={() => setIsMonthly(true)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isMonthly ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
-                }`}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${isMonthly ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                  }`}
               >
                 Monthly
               </button>
@@ -397,7 +388,7 @@ export function SpaceDetailsModal({ space, isOpen, onClose, selectedDates }: Spa
                   <div key={review.id} className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
                       {renderStars(review.rating, "sm")}
-                      <span className="text-sm text-gray-500">{formatDate(review.created_at)}</span>
+                      <span className="text-sm text-gray-500">{formatDate(review.createdAt)}</span>
                     </div>
                     <p className="text-gray-700 text-sm">{review.comment}</p>
                   </div>
