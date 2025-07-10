@@ -31,12 +31,14 @@ import { ParkingMap } from "@/components/parking-map"
 import { BookingModal, type BookingData } from "@/components/booking-modal"
 import type { ParkingSpace } from "@/lib/supabase-types"
 import Image from "next/image"
+import { ISpaces } from "@/model/spaces"
+import { DateRange } from "react-day-picker"
 
 interface Message {
   role: "assistant" | "user"
   content: string
   timestamp: string
-  parkingSpaces?: ParkingSpace[]
+  parkingSpaces?: ISpaces[]
 }
 
 // Simple booking flow stages
@@ -48,22 +50,19 @@ export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null)
+  const [selectedSpace, setSelectedSpace] = useState<ISpaces | null>(null)
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid")
   const [hasProcessedQuery, setHasProcessedQuery] = useState(false)
 
   // Simple booking flow state
   const [bookingStage, setBookingStage] = useState<BookingStage>("chat")
-  const [selectedDates, setSelectedDates] = useState<{
-    from: Date | undefined
-    to: Date | undefined
-  }>({
+  const [selectedDates, setSelectedDates] = useState<DateRange>({
     from: undefined,
     to: undefined,
   })
   const [selectedTime, setSelectedTime] = useState("")
-  const [latestParkingSpaces, setLatestParkingSpaces] = useState<ParkingSpace[]>([])
+  const [latestParkingSpaces, setLatestParkingSpaces] = useState<ISpaces[]>([])
 
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -103,7 +102,7 @@ export default function ChatInterface() {
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
-    console.log("📜 Messages updated, count:", messages.length)
+    
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector("[data-radix-scroll-area-viewport]")
       if (scrollContainer) {
@@ -246,7 +245,7 @@ export default function ChatInterface() {
         console.log("✅ PARKING SPACES FOUND! Setting latest spaces and adding follow-up")
         console.log(
           "✅ Spaces to store:",
-          data.parkingSpaces.map((s) => ({ id: s.id, title: s.title })),
+          data.parkingSpaces.map((s: { id: any; title: any }) => ({ id: s.id, title: s.title })),
         )
 
         setLatestParkingSpaces(data.parkingSpaces)
@@ -333,7 +332,7 @@ export default function ChatInterface() {
     }
   }
 
-  const handleSelectSpaceFromMap = (space: ParkingSpace) => {
+  const handleSelectSpaceFromMap = (space: ISpaces) => {
     console.log("🗺️ handleSelectSpaceFromMap called for space:", space.id)
     setSelectedSpace(space)
     setIsBookingModalOpen(true)
@@ -364,7 +363,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
     }
   }
 
-  const handleDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
+  const handleDateSelect = (range: DateRange | undefined) => {
     if (range) {
       console.log("📅 Date range selected:", range)
       setSelectedDates(range)
@@ -496,7 +495,7 @@ You'll receive a confirmation email at ${bookingData.contactEmail} with all the 
                   <Tabs value={viewMode} className="w-full">
                     <TabsContent value="grid" className="mt-0">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {message.parkingSpaces.map((space) => (
+                        {message.parkingSpaces.map((space: any) => (
                           <ParkingSpaceCard key={space.id} space={space} onBook={handleBookSpace} />
                         ))}
                       </div>

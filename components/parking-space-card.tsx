@@ -89,7 +89,7 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
     <Card className="w-full max-w-sm mx-auto">
       <div className="aspect-video relative overflow-hidden rounded-t-lg">
         <img
-          src={space.image_url || "/placeholder.svg?height=200&width=300"}
+          src={"/placeholder.svg?height=200&width=300"}
           alt={space.title}
           className="object-cover w-full h-full"
         />
@@ -135,11 +135,11 @@ export function ParkingSpaceCard({ space, onBook }: ParkingSpaceCardProps) {
         <div className="space-y-1 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
             <Clock className="w-3 h-3 flex-shrink-0" />
-            <span>{formatAvailableHours(space.available_hours)}</span>
+            <span>{formatAvailableHours('12')}</span>
           </div>
           <div className="flex items-center gap-1">
             <Calendar className="w-3 h-3 flex-shrink-0" />
-            <span className="truncate">{formatAvailableDays(space.available_days)}</span>
+            <span className="truncate">{formatAvailableDays('1')}</span>
           </div>
         </div>
 

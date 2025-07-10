@@ -15,6 +15,8 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { CalendarIcon, Clock, MapPin, Star, Shield, Wifi, Camera, Car } from "lucide-react"
 import type { ParkingSpace } from "@/lib/supabase-types"
+import { ISpaces } from "@/model/spaces"
+import { DateRange } from "react-day-picker"
 
 export interface BookingData {
   startDate: Date
@@ -30,24 +32,18 @@ export interface BookingData {
 }
 
 interface BookingModalProps {
-  space: ParkingSpace | null
+  space: ISpaces | null
   isOpen: boolean
   onClose: () => void
   onConfirm: (bookingData: BookingData) => Promise<void>
-  selectedDates?: {
-    from: Date | undefined
-    to: Date | undefined
-  }
+  selectedDates?: DateRange
   selectedTime?: string
 }
 
 export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates, selectedTime }: BookingModalProps) {
   const [bookingData, setBookingData] = useState<Partial<BookingData>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [dateRange, setDateRange] = useState<{
-    from: Date | undefined
-    to: Date | undefined
-  }>({
+  const [dateRange, setDateRange] = useState<DateRange>({
     from: undefined,
     to: undefined,
   })
@@ -86,7 +82,7 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates,
     if (!dateRange.from || !dateRange.to || !space) return 0
 
     const days = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))
-    return days * (space.price_per_day || space.price || 10)
+    return days * (space.price_per_day)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,7 +113,7 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates,
     }
   }
 
-  const handleDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
+  const handleDateSelect = (range: DateRange | undefined) => {
     if (range) {
       setDateRange(range)
       setBookingData((prev) => ({
@@ -186,7 +182,7 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates,
                 </div>
 
                 <div className="text-2xl font-bold">
-                  £{space.price_per_day || space.price || 10}
+                  £{space.price_per_day}
                   <span className="text-sm font-normal text-muted-foreground">/day</span>
                 </div>
               </CardContent>
@@ -365,7 +361,7 @@ export function BookingModal({ space, isOpen, onClose, onConfirm, selectedDates,
                         </div>
                         <div className="flex justify-between">
                           <span>Daily Rate:</span>
-                          <span>£{space.price_per_day || space.price || 10}</span>
+                          <span>£{space.price_per_day}</span>
                         </div>
                         <Separator />
                         <div className="flex justify-between font-bold text-lg">

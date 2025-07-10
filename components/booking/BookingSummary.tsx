@@ -5,9 +5,13 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { MapPin } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { fadeIn } from "@/app/booking/page"
 
-export default function BookingSummary({ spaceTitle, spaceLocation, price, priceType, discountType, getDiscountLabel, calculateTotal }) {
+const fadeIn = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+};
+
+export default function BookingSummary({ spaceTitle, spaceLocation, price, priceType, discountType, getDiscountLabel, calculateTotal }: any) {
   const router = useRouter()
 
   return (

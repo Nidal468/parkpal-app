@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Import Commerce Layer SDK dynamically
-    const { CommerceLayer, Order, LineItem, Customer } = await import("@commercelayer/sdk")
+    const { CommerceLayer, Order, LineItem, Customer }: any = null
 
     // Initialize Commerce Layer client
     const cl = CommerceLayer({

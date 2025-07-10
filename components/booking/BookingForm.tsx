@@ -5,9 +5,13 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { User, Car, Mail, Phone, Calendar, Clock } from "lucide-react"
-import { fadeIn } from "@/app/booking/page"
 
-export default function BookingForm({ bookingForm, handleInputChange, selectedVehicle, setSelectedVehicle, timeSlots }) {
+const fadeIn = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+};
+
+export default function BookingForm({ bookingForm, handleInputChange, selectedVehicle, setSelectedVehicle, timeSlots }: any) {
   return (
     <motion.div
       initial="hidden"

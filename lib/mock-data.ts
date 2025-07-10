@@ -1,7 +1,7 @@
 import type { ParkingSpaceDisplay, User, Vehicle } from "./supabase-types"
 
 // Mock users data
-export const mockUsers: User[] = [
+export const mockUsers: any[] = [
   {
     id: "user-1",
     email: "john.host@example.com",
@@ -26,7 +26,7 @@ export const mockUsers: User[] = [
 ]
 
 // Mock vehicles data
-export const mockVehicles: Vehicle[] = [
+export const mockVehicles: any[] = [
   {
     id: "vehicle-1",
     created_at: "2024-01-01T00:00:00Z",
@@ -48,7 +48,7 @@ export const mockVehicles: Vehicle[] = [
 ]
 
 // Updated mock parking data with host information
-export const mockParkingSpaces: ParkingSpaceDisplay[] = [
+export const mockParkingSpaces: any[] = [
   {
     id: "1",
     host_id: "user-1",
@@ -216,7 +216,7 @@ export function searchMockParkingSpaces(params: {
   if (params.features && params.features.length > 0) {
     results = results.filter((space) =>
       params.features!.some((feature) =>
-        space.features.some((spaceFeature) => spaceFeature.toLowerCase().includes(feature.toLowerCase())),
+        space.features.some((spaceFeature: any) => spaceFeature.toLowerCase().includes(feature.toLowerCase())),
       ),
     )
   }

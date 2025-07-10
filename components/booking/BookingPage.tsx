@@ -3,9 +3,13 @@ import { motion } from "framer-motion"
 import BookingHeader from "./BookingHeader"
 import BookingForm from "./BookingForm"
 import BookingSummary from "./BookingSummary"
-import { fadeIn } from "@/app/booking/page"
 
-export default function BookingPage(props) {
+const fadeIn = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+};
+
+export default function BookingPage(props: any) {
   return (
     <motion.div
       initial="hidden"

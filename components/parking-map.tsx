@@ -5,22 +5,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { MapPin, Navigation, PoundSterlingIcon as Pound } from "lucide-react"
-import type { ParkingSpaceDisplay } from "@/lib/supabase-types"
+import { ISpaces } from "@/model/spaces"
 
 interface ParkingMapProps {
-  spaces: ParkingSpaceDisplay[]
-  onSelectSpace?: (space: ParkingSpaceDisplay) => void
+  spaces: ISpaces[]
+  onSelectSpace?: (space: ISpaces) => void
   selectedSpaceId?: string
 }
 
 export function ParkingMap({ spaces, onSelectSpace, selectedSpaceId }: ParkingMapProps) {
-  const [selectedSpace, setSelectedSpace] = useState<ParkingSpaceDisplay | null>(null)
+  const [selectedSpace, setSelectedSpace] = useState<ISpaces | null>(null)
 
   // Center map on first space or default to London
   const centerLat = spaces.length > 0 && spaces[0].latitude ? spaces[0].latitude : 51.5074
   const centerLng = spaces.length > 0 && spaces[0].longitude ? spaces[0].longitude : -0.1278
 
-  const handleSpaceClick = (space: ParkingSpaceDisplay) => {
+  const handleSpaceClick = (space: ISpaces) => {
     setSelectedSpace(space)
     onSelectSpace?.(space)
   }
